@@ -2,9 +2,11 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 from librosa import display
+from matplotlib.ticker import ScalarFormatter
 
 from hparams import hparams
 
+# https://github.com/keithito/tacotron/blob/master/util/audio.py
 
 AUDIO_FLOAT_EPS = 1e-7
 
@@ -110,9 +112,9 @@ def ms_to_samples(ms, sampling_rate):
     return int((ms / 1000) * sampling_rate)
 
 
-def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, n_mfcc, hop_length, win_length, power):
+def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, hop_length, win_length, power):
     """
-    Calculate a Mel-scaled spectrogram as well as Mel-frequency cepstral coefficients (MFCCs) from a signal.
+    Calculate a Mel-scaled spectrogram from a signal.
 
     :param wav: np.ndarray [shape=(n,)]
         Audio time series.
@@ -133,9 +135,6 @@ def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, n_mfcc,
         Highest frequency (in Hz).
         If `None`, use `fmax = sampling_rate / 2.0`.
 
-    :param n_mfcc: int > 0 [scalar]
-        Number of MFCCs to return.
-
     :param hop_length: int > 0 [scalar]
         Number of audio samples to hop between frames.
 
@@ -147,58 +146,115 @@ def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, n_mfcc,
         e.g., 1 for energy, 2 for power, etc.
 
     :return:
-        mel_spec: np.ndarray [shape=(1 + n_fft/2, t)]
+        mel_spec: np.ndarray [shape=(n_mels, t)]
             STFT matrix of the Mel-scaled spectrogram.
-
-        mfccs: np.ndarray [shape=(n_mfcc, t)]
-            Mel-frequency cepstral coefficients (MFCCs) for each frame.
 
     :notes:
         Setting `win_length` to `n_fft` results in exactly the same values the librosa build in functions
         `librosa.feature.mfcc` and `librosa.feature.melspectrogram` would deliver.
     """
-
-    # TODO: Append shapes of the variables after each function call.
-
     # This implementation calculates the Mel-scaled spectrogram and the mfccs step by step.
     # Both `librosa.feature.mfcc` and `librosa.feature.melspectrogram` could be used to do this in fewer lines of code.
     # However, they do not allow to control the window length used in the initial stft calculation.
     # Setting `win_length` to `n_fft` results in exactly the same values the librosa build in functions would deliver.
 
     # Short-time Fourier transform of the signal to create a linear-scale spectrogram.
-    mag_phase = librosa.stft(y=wav, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    # Return shape: (n_fft/2 + 1, n_frames), with n_frames being floor(len(wav) / win_hop).
+    mag_phase_spec = librosa.stft(y=wav, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
 
     # Extract the magnitudes from the linear-scale spectrogram.
-    mag_spec = np.abs(mag_phase)
+    # Return shape: (n_fft/2 + 1, n_frames).
+    mag_spec = np.abs(mag_phase_spec)
 
     # Raise the linear-scale spectrogram magnitudes to the power of `power`.
     # `power` = 1 for energy,`power` = 2 for power, etc.
+    # Return shape: (n_fft/2 + 1, n_frames).
     linear_spec = mag_spec ** power
 
     # Create a filter-bank matrix to combine FFT bins into Mel-frequency bins.
+    # Return shape: (n_mels, n_fft/2 + 1).
     mel_basis = librosa.filters.mel(sr=sampling_rate, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax, htk=True)
 
     # Apply Mel-filters to create a Mel-scaled spectrogram.
+    # Return shape: (n_mels, n_frames).
     mel_spec = np.dot(mel_basis, linear_spec)
-    mel_spec_db = librosa.power_to_db(mel_spec)
 
+    return mel_spec
+
+
+def calculate_mfccs(mel_spec, sampling_rate, n_mfcc):
+    """
+    Calculate Mel-frequency cepstral coefficients (MFCCs) from a Mel-scaled spectrogram.
+
+    :param mel_spec: np.ndarray [shape=(n_mels, t)]
+        STFT matrix of the Mel-scaled spectrogram.
+
+    :param sampling_rate: int > 0 [scalar]
+        Sampling rate of `wav`.
+
+    :param n_mfcc: int > 0 [scalar]
+        Number of MFCCs to return.
+
+    :return:
+        mfccs: np.ndarray [shape=(n_mfcc, t)]
+            Mel-frequency cepstral coefficients (MFCCs) for each frame.
+    """
     # Calculate Mel-frequency cepstral coefficients (MFCCs) from the Mel-spectrogram.
-    mfccs = librosa.feature.mfcc(S=mel_spec_db, sr=sampling_rate, n_mfcc=n_mfcc)
+    # Return shape: (n_mfcc, n_frames).
+    mfccs = librosa.feature.mfcc(S=mel_spec, sr=sampling_rate, n_mfcc=n_mfcc)
 
-    return mel_spec, mfccs
+    return mfccs
+
+
+def mceps(mel_spec, sampling_rate, n_mceps):
+    raise NotImplementedError()
 
 
 def linear_scale_spectrogram(wav, n_fft, hop_length=None, win_length=None):
-    mag_phase = librosa.stft(wav, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
-    mag, phase = librosa.magphase(mag_phase)
+    linear_spec = librosa.stft(wav, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    # mag, phase = librosa.magphase(linear_spec)
 
-    return mag, phase
+    return linear_spec
 
 
-def plot_spectrogram(spec_db, sampling_rate, hop_length, title, y_axis='log'):
-    librosa.display.specshow(spec_db, sr=sampling_rate, hop_length=hop_length, y_axis=y_axis, x_axis='time')
+def plot_spectrogram(spec_db, sampling_rate, hop_length, fmin, fmax, y_axis, title):
+    librosa.display.specshow(spec_db,
+                             sr=sampling_rate,
+                             hop_length=hop_length,
+                             fmin=fmin,
+                             fmax=fmax,
+                             y_axis=y_axis,
+                             x_axis='time')
     plt.title(title)
     plt.colorbar(format='%+2.0f dB')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_feature_frames(features, sampling_rate, hop_length, title):
+    """
+    Plot a sequence of feature vectors that were computed for a framed signal.
+
+    :param features: np.ndarray [shape=(n, t)]
+        Feature time series to plot.
+
+    :param sampling_rate: number > 0 [scalar]
+        Sampling rate of the original signal the features were computed on.
+
+    :param hop_length: int > 0 [scalar]
+        Number of audio samples that were hopped between frames.
+
+    :param title: string
+        Title of the plot.
+    """
+    axes = librosa.display.specshow(features, sr=sampling_rate, hop_length=hop_length, x_axis='time')
+    axes.yaxis.set_major_formatter(ScalarFormatter())
+    axes.yaxis.set_ticks(np.arange(features.shape[0] + 1))
+    plt.ylim(ymin=0, ymax=features.shape[0])
+
+    plt.set_cmap('magma')
+    plt.title(title)
+    plt.colorbar()
     plt.tight_layout()
     plt.show()
 
