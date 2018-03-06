@@ -1,12 +1,18 @@
 import librosa
 import matplotlib.pyplot as plt
 import numpy as np
+import pysptk
 from librosa import display
 from matplotlib.ticker import ScalarFormatter
 
 from hparams import hparams
 
 # https://github.com/keithito/tacotron/blob/master/util/audio.py
+
+# Griffin-Lim algorithm in Librosa:
+# https://github.com/librosa/librosa/issues/434
+
+# https://github.com/eYSIP-2017/eYSIP-2017_Speech_Spoofing_and_Verification
 
 AUDIO_FLOAT_EPS = 1e-7
 
@@ -64,7 +70,7 @@ def load_wav(wav_path, sampling_rate=hparams.sampling_rate, offset=0.0, duration
     return librosa.core.load(wav_path, sr=sampling_rate, offset=offset, duration=duration)
 
 
-def save_wav(wav_path, wav, sampling_rate=hparams.sampling_rate):
+def save_wav(wav_path, wav, sampling_rate=hparams.sampling_rate, norm=False):
     """
     Write a WAV file to disk.
 
@@ -76,8 +82,12 @@ def save_wav(wav_path, wav, sampling_rate=hparams.sampling_rate):
 
     :param sampling_rate: int > 0 [scalar]
         Sampling rate of `wav`.
+
+    :param norm: boolean [scalar]
+        Enable amplitude normalization.
+        Scale the data to the range [-1, +1].
     """
-    librosa.output.write_wav(wav_path, wav.astype(np.int16), sampling_rate)
+    librosa.output.write_wav(wav_path, wav.astype(np.float32), sampling_rate, norm=norm)
 
 
 def samples_to_ms(samples, sampling_rate):
@@ -206,8 +216,18 @@ def calculate_mfccs(mel_spec, sampling_rate, n_mfcc):
     return mfccs
 
 
-def mceps(mel_spec, sampling_rate, n_mceps):
-    raise NotImplementedError()
+def calculate_mceps(wav, hop_len, n_mceps, alpha, n_fft):
+    win_len = n_fft
+    frames = librosa.util.frame(wav, frame_length=win_len,
+                                hop_length=hop_len).astype(np.float64).T
+    frames *= pysptk.blackman(win_len)
+
+    mc = pysptk.mcep(frames, n_mceps, alpha)
+    logH = pysptk.mgc2sp(mc, alpha, 0.0, win_len).real
+
+    print("logH mceps shape:", logH.T.shape)
+    print("mc mceps shape:", mc.T.shape)
+    return logH.T, mc
 
 
 def linear_scale_spectrogram(wav, n_fft, hop_length=None, win_length=None):

@@ -3,4 +3,4 @@ librosa
 numpy
 matplotlib
 sklearn
-python_speech_features
+pysptk
