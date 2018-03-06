@@ -46,14 +46,17 @@ mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
 mfccs = calculate_mfccs(mel_spec_db, sr, hparams.n_mfcc)
 
 # Note win_length is equal to n_fft here.
+mcep_alpha = 0.42
+# n_mceps = 110
+n_mceps = 39
 mceps, mc = calculate_mceps(wav, hop_len=hop_len,
-                            n_mceps=39, alpha=0.42, n_fft=hparams.n_fft)
+                            n_mceps=n_mceps, alpha=mcep_alpha, n_fft=hparams.n_fft)
 
 print("linear spec shape:", linear_spec.shape)
 
 # ==================================================================
 pitch = pysptk.swipe(wav.astype(np.float64),
-                     fs=sr, hopsize=hop_len, min=60, max=240, otype="pitch")
+                     fs=sr, hopsize=hop_len, min=80, max=260, otype="pitch")
 
 source_excitation = pysptk.excite(pitch, hop_len)
 print("source_excitation.shape", source_excitation.shape)
@@ -66,8 +69,8 @@ print("source_excitation.shape", source_excitation.shape)
 # ==================================================================
 from pysptk.synthesis import MLSADF, Synthesizer
 
-b = pysptk.mc2b(mc, alpha=0.42)
-synthesizer = Synthesizer(MLSADF(order=39, alpha=0.42), hop_len)
+b = pysptk.mc2b(mc, alpha=mcep_alpha)
+synthesizer = Synthesizer(MLSADF(order=n_mceps, alpha=mcep_alpha), hop_len)
 wav_synth = synthesizer.synthesis(source_excitation, b)
 # ==================================================================
 
