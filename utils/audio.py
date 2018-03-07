@@ -225,8 +225,8 @@ def calculate_mceps(wav, hop_len, n_mceps, alpha, n_fft):
     mc = pysptk.mcep(frames, n_mceps, alpha)
     logH = pysptk.mgc2sp(mc, alpha, 0.0, win_len).real
 
-    print("logH mceps shape:", logH.T.shape)
-    print("mc mceps shape:", mc.T.shape)
+    # print("logH mceps shape:", logH.T.shape)
+    # print("mc mceps shape:", mc.T.shape)
     return logH.T, mc
 
 
