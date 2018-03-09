@@ -87,12 +87,12 @@ mfccs = calculate_mfccs(mel_spec_db, sr, hparams.n_mfcc)
 # plot_waveform(wav_synth, sampling_rate=sr)
 # exit()
 
-wav_synth = spectrogram_to_wav(np.abs(linear_spec),
+wav_synth = spectrogram_to_wav(np.sqrt(linear_spec),
                                win_len,
                                hop_len,
                                hparams.n_fft,
                                50)
-save_wav('/tmp/synthesized_griffin_v3.wav', wav_synth, sr, norm=True)
+save_wav('/tmp/synthesized_griffin.wav', wav_synth, sr, norm=True)
 exit()
 
 plot_spectrogram(linear_spec_db,

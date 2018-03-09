@@ -17,6 +17,22 @@ from hparams import hparams
 AUDIO_FLOAT_EPS = 1e-7
 
 
+def magnitude_to_decibel(mag):
+    # TODO: Add documentation.
+    # TODO: Add decibel_to_magnitude function.
+    mag_db = 20 * np.log10(np.maximum(1e-5, mag))
+
+    return mag_db
+
+
+def normalize_decibel(mag_db, ref_db, max_db):
+    # TODO: Add documentation.
+    # TODO: Add a inv_normalize_decibel function.
+    mag_db = np.clip((mag_db - ref_db + max_db) / max_db, 1e-8, 1.0)
+
+    return mag_db
+
+
 def power_to_decibel(power, ref, amin, max_db):
     """
     Convert a power spectrogram (amplitude squared) to decibel (dB).
@@ -39,6 +55,9 @@ def power_to_decibel(power, ref, amin, max_db):
         decibel: np.ndarray
         ``decibel ~= 10 * log10(power) - 10 * log10(ref)``
     """
+    # TODO: Remove during the next cleanup.
+    raise DeprecationWarning("This function will be removed during the next cleanup.")
+
     return 20 * np.log10(np.maximum(AUDIO_FLOAT_EPS, power))
 
 
