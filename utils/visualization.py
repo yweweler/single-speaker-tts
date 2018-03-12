@@ -1,10 +1,48 @@
 import librosa
 import numpy as np
+from librosa import display
 from matplotlib import pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 
 
 def plot_spectrogram(spec_db, sampling_rate, hop_length, fmin, fmax, y_axis, title):
+    """
+    Plots a spectrogram given a Short-time Fourier transform matrix.
+
+    Arguments:
+        spec_db (np.ndarray):
+            STFT matrix of a spectrogram.
+            The shape is expected to be shape=(n_bins, t) with
+            n_bins being the number of frequency bins and t the number of frames.
+
+        sampling_rate (int):
+            Sampling rate of `spec_db`.
+
+        hop_length (int):
+            Number of audio samples to hop between frames.
+
+        fmin (float):
+            Lowest frequency (in Hz).
+
+        fmax (float):
+            Highest frequency (in Hz).
+
+        y_axis (str):
+            Range for the y-axes.
+
+            Valid types are:
+
+            - None, 'none', or 'off' : no axis decoration is displayed.
+            - 'linear', 'fft', 'hz' : Frequency range is determined by
+              the FFT window and sampling rate.
+            - 'log' : The spectrum is displayed on a log scale.
+            - 'mel' : Frequencies are determined by the mel scale.
+            - 'cqt_hz' : Frequencies are determined by the CQT scale.
+            - 'cqt_note' : Pitches are determined by the CQT scale.
+
+        title (str):
+            Title of the plot.
+    """
     librosa.display.specshow(spec_db,
                              sr=sampling_rate,
                              hop_length=hop_length,
@@ -22,17 +60,20 @@ def plot_feature_frames(features, sampling_rate, hop_length, title):
     """
     Plot a sequence of feature vectors that were computed for a framed signal.
 
-    :param features: np.ndarray [shape=(n, t)]
-        Feature time series to plot.
+    Arguments:
+        features (np.ndarray):
+            Feature time series to plot.
+            The shape is expected to be shape=(n, t) with
+            n being the number of features and t the number of feature frames.
 
-    :param sampling_rate: number > 0 [scalar]
-        Sampling rate of the original signal the features were computed on.
+        sampling_rate (int):
+            Sampling rate of the original signal the features were computed on.
 
-    :param hop_length: int > 0 [scalar]
-        Number of audio samples that were hopped between frames.
+        hop_length (int):
+            Number of audio samples that were hopped between frames.
 
-    :param title: string
-        Title of the plot.
+        title (str):
+            Title of the plot.
     """
     axes = librosa.display.specshow(features, sr=sampling_rate, hop_length=hop_length, x_axis='time')
     axes.yaxis.set_major_formatter(ScalarFormatter())
@@ -48,16 +89,19 @@ def plot_feature_frames(features, sampling_rate, hop_length, title):
 
 def plot_waveform(wav, sampling_rate, title='Mono'):
     """
-    Plot a waveform signal.
+    Plot a mono or stereo waveform signal in the time domain.
 
-    :param wav: np.ndarray [shape=(n,) or (2, n)]
-        Audio time series to plot.
+    Arguments:
+        wav (np.ndarray):
+            Audio time series.
+            The shape is expected to be shape=(n,) for an mono waveform
+            or shape(2, n) for an stereo waveform.
 
-    :param sampling_rate: number > 0 [scalar]
-        Sampling rate of `wav`.
+        sampling_rate (int):
+            Sampling rate of `wav`.
 
-    :param title: string
-        Title of the plot.
+        title (str):
+            Title of the plot.
     """
     librosa.display.waveplot(wav, sr=sampling_rate)
     plt.title(title)
