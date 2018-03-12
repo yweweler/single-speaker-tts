@@ -6,8 +6,10 @@ import sklearn
 from librosa import display
 
 from hparams import hparams
-from utils.audio import load_wav, plot_spectrogram, linear_scale_spectrogram, ms_to_samples, \
-    mel_scale_spectrogram, calculate_mfccs, plot_feature_frames, calculate_mceps, plot_waveform, save_wav
+from utils.audio import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
+from utils.conversion import ms_to_samples
+from utils.io import load_wav, save_wav
+from utils.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
 from utils.synthesis import spectrogram_to_wav
 
 

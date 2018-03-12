@@ -1,6 +1,8 @@
 import numpy as np
 
-from utils.audio import load_wav, linear_scale_spectrogram, mel_scale_spectrogram, magnitude_to_decibel
+from utils.audio import linear_scale_spectrogram, mel_scale_spectrogram
+from utils.conversion import magnitude_to_decibel
+from utils.io import load_wav
 
 
 def decibel_statistics(wav, sampling_rate):
