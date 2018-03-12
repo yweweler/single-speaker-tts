@@ -1,8 +1,6 @@
 import librosa
 import numpy as np
 
-from hparams import hparams
-
 
 def load_wav(wav_path, sampling_rate=None, offset=0.0, duration=None):
     """
@@ -32,7 +30,7 @@ def load_wav(wav_path, sampling_rate=None, offset=0.0, duration=None):
     return librosa.core.load(wav_path, sr=sampling_rate, offset=offset, duration=duration)
 
 
-def save_wav(wav_path, wav, sampling_rate=hparams.sampling_rate, norm=False):
+def save_wav(wav_path, wav, sampling_rate, norm=False):
     """
     Write a WAV file to disk.
 
