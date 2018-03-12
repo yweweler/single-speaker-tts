@@ -20,45 +20,28 @@ AUDIO_FLOAT_EPS = 1e-7
 def magnitude_to_decibel(mag):
     # TODO: Add documentation.
     # TODO: Add decibel_to_magnitude function.
-    mag_db = 20 * np.log10(np.maximum(1e-5, mag))
+    mag_db = 20.0 * np.log10(np.maximum(1e-5, mag))
 
     return mag_db
 
 
+def decibel_to_magnitude(mag_db):
+    # TODO: Add documentation.
+    mag = np.power(10.0, mag_db / 20.0)
+
+    return mag
+
+
 def normalize_decibel(mag_db, ref_db, max_db):
     # TODO: Add documentation.
-    # TODO: Add a inv_normalize_decibel function.
     mag_db = np.clip((mag_db - ref_db + max_db) / max_db, 1e-8, 1.0)
 
     return mag_db
 
 
-def power_to_decibel(power, ref, amin, max_db):
-    """
-    Convert a power spectrogram (amplitude squared) to decibel (dB).
-
-    :param power: np.ndarray
-        Power spectrum to convert.
-
-    :param ref: scalar
-        The amplitude `abs(power)` is scaled relative to `ref`:
-        `10 * log10(power / ref)`.
-
-    :param amin: float > 0 [scalar]
-        Minimum threshold for `abs(power)` and `ref`.
-
-    :param max_db: float >= 0 [scalar]
-        Threshold the output at `max_db` below the peak:
-        ``max(10 * log10(power)) - max_db``.
-
-    :return:
-        decibel: np.ndarray
-        ``decibel ~= 10 * log10(power) - 10 * log10(ref)``
-    """
-    # TODO: Remove during the next cleanup.
-    raise DeprecationWarning("This function will be removed during the next cleanup.")
-
-    return 20 * np.log10(np.maximum(AUDIO_FLOAT_EPS, power))
+def inv_normalize_decibel(db, ref_db, max_db):
+    # TODO: Add documentation.
+    return (np.clip(db, 0.0, 1.0) * max_db) + ref_db - max_db
 
 
 def load_wav(wav_path, sampling_rate=hparams.sampling_rate, offset=0.0, duration=None):
