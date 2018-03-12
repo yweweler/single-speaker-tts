@@ -4,15 +4,19 @@ import numpy as np
 def magnitude_to_decibel(mag):
     """
     Convert a magnitude spectrogram to decibel (dB).
+
     Decibel values will be in the range [-100 dB, +inf dB]
 
-    :param mag: np.ndarray
-         Magnitude spectrum.
+    Arguments:
+        mag (np.ndarray):
+            Magnitude spectrum.
 
-    :return: np.ndarray
-        Magnitude spectrum in decibel representation.
+    Returns:
+        np.ndarray:
+            Magnitude spectrum in decibel representation.
 
-        20 * log10(max(1e-5, abs(mag)))
+            Calculation: 20 * log10(max(1e-5, abs(mag)))
+
     """
     # Decibel values are bounded to a lower level of -100 dB.
     # 20 * log10(1e-5) = -100 dB
@@ -26,17 +30,19 @@ def magnitude_to_decibel(mag):
 
 def decibel_to_magnitude(mag_db):
     """
-    Convert a magnitude spectrogram in decibel (dB) representation back to a raw magnitude spectrogram.
+    Convert a magnitude spectrogram in decibel (dB) representation back to raw magnitude representation.
 
-    :param mag_db: np.ndarray
+    Arguments:
+        mag_db (np.ndarray):
         Magnitude spectrum in decibel representation.
 
-    :return:
-        Magnitude spectrum.
+    Returns:
+        np.ndarray:
+            Magnitude spectrum.
 
-        power(10, mag_db / 20)
+            Calculation: power(10, mag_db / 20)
     """
-    # TODO: Limit passed mag_db to [-100 dB, +inf dB] before conversion?
+    # TODO: Limit mag_db to [-100 dB, +inf dB] before conversion?
     mag = np.power(10.0, mag_db / 20.0)
 
     return mag
@@ -44,19 +50,23 @@ def decibel_to_magnitude(mag_db):
 
 def normalize_decibel(db, ref_db, max_db):
     """
-    Normalize decibel (dB) values to the range [0.0, 1.0].
+    Normalize decibel (dB) values and map them to the range [0.0, 1.0].
 
-    :param db:
-        Data in decibel representation (dB).
+    Arguments:
+        db (np.ndarray):
+            Data in decibel representation (dB).
 
-    :param ref_db:
-        Signal reference in decibel (dB).
+        ref_db (float):
+            Signal reference in decibel (dB).
 
-    :param max_db:
-        Signal maximum in decibel (dB).
+        max_db (float):
+            Signal maximum in decibel (dB).
 
-    :return:
-        clip((mag_db - ref_db + max_db) / max_db, 0.0, 1.0)
+    Returns:
+        np.ndarray:
+            Normalized values in the range [0.0, 1.0].
+
+            Calculation: clip((db - ref_db + max_db) / max_db, 0.0, 1.0)
     """
     return np.clip((db - ref_db + max_db) / max_db, 0.0, 1.0)
 
@@ -65,17 +75,21 @@ def inv_normalize_decibel(norm_db, ref_db, max_db):
     """
     Convert normalized decibel (dB) values from the range [0.0, 1.0] back to decibel.
 
-    :param norm_db:
-        Normalized decibel values in the range [0.0, 1.0].
+    Arguments:
+        norm_db (np.ndarray):
+            Normalized decibel values in the range [0.0, 1.0].
 
-    :param ref_db:
-        Signal reference in decibel (dB) used for normalization.
+        ref_db (float):
+            Signal reference in decibel (dB) used during normalization.
 
-    :param max_db:
-        Signal maximum in decibel (dB) used for normalization.
+        max_db (float):
+            Signal maximum in decibel (dB) used during normalization.
 
-    :return:
-        (clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
+    Returns:
+        np.ndarray:
+            Input data converted to decibel representation.
+
+            Calculation: (clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
     """
     return (np.clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
 
@@ -84,14 +98,15 @@ def samples_to_ms(samples, sampling_rate):
     """
     Convert a duration in samples into milliseconds.
 
-    :param samples: int > 0 [scalar]
-        Samples to convert into milliseconds.
+    Arguments:
+        samples (int):
+            Samples to convert into milliseconds.
 
-    :param sampling_rate: int > 0 [scalar]
-        Sampling rate of `wav`.
+        sampling_rate (int):
+            Sampling rate of of the signal.
 
-    :return: float > 0 [scalar]
-        Duration in ms.
+    Returns:
+        float: Duration in ms.
     """
     return (samples / sampling_rate) * 1000
 
@@ -100,13 +115,14 @@ def ms_to_samples(ms, sampling_rate):
     """
     Convert a duration in milliseconds into samples.
 
-    :param ms: float > 0 [scalar]
-        Duration in ms.
+    Arguments:
+        ms (float):
+            Duration in ms.
 
-    :param sampling_rate: int > 0 [scalar]
-        Sampling rate of `wav`.
+        sampling_rate (int):
+            Sampling rate of of the signal.
 
-    :return: int > 0 [scalar]
-        Duration in samples.
+    Returns:
+        int: Duration in samples.
     """
     return int((ms / 1000) * sampling_rate)
