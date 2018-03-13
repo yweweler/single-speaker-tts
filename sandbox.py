@@ -6,7 +6,7 @@ import sklearn
 from librosa import display
 
 from hparams import hparams
-from utils.audio import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
+from utils.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
 from utils.conversion import ms_to_samples
 from utils.io import load_wav, save_wav
 from utils.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
@@ -17,8 +17,8 @@ def resynth_wav_using_mcep(wav, n_fft, hop_len, n_mceps, mcep_alpha):
     from pysptk.synthesis import MLSADF, Synthesizer
 
     # Calculate mceps.
-    mceps, mc = calculate_mceps(wav, hop_len=hop_len,
-                                n_mceps=n_mceps, alpha=mcep_alpha, n_fft=n_fft)
+    mceps, mc = calculate_mceps(wav, n_fft=n_fft, hop_length=hop_len,
+                                n_mceps=n_mceps, alpha=mcep_alpha)
 
     # Calculate source excitation.
     pitch = pysptk.swipe(wav.astype(np.float64),

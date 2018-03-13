@@ -34,7 +34,7 @@ def decibel_to_magnitude(mag_db):
 
     Arguments:
         mag_db (np.ndarray):
-        Magnitude spectrum in decibel representation.
+            Magnitude spectrum in decibel representation.
 
     Returns:
         np.ndarray:
