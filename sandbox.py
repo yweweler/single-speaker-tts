@@ -2,11 +2,11 @@ import librosa
 import numpy as np
 import pysptk
 
+from audio.conversion import ms_to_samples
+from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
+from audio.io import load_wav
+from audio.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
 from hparams import hparams
-from utils.conversion import ms_to_samples
-from utils.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
-from utils.io import load_wav
-from utils.visualization import plot_spectrogram, plot_feature_frames
 
 
 def resynth_wav_using_mcep(wav, hop_len, n_mceps, mcep_alpha):
@@ -94,6 +94,14 @@ def calculate_linear_spec(wav, hop_len, win_len):
                                            hop_length=hop_len,
                                            win_length=win_len)
 
+    plot_spectrogram(np.abs(linear_spec),
+                     sampling_rate=hparams.sampling_rate,
+                     hop_length=hop_len,
+                     fmin=hparams.mel_fmin,
+                     fmax=hparams.mel_fmax,
+                     y_axis='linear',
+                     title='Raw Linear-scale spectrogram')
+
     # Convert the linear-scaled spectrogram to its decibel representation.
     linear_spec_db = librosa.amplitude_to_db(linear_spec, ref=np.max)
 
@@ -103,7 +111,7 @@ def calculate_linear_spec(wav, hop_len, win_len):
                      fmin=hparams.mel_fmin,
                      fmax=hparams.mel_fmax,
                      y_axis='linear',
-                     title='Linear-scale power spectrogram')
+                     title='Linear-scale log spectrogram')
 
 
 wav_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/TRAIN/DR1/FCJF0/SA1.WAV'
@@ -112,6 +120,7 @@ wav, sr = load_wav(wav_path)
 win_len = ms_to_samples(hparams.win_len, sampling_rate=sr)
 hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 
-# calculate_linear_spec(wav, hop_len, win_len)
+plot_waveform(wav, hparams.sampling_rate, title="Mega original")
+calculate_linear_spec(wav, hop_len, win_len)
 # calculate_mfccs_and_deltas(wav, hop_len, win_len)
 # resynth_wav_using_mcep(wav, hop_len, 25, 0.35)

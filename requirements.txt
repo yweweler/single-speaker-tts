@@ -4,3 +4,4 @@ numpy
 matplotlib
 sklearn
 pysptk
+tqdm
