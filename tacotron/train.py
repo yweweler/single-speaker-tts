@@ -8,6 +8,10 @@ from tacotron.model import Tacotron
 
 
 def train_data():
+    # TODO: Force the code to run on the cpu not matter what device is selected for the actual training process.
+    # TODO: Provide a lazy loading queue that pre-caches data using multiple workers to prevent the training process from stopping due to io.
+
+    # TODO: Take a look at tensorflof datasets and iterattors, maybe they provide lazy loading using generators.
     raise NotImplementedError()
 
 
