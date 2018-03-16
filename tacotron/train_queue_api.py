@@ -84,8 +84,8 @@ def train_data_bueckets(file_list_path, batch_size):
 
     # Convert everything into tf.Tensor objects for queue based processing.
     wav_paths = tf.convert_to_tensor(wav_paths)
-    sentences = tf.convert_to_tensor(sentences)
     sentence_lengths = tf.convert_to_tensor(sentence_lengths)
+    sentences = tf.convert_to_tensor(sentences)
 
     # Create a queue based iterator that yields tuples to process.
     wav_path, sentence_length, sentence = tf.train.slice_input_producer([wav_paths, sentence_lengths, sentences],
@@ -98,20 +98,22 @@ def train_data_bueckets(file_list_path, batch_size):
     # Apply load_entry to each wav_path of the tensorflow iterator.
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
+    # TODO: The shape of the returned values from py_func seems to get lost for some reason.
+
     print('sentences.shape', sentences.shape)
     print('mel.shape', mel.shape)
     print('mag.shape', mag.shape)
 
-    _, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
-        input_length=sentence_lengths,
-        tensors=[sentence, mel, mag],
-        batch_size=batch_size,
-        bucket_boundaries=[i for i in range(minlen + 1, maxlen, 1)],
-        num_threads=4,
-        capacity=batch_size * 4,
-        dynamic_pad=True)
+    # _, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
+    #     input_length=sentence_lengths,
+    #     tensors=[sentence, mel, mag],
+    #     batch_size=batch_size,
+    #     bucket_boundaries=[i for i in range(minlen + 1, maxlen, 1)],
+    #     num_threads=4,
+    #     capacity=batch_size * 4,
+    #     dynamic_pad=True)
 
-    return sents, mels, mags
+    return sentence, mel, mag # sents, mels, mags
 
 
 def train(checkpoint_dir):
