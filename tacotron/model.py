@@ -2,11 +2,11 @@ import tensorflow as tf
 
 
 class Tacotron:
-    def __init__(self, hparams):
+    def __init__(self, hparams, inputs):
         self.hparams = hparams
 
         # Create placeholders for the input data.
-        self.inp_mel_spec, self.inp_linear_spec = self.inputs()
+        self.inp_mel_spec, self.inp_linear_spec = inputs
         self.pred_linear_spec = None
 
         self.model()
