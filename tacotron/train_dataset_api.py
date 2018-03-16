@@ -26,14 +26,8 @@ def load_entry(entry):
 
         linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
 
-        # Add 0 padding up to 1000 frames on the time axis.
-        linear_spec = np.pad(linear_spec, [[0, 974 - linear_spec.shape[0]], [0, 0]], 'constant')
-
         mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
                                          hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
-
-        # Add 0 padding up to 1000 frames on the time axis.
-        mel_spec = np.pad(mel_spec, [[0, 974 - mel_spec.shape[0]], [0, 0]], 'constant')
 
         dev = 1e-4 / 2
         mel_spec_noisy = mel_spec + np.random.uniform(low=0.0, high=dev, size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
@@ -74,7 +68,7 @@ def feedable_train_data(file_list_path, batch_size):
         lambda filenames: tf.py_func(load_entry, [filenames], [tf.string, tf.float32, tf.float32]),
         num_parallel_calls=4
     )
-    dataset.prefetch(64 * 2)
+    dataset.prefetch(64)
 
     dataset = dataset.repeat(1)
     iterator = dataset.make_one_shot_iterator()
@@ -88,7 +82,7 @@ def train(checkpoint_dir):
     file_listing_path = '/tmp/train_all.txt'
 
     n_epochs = 1
-    batch_size = 32
+    batch_size = 1
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
