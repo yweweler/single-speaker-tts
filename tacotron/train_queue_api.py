@@ -18,6 +18,8 @@ def load_entry(entry):
 
     wav, sr = load_wav(base_path + entry.decode())
 
+    # TODO: Implement the Tacotron reduction factor.
+
     linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
 
     mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
@@ -95,7 +97,7 @@ def train_data_bueckets(file_list_path, n_epochs, batch_size):
         [wav_paths, sentence_lengths, sentences],
         capacity=n_threads * batch_size,
         num_epochs=n_epochs,
-        shuffle=False)
+        shuffle=True)
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
     # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
@@ -165,15 +167,16 @@ def train(checkpoint_dir):
     # NOTE: The global step has to be created before the optimizer is created.
     tf.train.create_global_step()
 
-    learning_rate = tf.train.exponential_decay(learning_rate=0.01,
-                                               global_step=tf.train.get_global_step(),
-                                               decay_steps=100,
-                                               decay_rate=0.9)
-
-    tf.summary.scalar('lr', learning_rate)
+    # learning_rate = tf.train.exponential_decay(learning_rate=0.01,
+    #                                            global_step=tf.train.get_global_step(),
+    #                                            decay_steps=100,
+    #                                            decay_rate=0.94)
+    #
+    # tf.summary.scalar('lr', learning_rate)
 
     # optimizer = tf.train.RMSPropOptimizer(learning_rate)
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    # optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer()
 
     # Tell the optimizer to minimize the loss function.
     train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
