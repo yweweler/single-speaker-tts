@@ -1,3 +1,4 @@
+import math
 import time
 
 import numpy as np
@@ -38,8 +39,8 @@ def load_entry(entry):
     mel_mag_db = magnitude_to_decibel(mel_mag)
     mel_mag_db = normalize_decibel(mel_mag_db, -7.7, 95.8)
 
-    print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
-    print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
+    # print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
+    # print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
 
     return np.array(mel_mag_db).astype(np.float32), \
            np.array(linear_mag_db).astype(np.float32)
@@ -80,6 +81,7 @@ def train_data_bueckets(file_list_path, batch_size):
     print('minlen', minlen)
     print('maxlen', maxlen)
     print('len(sentence_lengths)', len(sentence_lengths))
+    print('len(wav_paths)', len(wav_paths))
 
     # Convert everything into tf.Tensor objects for queue based processing.
     wav_paths = tf.convert_to_tensor(wav_paths)
@@ -106,21 +108,30 @@ def train_data_bueckets(file_list_path, batch_size):
     print('mel.shape', mel.shape)
     print('mag.shape', mag.shape)
 
-    # _, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
-    #     input_length=sentence_lengths,
-    #     tensors=[sentence, mel, mag],
-    #     batch_size=batch_size,
-    #     bucket_boundaries=[i for i in range(minlen + 1, maxlen, 1)],
-    #     num_threads=4,
-    #     capacity=batch_size * 4,
-    #     dynamic_pad=True)
+    # mels, mags = tf.train.batch([mel, mag], batch_size=batch_size, capacity=64, num_threads=4)
+    print('n_buckets: {} + 2'.format(len([i for i in range(minlen + 1, maxlen, 10)])))
+    _, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
+        input_length=sentence_length,
+        tensors=[sentence, mel, mag],
+        batch_size=batch_size,
+        bucket_boundaries=[i for i in range(minlen + 1, maxlen, 10)],
+        num_threads=4,
+        capacity=64,
+        dynamic_pad=True)
 
     # Since we have no batching calls at the moment and we only deliver one sample at a time we have to
     # add one dimension in order to create a 4-D batch tensor containing one sample.
-    sentence = tf.expand_dims(sentence, 0)
-    mel = tf.expand_dims(mel, 0)
-    mag = tf.expand_dims(mag, 0)
-    return sentence, mel, mag  # sents, mels, mags
+    # sentence = tf.expand_dims(sentence, 0)
+    # mel = tf.expand_dims(mel, 0)
+    # mag = tf.expand_dims(mag, 0)
+
+    n_batches = int(math.ceil(len(lines) / batch_size))
+
+    print('batched.sentence.shape', sents.shape)
+    print('batched.mel.shape', mels.shape)
+    print('batched.mag.shape', mags.shape)
+
+    return sents, mels, mags, n_batches
 
 
 def train(checkpoint_dir):
@@ -136,7 +147,7 @@ def train(checkpoint_dir):
     summary_save_steps = 10
 
     dataset_start = time.time()
-    sent_iter, mel_iter, linear_iter = train_data_bueckets(file_listing_path, batch_size)
+    sent_iter, mel_iter, linear_iter, n_batches = train_data_bueckets(file_listing_path, batch_size)
     dataset_duration = time.time() - dataset_start
     print('Dataset generation: {}s'.format(dataset_duration))
 
@@ -199,14 +210,11 @@ def train(checkpoint_dir):
     tf.train.start_queue_runners(sess=session)
 
     for epoch in range(n_epochs):
-        while True:
-            try:
-                _, loss_value = session.run([train_op, loss_op])
-                print(loss_value)
+        for batch in range(n_batches):
+            _, loss_value = session.run([train_op, loss_op])
+            # print(loss_value)
 
-            except tf.errors.OutOfRangeError:
-                print('All batches read.')
-                break
+        print('All batches read.')
 
     train_duration = time.time() - train_start
     print('Training duration: {}s'.format(train_duration))
