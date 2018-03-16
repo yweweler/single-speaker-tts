@@ -14,7 +14,6 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 
 def load_entry(entry):
-    # print('load_entry() ...')
     base_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
     win_len = ms_to_samples(hparams.win_len, hparams.sampling_rate)
     hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
@@ -30,7 +29,8 @@ def load_entry(entry):
                                          hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
 
         dev = 1e-4 / 2
-        mel_spec_noisy = mel_spec + np.random.uniform(low=0.0, high=dev, size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
+        mel_spec_noisy = mel_spec + np.random.uniform(low=0.0, high=dev, size=np.prod(mel_spec.shape)).reshape(
+            mel_spec.shape)
         mel_spec = mel_spec_noisy
 
         # Convert the linear spectrogram into decibel representation.
@@ -45,8 +45,6 @@ def load_entry(entry):
 
         out_batch_linear.append(linear_mag_db)
         out_batch_mel.append(mel_mag_db)
-
-    # print('load_entry() done.')
 
     return np.array(['text'] * entry.shape[0], dtype=np.object), \
            np.array(out_batch_mel).astype(np.float32), \
@@ -154,28 +152,21 @@ def train(checkpoint_dir):
 
     train_start = time.time()
     for epoch in range(n_epochs):
-        # # print('\n')
-        # print('=' * 64)
-        # print('Epoch', epoch + 1)
-        # print('=' * 64)
-
         while True:
             try:
                 _, mel_batch, linear_batch = session.run(features, feed_dict={
                     inp_mel: np.zeros(shape=(1, 1, hparams.n_mels)),
                     inp_linear: np.zeros(shape=(1, 1, 1 + hparams.n_fft // 2)),
                 })
-                # print(mel_batch.shape, linear_batch.shape)
+
                 _, loss_value = session.run([train_op, loss_op], feed_dict={
                     inp_mel: mel_batch,
                     inp_linear: linear_batch
                 })
-                # print(loss_value)
+                print(loss_value)
 
             except tf.errors.OutOfRangeError:
-                # print('')
-                # print('All batches read.')
-                # print('=' * 64)
+                print('All batches read.')
                 break
 
     train_duration = time.time() - train_start
