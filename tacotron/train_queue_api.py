@@ -65,7 +65,9 @@ def load_text(text_paths):
     return lines, line_lens
 
 
-def train_data_bueckets(file_list_path, batch_size):
+def train_data_bueckets(file_list_path, n_epochs, batch_size):
+    n_threads = 4
+
     # Read all lines from the file listing.
     with open(file_list_path, 'r') as listing:
         lines = listing.readlines()
@@ -89,8 +91,11 @@ def train_data_bueckets(file_list_path, batch_size):
     sentences = tf.convert_to_tensor(sentences)
 
     # Create a queue based iterator that yields tuples to process.
-    wav_path, sentence_length, sentence = tf.train.slice_input_producer([wav_paths, sentence_lengths, sentences],
-                                                                        shuffle=False)
+    wav_path, sentence_length, sentence = tf.train.slice_input_producer(
+        [wav_paths, sentence_lengths, sentences],
+        capacity=n_threads * batch_size,
+        num_epochs=n_epochs,
+        shuffle=False)
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
     # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
@@ -109,15 +114,16 @@ def train_data_bueckets(file_list_path, batch_size):
     print('mag.shape', mag.shape)
 
     # mels, mags = tf.train.batch([mel, mag], batch_size=batch_size, capacity=64, num_threads=4)
-    print('n_buckets: {} + 2'.format(len([i for i in range(minlen + 1, maxlen, 10)])))
-    _, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
+    print('n_buckets: {} + 2'.format(len([i for i in range(minlen + 1, maxlen + 1, 4)])))
+    batch_sequence_lengths, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
         input_length=sentence_length,
         tensors=[sentence, mel, mag],
         batch_size=batch_size,
-        bucket_boundaries=[i for i in range(minlen + 1, maxlen, 10)],
-        num_threads=4,
-        capacity=64,
-        dynamic_pad=True)
+        bucket_boundaries=[i for i in range(minlen + 1, maxlen + 1, 4)],
+        num_threads=n_threads,
+        capacity=n_threads * batch_size,
+        dynamic_pad=True,
+        allow_smaller_final_batch=True)
 
     # Since we have no batching calls at the moment and we only deliver one sample at a time we have to
     # add one dimension in order to create a 4-D batch tensor containing one sample.
@@ -131,13 +137,13 @@ def train_data_bueckets(file_list_path, batch_size):
     print('batched.mel.shape', mels.shape)
     print('batched.mag.shape', mags.shape)
 
-    return sents, mels, mags, n_batches
+    return batch_sequence_lengths, sents, mels, mags, n_batches
 
 
 def train(checkpoint_dir):
     file_listing_path = '/tmp/train_all.txt'
 
-    n_epochs = 1
+    n_epochs = 10
     batch_size = 8
 
     # Checkpoint every 10 minutes.
@@ -147,14 +153,14 @@ def train(checkpoint_dir):
     summary_save_steps = 10
 
     dataset_start = time.time()
-    sent_iter, mel_iter, linear_iter, n_batches = train_data_bueckets(file_listing_path, batch_size)
+    lengths_iter, sent_iter, mel_iter, linear_iter, n_batches = train_data_bueckets(file_listing_path, n_epochs,
+                                                                                    batch_size)
     dataset_duration = time.time() - dataset_start
     print('Dataset generation: {}s'.format(dataset_duration))
 
-    model = Tacotron(hparams=hparams, inputs=(mel_iter, linear_iter))
+    model = Tacotron(hparams=hparams, inputs=(mel_iter, linear_iter, lengths_iter))
 
     loss_op = model.get_loss_op()
-    summary_op = model.summary()
 
     # NOTE: The global step has to be created before the optimizer is created.
     tf.train.create_global_step()
@@ -162,13 +168,17 @@ def train(checkpoint_dir):
     learning_rate = tf.train.exponential_decay(learning_rate=0.01,
                                                global_step=tf.train.get_global_step(),
                                                decay_steps=100,
-                                               decay_rate=0.98)
+                                               decay_rate=0.9)
+
+    tf.summary.scalar('lr', learning_rate)
 
     # optimizer = tf.train.RMSPropOptimizer(learning_rate)
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
     # Tell the optimizer to minimize the loss function.
     train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
+
+    summary_op = model.summary()
 
     # TODO: Not sure what the exact benefit of a scaffold is since it does not hold very much data.
     session_scaffold = tf.train.Scaffold(
@@ -209,12 +219,19 @@ def train(checkpoint_dir):
     # Start the data queue
     tf.train.start_queue_runners(sess=session)
 
-    for epoch in range(n_epochs):
-        for batch in range(n_batches):
-            _, loss_value = session.run([train_op, loss_op])
-            print(loss_value)
-
-        print('All batches read.')
+    batch = 0
+    # 1 since epochs are automatically handled by the data provider.
+    for epoch in range(1):
+        # for batch in range(n_batches):
+        while True:
+            try:
+                _, loss_value = session.run([train_op, loss_op])
+                # print(batch + 1, model.inp_mel_spec.shape, model.inp_linear_spec.shape)
+                # batch += 1
+                print(loss_value)
+            except tf.errors.OutOfRangeError:
+                print('All batches read.')
+                break
 
     train_duration = time.time() - train_start
     print('Training duration: {}s'.format(train_duration))

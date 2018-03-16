@@ -6,7 +6,7 @@ class Tacotron:
         self.hparams = hparams
 
         # Create placeholders for the input data.
-        self.inp_mel_spec, self.inp_linear_spec = inputs
+        self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
         self.pred_linear_spec = None
 
         self.model()
@@ -34,6 +34,8 @@ class Tacotron:
                                                 kernel_initializer=tf.glorot_normal_initializer(),
                                                 bias_initializer=tf.glorot_normal_initializer())
 
+        # self.pred_linear_spec = tf.Print(self.pred_linear_spec, [self.seq_lengths], summarize=32)
+
     def loss(self):
         # tf.losses.absolute_difference could be used either (in case reduction=Reduction.MEAN is used).
         return tf.reduce_mean(tf.abs(self.inp_linear_spec - self.pred_linear_spec))
@@ -42,8 +44,9 @@ class Tacotron:
         return self.loss_op
 
     def summary(self):
-        tf.summary.scalar('loss', self.loss())
+        tf.summary.scalar('loss', self.loss_op)
         tf.summary.image('inp_mel_spec', tf.expand_dims(self.inp_mel_spec, -1), max_outputs=1)
+
         with tf.name_scope('linear_spec'):
             tf.summary.image('inp_linear_spec', tf.expand_dims(self.inp_linear_spec, -1), max_outputs=1)
             tf.summary.image('pred_linear_spec', tf.expand_dims(self.pred_linear_spec, -1), max_outputs=1)
