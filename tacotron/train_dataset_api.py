@@ -52,6 +52,9 @@ def load_entry(entry):
 
 
 def feedable_train_data(file_list_path, batch_size):
+    # For more information on the input pipeline see:
+    # https://www.tensorflow.org/versions/master/performance/datasets_performance
+    
     # Read all lines from the file listing.
     with open(file_list_path, 'r') as listing:
         lines = listing.readlines()
