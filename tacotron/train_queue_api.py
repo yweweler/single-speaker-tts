@@ -11,10 +11,6 @@ from tacotron.model import Tacotron
 
 
 def load_entry(entry):
-    print('=' * 64)
-    print(entry.shape)
-    print(entry)
-
     base_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
     win_len = ms_to_samples(hparams.win_len, hparams.sampling_rate)
     hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
@@ -42,8 +38,11 @@ def load_entry(entry):
     mel_mag_db = magnitude_to_decibel(mel_mag)
     mel_mag_db = normalize_decibel(mel_mag_db, -7.7, 95.8)
 
-    return np.array(linear_mag_db).astype(np.float32),\
-           np.array(mel_mag_db).astype(np.float32)
+    print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
+    print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
+
+    return np.array(mel_mag_db).astype(np.float32), \
+           np.array(linear_mag_db).astype(np.float32)
 
 
 def load_text(text_paths):
@@ -98,9 +97,12 @@ def train_data_bueckets(file_list_path, batch_size):
     # Apply load_entry to each wav_path of the tensorflow iterator.
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
-    # TODO: The shape of the returned values from py_func seems to get lost for some reason.
+    # The shape of the returned values from py_func seems to get lost for some reason.
+    mel.set_shape((None, hparams.n_mels))
+    mag.set_shape((None, 1 + hparams.n_fft // 2))
 
     print('sentences.shape', sentences.shape)
+    print('sentence.shape', sentence.shape)
     print('mel.shape', mel.shape)
     print('mag.shape', mag.shape)
 
@@ -113,7 +115,12 @@ def train_data_bueckets(file_list_path, batch_size):
     #     capacity=batch_size * 4,
     #     dynamic_pad=True)
 
-    return sentence, mel, mag # sents, mels, mags
+    # Since we have no batching calls at the moment and we only deliver one sample at a time we have to
+    # add one dimension in order to create a 4-D batch tensor containing one sample.
+    sentence = tf.expand_dims(sentence, 0)
+    mel = tf.expand_dims(mel, 0)
+    mag = tf.expand_dims(mag, 0)
+    return sentence, mel, mag  # sents, mels, mags
 
 
 def train(checkpoint_dir):
@@ -189,7 +196,7 @@ def train(checkpoint_dir):
     train_start = time.time()
 
     # Start the data queue
-    tf.train.start_queue_runners()
+    tf.train.start_queue_runners(sess=session)
 
     for epoch in range(n_epochs):
         while True:
