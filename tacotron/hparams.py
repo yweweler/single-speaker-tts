@@ -15,7 +15,7 @@ hparams = tf.contrib.training.HParams(
     win_hop=8.0,
 
     # Number of Mel bands to generate.
-    n_mels=128,
+    n_mels=80,
 
     # Mel spectrum lower cutoff frequency.
     mel_fmin=0,
