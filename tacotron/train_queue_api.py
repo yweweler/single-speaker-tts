@@ -138,7 +138,7 @@ def train(checkpoint_dir):
     file_listing_path = '/tmp/train_all.txt'
 
     n_epochs = 1
-    batch_size = 1
+    batch_size = 8
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
@@ -212,7 +212,7 @@ def train(checkpoint_dir):
     for epoch in range(n_epochs):
         for batch in range(n_batches):
             _, loss_value = session.run([train_op, loss_op])
-            # print(loss_value)
+            print(loss_value)
 
         print('All batches read.')
 
