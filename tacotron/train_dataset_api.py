@@ -1,4 +1,5 @@
 import math
+import time
 
 import numpy as np
 import tensorflow as tf
@@ -13,6 +14,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 
 def load_entry(entry):
+    # print('load_entry() ...')
     base_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
     win_len = ms_to_samples(hparams.win_len, hparams.sampling_rate)
     hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
@@ -24,8 +26,14 @@ def load_entry(entry):
 
         linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
 
+        # Add 0 padding up to 1000 frames on the time axis.
+        linear_spec = np.pad(linear_spec, [[0, 974 - linear_spec.shape[0]], [0, 0]], 'constant')
+
         mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
                                          hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
+
+        # Add 0 padding up to 1000 frames on the time axis.
+        mel_spec = np.pad(mel_spec, [[0, 974 - mel_spec.shape[0]], [0, 0]], 'constant')
 
         dev = 1e-4 / 2
         mel_spec_noisy = mel_spec + np.random.uniform(low=0.0, high=dev, size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
@@ -43,6 +51,8 @@ def load_entry(entry):
 
         out_batch_linear.append(linear_mag_db)
         out_batch_mel.append(mel_mag_db)
+
+    # print('load_entry() done.')
 
     return np.array(['text'] * entry.shape[0], dtype=np.object), \
            np.array(out_batch_mel).astype(np.float32), \
@@ -64,7 +74,7 @@ def feedable_train_data(file_list_path, batch_size):
         lambda filenames: tf.py_func(load_entry, [filenames], [tf.string, tf.float32, tf.float32]),
         num_parallel_calls=4
     )
-    dataset.prefetch(64)
+    dataset.prefetch(64 * 2)
 
     dataset = dataset.repeat(1)
     iterator = dataset.make_one_shot_iterator()
@@ -77,8 +87,8 @@ def feedable_train_data(file_list_path, batch_size):
 def train(checkpoint_dir):
     file_listing_path = '/tmp/train_all.txt'
 
-    n_epochs = 1000
-    batch_size = 1
+    n_epochs = 1
+    batch_size = 32
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
@@ -135,20 +145,25 @@ def train(checkpoint_dir):
         )
     )
 
+    dataset_start = time.time()
+
     dataset_iter, n_batches = feedable_train_data(file_listing_path, batch_size)
     features = dataset_iter.get_next()
+
+    dataset_duration = time.time() - dataset_start
+    print('Dataset generation: {}s'.format(dataset_duration))
 
     session = tf.train.SingularMonitoredSession(hooks=[saver_hook, summary_hook, nan_hook],
                                                 scaffold=session_scaffold,
                                                 config=session_config,
                                                 checkpoint_dir=checkpoint_dir)
 
-    # TODO: Feed batches to the network and update gradients.
+    train_start = time.time()
     for epoch in range(n_epochs):
-        print('\n')
-        print('=' * 64)
-        print('Epoch', epoch + 1)
-        print('=' * 64)
+        # # print('\n')
+        # print('=' * 64)
+        # print('Epoch', epoch + 1)
+        # print('=' * 64)
 
         while True:
             try:
@@ -156,17 +171,21 @@ def train(checkpoint_dir):
                     inp_mel: np.zeros(shape=(1, 1, hparams.n_mels)),
                     inp_linear: np.zeros(shape=(1, 1, 1 + hparams.n_fft // 2)),
                 })
+                # print(mel_batch.shape, linear_batch.shape)
                 _, loss_value = session.run([train_op, loss_op], feed_dict={
                     inp_mel: mel_batch,
                     inp_linear: linear_batch
                 })
-                print(loss_value)
+                # print(loss_value)
 
             except tf.errors.OutOfRangeError:
-                print('')
-                print('All batches read.')
-                print('=' * 64)
+                # print('')
+                # print('All batches read.')
+                # print('=' * 64)
                 break
+
+    train_duration = time.time() - train_start
+    print('Training duration: {}s'.format(train_duration))
 
     session.close()
 
