@@ -42,7 +42,6 @@ def load_entry(entry):
     # =================================================================================================================
     # Tacotron reduction factor.
     # =================================================================================================================
-    # print('mel_mag_db.shape ( pre reduction): {}'.format(mel_mag_db.shape))
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
@@ -51,13 +50,10 @@ def load_entry(entry):
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
     mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * hparams.reduction))
-    # print('mel_mag_db.shape (post reduction): {}'.format(mel_mag_db.shape))
 
     # Since the magnitude spectrogram has to have the same number of frames we need to add padding.
-    # print('linear_mag_db.shape ( pre reduction): {}'.format(linear_mag_db.shape))
     linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
     linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
-    # print('linear_mag_db.shape (post reduction): {}'.format(linear_mag_db.shape))
     # =================================================================================================================
 
     # print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
@@ -129,12 +125,8 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     mel.set_shape((None, hparams.n_mels * hparams.reduction))
     mag.set_shape((None, (1 + hparams.n_fft // 2) * hparams.reduction))
 
-    print('sentences.shape', sentences.shape)
-    print('sentence.shape', sentence.shape)
-    print('mel.shape', mel.shape)
-    print('mag.shape', mag.shape)
-
     # mels, mags = tf.train.batch([mel, mag], batch_size=batch_size, capacity=64, num_threads=4)
+
     print('n_buckets: {} + 2'.format(len([i for i in range(minlen + 1, maxlen + 1, 4)])))
     batch_sequence_lengths, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
         input_length=sentence_length,
@@ -145,12 +137,6 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
         capacity=n_threads * batch_size,
         dynamic_pad=True,
         allow_smaller_final_batch=True)
-
-    # Since we have no batching calls at the moment and we only deliver one sample at a time we have to
-    # add one dimension in order to create a 4-D batch tensor containing one sample.
-    # sentence = tf.expand_dims(sentence, 0)
-    # mel = tf.expand_dims(mel, 0)
-    # mag = tf.expand_dims(mag, 0)
 
     n_batches = int(math.ceil(len(lines) / batch_size))
 
@@ -165,7 +151,7 @@ def train(checkpoint_dir):
     file_listing_path = 'data/train_all.txt'
 
     n_epochs = 4
-    batch_size = 1
+    batch_size = 8
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
@@ -187,15 +173,6 @@ def train(checkpoint_dir):
     # NOTE: The global step has to be created before the optimizer is created.
     tf.train.create_global_step()
 
-    # learning_rate = tf.train.exponential_decay(learning_rate=0.01,
-    #                                            global_step=tf.train.get_global_step(),
-    #                                            decay_steps=100,
-    #                                            decay_rate=0.94)
-    #
-    # tf.summary.scalar('lr', learning_rate)
-
-    # optimizer = tf.train.RMSPropOptimizer(learning_rate)
-    # optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     optimizer = tf.train.AdamOptimizer()
 
     # Tell the optimizer to minimize the loss function.
@@ -239,22 +216,12 @@ def train(checkpoint_dir):
 
     train_start = time.time()
 
-    # Start the data queue
-    # TODO: This normaly returns threads.
-    # TODO: Do I have to close / join them using a coordinator manually? (Could also unnecessary becasue it might be handled  by the MonitoredSession)
-    tf.train.start_queue_runners(sess=session)
-
-    # 1 since epochs are automatically handled by the data provider.
-    for epoch in range(1):
-        # for batch in range(n_batches):
-        while True:
-            try:
-                _, loss_value = session.run([train_op, loss_op])
-                print(model.inp_mel_spec.shape, model.inp_linear_spec.shape)
-                print(loss_value)
-            except tf.errors.OutOfRangeError:
-                print('All batches read.')
-                break
+    while True:
+        try:
+            _, loss_value = session.run([train_op])
+        except tf.errors.OutOfRangeError:
+            print('All batches read.')
+            break
 
     train_duration = time.time() - train_start
     print('Training duration: {}s'.format(train_duration))

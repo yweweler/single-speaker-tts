@@ -8,27 +8,14 @@ class Tacotron:
         # Create placeholders for the input data.
         self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
         self.pred_linear_spec = None
+        self.loss_op = None
 
+        # Construct the network.
         self.model()
 
-        self.loss_op = self.loss()
-
-    def inputs(self):
-        # Network inputs.
-        inp_mel_spec = tf.placeholder(dtype=tf.float32,
-                                      shape=(None, None, self.hparams.n_mels * self.hparams.reduction),
-                                      name='inp_mel_spec')
-
-        # Network target outputs for calculating the loss.
-        inp_linear_spec = tf.placeholder(dtype=tf.float32,
-                                         shape=(None, None, (1 + self.hparams.n_fft // 2) * self.hparams.reduction),
-                                         name='inp_linear_spec')
-
+    def get_inputs_placeholders(self):
         # inp_mel_spec: shape=(N, T//r, n_mels*r)
         # inp_linear_spec: shape=(N, T//r, (1 + n_fft // 2)*r)
-        return inp_mel_spec, inp_linear_spec
-
-    def get_inputs_placeholders(self):
         return self.inp_mel_spec, self.inp_linear_spec
 
     def postprocess(self, inputs):
@@ -44,11 +31,8 @@ class Tacotron:
     def model(self):
         self.postprocess(self.inp_mel_spec)
 
-        # self.pred_linear_spec = tf.Print(self.pred_linear_spec, [self.seq_lengths], summarize=32)
-
-    def loss(self):
         # tf.losses.absolute_difference could be used either (in case reduction=Reduction.MEAN is used).
-        return tf.reduce_mean(tf.abs(self.inp_linear_spec - self.pred_linear_spec))
+        self.loss_op = tf.reduce_mean(tf.abs(self.inp_linear_spec - self.pred_linear_spec))
 
     def get_loss_op(self):
         return self.loss_op

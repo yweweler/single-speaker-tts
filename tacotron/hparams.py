@@ -27,5 +27,5 @@ hparams = tf.contrib.training.HParams(
     n_mfcc=13,
 
     # Tacotron reduction factor r.
-    reduction=1
+    reduction=3
 )
