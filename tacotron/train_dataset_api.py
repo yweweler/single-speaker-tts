@@ -105,7 +105,6 @@ def train(checkpoint_dir):
                                                decay_steps=100,
                                                decay_rate=0.98)
 
-    # optimizer = tf.train.RMSPropOptimizer(learning_rate)
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
     # Tell the optimizer to minimize the loss function.

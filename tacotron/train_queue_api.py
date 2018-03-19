@@ -18,18 +18,16 @@ def load_entry(entry):
 
     wav, sr = load_wav(base_path + entry.decode())
 
-    # TODO: Implement the Tacotron reduction factor.
-
     linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
 
     mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
                                      hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
 
-    dev = 1e-4 / 2
-    mel_spec_noisy = mel_spec + np.random.uniform(low=0.0,
-                                                  high=dev,
-                                                  size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
-    mel_spec = mel_spec_noisy
+    # dev = 1e-4 / 2
+    # mel_spec_noisy = mel_spec + np.random.uniform(low=0.0,
+    #                                               high=dev,
+    #                                               size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
+    # mel_spec = mel_spec_noisy
 
     # Convert the linear spectrogram into decibel representation.
     linear_mag = np.abs(linear_spec)
@@ -40,6 +38,27 @@ def load_entry(entry):
     mel_mag = np.abs(mel_spec)
     mel_mag_db = magnitude_to_decibel(mel_mag)
     mel_mag_db = normalize_decibel(mel_mag_db, -7.7, 95.8)
+
+    # =================================================================================================================
+    # Tacotron reduction factor.
+    # =================================================================================================================
+    # print('mel_mag_db.shape ( pre reduction): {}'.format(mel_mag_db.shape))
+    n_frames = mel_mag_db.shape[0]
+
+    # Calculate how much padding frames have to be added to be a multiple of `reduction`.
+    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (n_frames % hparams.reduction) != 0 else 0
+
+    # Add padding frames to the mel spectrogram.
+    mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
+    mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * hparams.reduction))
+    # print('mel_mag_db.shape (post reduction): {}'.format(mel_mag_db.shape))
+
+    # Since the magnitude spectrogram has to have the same number of frames we need to add padding.
+    # print('linear_mag_db.shape ( pre reduction): {}'.format(linear_mag_db.shape))
+    linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
+    linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
+    # print('linear_mag_db.shape (post reduction): {}'.format(linear_mag_db.shape))
+    # =================================================================================================================
 
     # print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
     # print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
@@ -67,7 +86,7 @@ def load_text(text_paths):
     return lines, line_lens
 
 
-def train_data_bueckets(file_list_path, n_epochs, batch_size):
+def train_data_buckets(file_list_path, n_epochs, batch_size):
     n_threads = 4
 
     # Read all lines from the file listing.
@@ -97,7 +116,7 @@ def train_data_bueckets(file_list_path, n_epochs, batch_size):
         [wav_paths, sentence_lengths, sentences],
         capacity=n_threads * batch_size,
         num_epochs=n_epochs,
-        shuffle=True)
+        shuffle=False)
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
     # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
@@ -107,8 +126,8 @@ def train_data_bueckets(file_list_path, n_epochs, batch_size):
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel.set_shape((None, hparams.n_mels))
-    mag.set_shape((None, 1 + hparams.n_fft // 2))
+    mel.set_shape((None, hparams.n_mels * hparams.reduction))
+    mag.set_shape((None, (1 + hparams.n_fft // 2) * hparams.reduction))
 
     print('sentences.shape', sentences.shape)
     print('sentence.shape', sentence.shape)
@@ -143,10 +162,10 @@ def train_data_bueckets(file_list_path, n_epochs, batch_size):
 
 
 def train(checkpoint_dir):
-    file_listing_path = '/tmp/train_all.txt'
+    file_listing_path = 'data/train_all.txt'
 
-    n_epochs = 10
-    batch_size = 8
+    n_epochs = 4
+    batch_size = 1
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
@@ -155,8 +174,9 @@ def train(checkpoint_dir):
     summary_save_steps = 10
 
     dataset_start = time.time()
-    lengths_iter, sent_iter, mel_iter, linear_iter, n_batches = train_data_bueckets(file_listing_path, n_epochs,
-                                                                                    batch_size)
+    lengths_iter, sent_iter, mel_iter, linear_iter, n_batches = train_data_buckets(file_listing_path,
+                                                                                   n_epochs,
+                                                                                   batch_size)
     dataset_duration = time.time() - dataset_start
     print('Dataset generation: {}s'.format(dataset_duration))
 
@@ -220,17 +240,17 @@ def train(checkpoint_dir):
     train_start = time.time()
 
     # Start the data queue
+    # TODO: This normaly returns threads.
+    # TODO: Do I have to close / join them using a coordinator manually? (Could also unnecessary becasue it might be handled  by the MonitoredSession)
     tf.train.start_queue_runners(sess=session)
 
-    batch = 0
     # 1 since epochs are automatically handled by the data provider.
     for epoch in range(1):
         # for batch in range(n_batches):
         while True:
             try:
                 _, loss_value = session.run([train_op, loss_op])
-                # print(batch + 1, model.inp_mel_spec.shape, model.inp_linear_spec.shape)
-                # batch += 1
+                print(model.inp_mel_spec.shape, model.inp_linear_spec.shape)
                 print(loss_value)
             except tf.errors.OutOfRangeError:
                 print('All batches read.')

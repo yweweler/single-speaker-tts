@@ -24,5 +24,8 @@ hparams = tf.contrib.training.HParams(
     mel_fmax=8000,
 
     # Number of Mel-frequency cepstral coefficients to generate.
-    n_mfcc=13
+    n_mfcc=13,
+
+    # Tacotron reduction factor r.
+    reduction=1
 )
