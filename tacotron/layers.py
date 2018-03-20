@@ -1,6 +1,32 @@
 import tensorflow as tf
 
 
+def prelu(inputs, scope='prelu', layer_wise=True):
+    """
+
+    Arguments:
+        inputs:
+        scope:
+        layer_wise:
+
+    Returns:
+
+    """
+    with tf.variable_scope(scope):
+        zeros = tf.zeros_like(inputs)
+        if layer_wise:
+            # TODO: Test if this is actually working as expected.
+            alpha = tf.get_variable('alpha',
+                                    shape=(1),
+                                    initializer=tf.constant_initializer(0.01))
+        else:
+            alpha = tf.get_variable('alpha',
+                                    shape=inputs.shape[-1],
+                                    initializer=tf.constant_initializer(0.01))
+
+        return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
+
+
 def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
     """
     Implementation of a multi layer Highway Network.
