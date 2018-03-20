@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+from tacotron.layers import highway_network
+
 
 class Tacotron:
     def __init__(self, hparams, inputs):
@@ -25,6 +27,12 @@ class Tacotron:
                                                     activation=tf.nn.sigmoid,
                                                     kernel_initializer=tf.glorot_normal_initializer(),
                                                     bias_initializer=tf.glorot_normal_initializer())
+
+            self.pred_linear_spec = \
+                highway_network(self.pred_linear_spec,
+                                units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
+                                layers=4,
+                                scope='highway_network')
 
         return self.pred_linear_spec
 

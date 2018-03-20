@@ -218,7 +218,7 @@ def train(checkpoint_dir):
 
     while True:
         try:
-            _, loss_value = session.run([train_op])
+            session.run([train_op])
         except tf.errors.OutOfRangeError:
             print('All batches read.')
             break
