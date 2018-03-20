@@ -34,9 +34,6 @@ def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
     # Make sure the the input dimensionality is equal to the output dimensionality.
     tf.assert_equal(inputs.shape[-1], units)
 
-    # TODO: The Highway Networks paper does state that they always use a FC layer as the first
-    # layer in an Highway Network.
-
     network = inputs
     with tf.variable_scope(scope):
         for layer in range(layers):
