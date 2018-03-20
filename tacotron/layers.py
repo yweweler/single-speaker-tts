@@ -1,7 +1,52 @@
 import tensorflow as tf
 
 
-def highway_network_layer(inputs, units, activation=tf.nn.relu, t_bias_init=-1.0):
+def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
+    """
+    Implementation of a multi layer Highway Network.
+
+    See: http://arxiv.org/abs/1505.00387
+
+    Arguments:
+        inputs (tf.Tensor):
+            The shape is expected to be shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
+
+        units (int):
+            The number of units in the highway layers.
+            Units is expected to fulfill `units` == F.
+
+        layers (int):
+            The number of highway layers to stack.
+
+        scope (str):
+            Tensorflow variable scope to wrap the layers in.
+
+        activation (:obj:`function`, optional):
+            Activation function for each of the fully connected layers.
+
+    Returns:
+        tf.Tensor:
+            Tensor of shape shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
+
+    """
+    # Make sure the the input dimensionality is equal to the output dimensionality.
+    tf.assert_equal(inputs.shape[-1], units)
+
+    # TODO: The Highway Networks paper does state that they always use a FC layer as the first
+    # layer in an Highway Network.
+
+    network = inputs
+    with tf.variable_scope(scope):
+        for layer in range(layers):
+            network = highway_network_layer(inputs=network, units=units, activation=activation,
+                                            scope='highway_layer_{}'.format(layer))
+
+    return network
+
+
+def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_init=-1.0):
     """
     Implementation of a Highway Network layer.
 
@@ -14,20 +59,24 @@ def highway_network_layer(inputs, units, activation=tf.nn.relu, t_bias_init=-1.0
 
         units (int):
             The number of units in the highway layer.
-            The number of units is expected to match the feature size F.
+            Units is expected to fulfill `units` == F.
+
+        scope (str):
+            Tensorflow variable scope to construct the layer in.
 
         activation (:obj:`function`, optional):
-            pass
+            Activation function for the fully connected layer H.
 
         t_bias_init (:obj:`float`, optional):
-            pass
+            Constant value for initializing the transform gate bias of the transform gate T.
 
     Returns:
         tf.Tensor:
-            pass
+            Tensor of shape shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
 
     Notes:
-        - See [1]: Highway Networks, http://arxiv.org/abs/1505.00387
+        - See [1]: Highway Networks, https://arxiv.org/abs/1505.00387
         - See [2]: http://arxiv.org/abs/1502.01852
 
         The Tacotron paper only states that they are able to train their architecture using
@@ -48,24 +97,22 @@ def highway_network_layer(inputs, units, activation=tf.nn.relu, t_bias_init=-1.0
         Since Xavier initialization is zero-mean and the Highway Networks used in Tacotron are
         not particularly deep there should not be a major impact from using it.
     """
-    # Make sure the the input dimensionality is equal to the output dimensionality.
-    tf.assert_equal(inputs.shape[-1], units)
+    with tf.variable_scope(scope):
+        h = tf.layers.dense(inputs=inputs,
+                            units=units,
+                            activation=activation,
+                            kernel_initializer=tf.glorot_normal_initializer(),
+                            bias_initializer=tf.zeros_initializer(),
+                            name='H')
 
-    h = tf.layers.dense(inputs=inputs,
-                        units=units,
-                        activation=activation,
-                        kernel_initializer=tf.glorot_normal_initializer(),
-                        bias_initializer=tf.zeros_initializer(),
-                        name='H')
-
-    # For the transform gate we follow [1], section "2.2 Training Deep Highway Networks" using a
-    # sigmoid activation function and a negative bias initializer.
-    t = tf.layers.dense(inputs=inputs,
-                        units=units,
-                        activation=tf.nn.sigmoid,
-                        kernel_initializer=tf.glorot_normal_initializer(),
-                        bias_initializer=tf.constant_initializer(t_bias_init),
-                        name='T')
+        # For the transform gate we follow [1], section "2.2 Training Deep Highway Networks" using a
+        # sigmoid activation function and a negative bias initializer.
+        t = tf.layers.dense(inputs=inputs,
+                            units=units,
+                            activation=tf.nn.sigmoid,
+                            kernel_initializer=tf.glorot_normal_initializer(),
+                            bias_initializer=tf.constant_initializer(t_bias_init),
+                            name='T')
 
     # TODO: For some reason pycharm thinks that this is a plain floating point operation.
     return (h * t) + (inputs * (1.0 - t))
