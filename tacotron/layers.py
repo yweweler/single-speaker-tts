@@ -1,8 +1,7 @@
 import tensorflow as tf
-from theano.gof.graph import inputs
 
 
-def prelu(inputs, layer_wise=True):
+def prelu(inputs, layer_wise=False):
     """
     Implements a Parametric Rectified Linear Unit (PReLU).
 
@@ -22,16 +21,6 @@ def prelu(inputs, layer_wise=True):
         tf.Tensor:
             Activation of the input tensor.
     """
-    # TODO: Can this also be written as tf.maximum/minimum(0.0, inputs)?
-    # TODO: Can this otherwise be written as zeros = tf.constant(0.0, shape=inputs.shape)?
-    # TODO: Is there a noticeable performance difference between these implementations?
-
-    # Measurements:
-    #   - zeros = tf.zeros_like(inputs)                         => bs=8, epochs=5: 773s, err: ~0.034
-    #   - zeros = tf.constant(0.0, [shape=inputs.shape[-1]])    => bs=8, epochs=5: 737s, err: ~0.034
-    #   - tf.maximum/minimum(0.0, inputs)                       => bs=8, epochs=5: 737s, err: ~0.034
-    #   - plain ReLU                                            => bs=8, epochs=5: 671s, err: ~0.035
-
     zeros = tf.constant(value=0.0, shape=[inputs.shape[-1]])
 
     if layer_wise:
@@ -45,7 +34,6 @@ def prelu(inputs, layer_wise=True):
 
     tf.summary.histogram('alpha', alpha)
 
-    # return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
     return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
 
 
