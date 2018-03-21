@@ -39,9 +39,9 @@ def load_entry(entry):
     mel_mag_db = magnitude_to_decibel(mel_mag)
     mel_mag_db = normalize_decibel(mel_mag_db, -7.7, 95.8)
 
-    # =================================================================================================================
+    # ==============================================================================================
     # Tacotron reduction factor.
-    # =================================================================================================================
+    # ==============================================================================================
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
@@ -54,7 +54,7 @@ def load_entry(entry):
     # Since the magnitude spectrogram has to have the same number of frames we need to add padding.
     linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
     linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
-    # =================================================================================================================
+    # ==============================================================================================
 
     # print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
     # print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
@@ -73,7 +73,7 @@ def load_text(text_paths):
             line = text_file.readline()
             line = line.replace('\n', '')
             line = line.split(' ', 2)[-1]
-            # Append string representation so that tf.Tensor handles this as an collection of objects.
+            # Append str. representation so that tf.Tensor handles this as an collection of objects.
             # This allows us to store sequences of different length in a single tensor.
             # TODO: char2idx for all lines.
             lines.append(np.zeros(shape=(len(line)), dtype=np.int32).tostring())

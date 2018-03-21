@@ -201,3 +201,27 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
                                         name='dropout')
 
         return network
+
+
+def conv_1d_filter_banks(inputs, n_banks, n_filters):
+    # K := Number of filter banks. (n_banks)
+    # C_K := Number of filters in the K-th filter bank. (n_filters)
+
+    filter_banks = []
+    for bank in range(n_banks):
+        # TODO: I thought I got the dimensionality calculations right, but currently I am not
+        # sure if same padding was the right solution.
+        filter_bank = tf.layers.conv1d(inputs=inputs,
+                                       filters=n_filters,
+                                       kernel_size=bank,
+                                       strides=1,
+                                       padding='same')
+
+        filter_banks.append(filter_bank)
+
+    # TODO: What would be the best solution when applying BN to the filter banks?
+    # Note: The Tacotron paper is not clear at this point. One could either apply BN K times to each
+    # filter bank and concatenate them or concatenate them and apply BN once.
+
+    # TODO: Check on which axis the concatenation is executed.
+    return tf.concat(filter_banks)
