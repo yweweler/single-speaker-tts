@@ -12,9 +12,9 @@ def prelu(inputs, layer_wise=False):
             An input tensor to be activated.
 
         layer_wise (boolean):
-            If True (default), only creates one trainable activation coefficient `alpha` for all
-            elements of the input. If False a separate activation coefficient `alpha` is created
-            for each element of the last dimension of the input tensor. Resulting in `alpha`
+            If True, only creates one trainable activation coefficient `alpha` for all
+            elements of the input. If False (default) a separate activation coefficient `alpha` is
+            created for each element of the last dimension of the input tensor. Resulting in `alpha`
             being a vector with `inputs.shape[-1]` elements.
 
     Returns:
@@ -149,3 +149,55 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
 
     # TODO: For some reason pycharm thinks that this is a plain floating point operation.
     return (h * t) + (inputs * (1.0 - t))
+
+
+def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', training=True):
+    """
+    Implementation of the pre-net described in "Tacotron: Towards End-to-End Speech Synthesis".
+
+    See: https://arxiv.org/abs/1703.10135
+
+    Arguments:
+        inputs (tf.Tensor):
+            The shape is expected to be shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
+
+        units (:obj:`list` of int):
+            A list of length L defining the number of units for L layers.
+            Defaults to (256, 128).
+
+        dropout (:obj:`list` of float):
+            A list of length L defining the dropout rates for L layers.
+            Defaults to (0.5, 0.5).
+
+        scope (str):
+            Tensorflow variable scope to wrap the layers in.
+
+        training (boolean):
+            Boolean defining whether to apply the dropout or not.
+            Default is True.
+
+    Returns:
+        tf.Tensor:
+            A tensor which shape is expected to be shape=(B, T, units[-1]) with B being the batch
+            size, T being the number of time frames.
+    """
+    assert (len(units) == len(dropout)), 'The number of supplied units does not match the number ' \
+                                         'of supplied dropout rates.'
+
+    network = inputs
+    with tf.variable_scope(scope):
+        for layer_units, layer_dropout in zip(units, dropout):
+            network = tf.layers.dense(inputs=network,
+                                      units=layer_units,
+                                      activation=tf.nn.relu,
+                                      kernel_initializer=tf.glorot_normal_initializer(),
+                                      bias_initializer=tf.zeros_initializer(),
+                                      name='FC-{}-ReLU'.format(layer_units))
+
+            network = tf.layers.dropout(inputs=network,
+                                        rate=layer_dropout,
+                                        training=training,
+                                        name='dropout')
+
+        return network
