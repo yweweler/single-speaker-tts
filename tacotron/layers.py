@@ -205,11 +205,11 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
 
 def conv_1d_filter_banks(inputs, n_banks, n_filters):
     # K := Number of filter banks. (n_banks)
-    # C_K := Number of filters in the K-th filter bank. (n_filters)
+    # C_k := Number of filters in the K-th filter bank. (n_filters)
 
     # See: section "3.1 CBHG Module"
     # "The input sequence is first convolved with K sets of 1-D convolutional filters, where the
-    # k-th set contains Ck filters of width k (i.e. k = 1, 2, . . . ,K)."
+    # k-th set contains C_k filters of width k (i.e. k = 1, 2, ... , K)."
     filter_banks = []
     for bank in range(n_banks):
         # TODO: I thought I got the dimensionality calculations right, but currently I am not
