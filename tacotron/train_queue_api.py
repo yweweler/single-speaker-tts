@@ -10,6 +10,8 @@ from audio.io import load_wav
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
+tf.logging.set_verbosity(tf.logging.INFO)
+
 
 def load_entry(entry):
     base_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
@@ -45,7 +47,8 @@ def load_entry(entry):
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
-    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (n_frames % hparams.reduction) != 0 else 0
+    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (
+                                                                                     n_frames % hparams.reduction) != 0 else 0
 
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
@@ -158,11 +161,13 @@ def train(checkpoint_dir):
 
     # Save summary every 10 steps.
     summary_save_steps = 10
+    summary_counter_steps = 100
 
     dataset_start = time.time()
-    lengths_iter, sent_iter, mel_iter, linear_iter, n_batches = train_data_buckets(file_listing_path,
-                                                                                   n_epochs,
-                                                                                   batch_size)
+    lengths_iter, sent_iter, mel_iter, linear_iter, n_batches = train_data_buckets(
+        file_listing_path,
+        n_epochs,
+        batch_size)
     dataset_duration = time.time() - dataset_start
     print('Dataset generation: {}s'.format(dataset_duration))
 
@@ -203,16 +208,25 @@ def train(checkpoint_dir):
         fail_on_nan_loss=True
     )
 
+    counter_hook = tf.train.StepCounterHook(
+        output_dir=checkpoint_dir,
+        every_n_steps=summary_counter_steps
+    )
+
     session_config = tf.ConfigProto(
         gpu_options=tf.GPUOptions(
             allow_growth=True,
         )
     )
 
-    session = tf.train.SingularMonitoredSession(hooks=[saver_hook, summary_hook, nan_hook],
-                                                scaffold=session_scaffold,
-                                                config=session_config,
-                                                checkpoint_dir=checkpoint_dir)
+    session = tf.train.SingularMonitoredSession(hooks=[
+        saver_hook,
+        summary_hook,
+        nan_hook,
+        counter_hook],
+        scaffold=session_scaffold,
+        config=session_config,
+        checkpoint_dir=checkpoint_dir)
 
     train_start = time.time()
 
