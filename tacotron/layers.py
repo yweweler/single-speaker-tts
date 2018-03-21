@@ -1,30 +1,52 @@
 import tensorflow as tf
+from theano.gof.graph import inputs
 
 
-def prelu(inputs, scope='prelu', layer_wise=True):
+def prelu(inputs, layer_wise=True):
     """
+    Implements a Parametric Rectified Linear Unit (PReLU).
+
+    See: https://arxiv.org/abs/1502.01852
 
     Arguments:
-        inputs:
-        scope:
-        layer_wise:
+        inputs (tf.Tensor):
+            An input tensor to be activated.
+
+        layer_wise (boolean):
+            If True (default), only creates one trainable activation coefficient `alpha` for all
+            elements of the input. If False a separate activation coefficient `alpha` is created
+            for each element of the last dimension of the input tensor. Resulting in `alpha`
+            being a vector with `inputs.shape[-1]` elements.
 
     Returns:
-
+        tf.Tensor:
+            Activation of the input tensor.
     """
-    with tf.variable_scope(scope):
-        zeros = tf.zeros_like(inputs)
-        if layer_wise:
-            # TODO: Test if this is actually working as expected.
-            alpha = tf.get_variable('alpha',
-                                    shape=(1),
-                                    initializer=tf.constant_initializer(0.01))
-        else:
-            alpha = tf.get_variable('alpha',
-                                    shape=inputs.shape[-1],
-                                    initializer=tf.constant_initializer(0.01))
+    # TODO: Can this also be written as tf.maximum/minimum(0.0, inputs)?
+    # TODO: Can this otherwise be written as zeros = tf.constant(0.0, shape=inputs.shape)?
+    # TODO: Is there a noticeable performance difference between these implementations?
 
-        return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
+    # Measurements:
+    #   - zeros = tf.zeros_like(inputs)                         => bs=8, epochs=5: 773s, err: ~0.034
+    #   - zeros = tf.constant(0.0, [shape=inputs.shape[-1]])    => bs=8, epochs=5: 737s, err: ~0.034
+    #   - tf.maximum/minimum(0.0, inputs)                       => bs=8, epochs=5: 737s, err: ~0.034
+    #   - plain ReLU                                            => bs=8, epochs=5: 671s, err: ~0.035
+
+    zeros = tf.constant(value=0.0, shape=[inputs.shape[-1]])
+
+    if layer_wise:
+        alpha_shape = 1
+    else:
+        alpha_shape = inputs.shape[-1]
+
+    alpha = tf.get_variable('alpha',
+                            shape=alpha_shape,
+                            initializer=tf.constant_initializer(0.01))
+
+    tf.summary.histogram('alpha', alpha)
+
+    # return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
+    return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
 
 
 def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):

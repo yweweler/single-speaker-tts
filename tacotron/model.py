@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from tacotron.layers import highway_network
+from tacotron.layers import highway_network, prelu
 
 
 class Tacotron:
@@ -32,6 +32,7 @@ class Tacotron:
                 highway_network(self.pred_linear_spec,
                                 units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
                                 layers=4,
+                                # activation=prelu,
                                 scope='highway_network')
 
         return self.pred_linear_spec
