@@ -207,13 +207,19 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
     # K := Number of filter banks. (n_banks)
     # C_K := Number of filters in the K-th filter bank. (n_filters)
 
+    # See: section "3.1 CBHG Module"
+    # "The input sequence is first convolved with K sets of 1-D convolutional filters, where the
+    # k-th set contains Ck filters of width k (i.e. k = 1, 2, . . . ,K)."
     filter_banks = []
     for bank in range(n_banks):
         # TODO: I thought I got the dimensionality calculations right, but currently I am not
         # sure if same padding was the right solution.
+
+        # See: section "3.1 CBHG Module"
+        # "Note that we use a stride of 1 to preserve the original time resolution."
         filter_bank = tf.layers.conv1d(inputs=inputs,
                                        filters=n_filters,
-                                       kernel_size=bank,
+                                       kernel_size=bank + 1,
                                        strides=1,
                                        padding='same')
 
@@ -224,4 +230,11 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
     # filter bank and concatenate them or concatenate them and apply BN once.
 
     # TODO: Check on which axis the concatenation is executed.
+    # See: section "3.1 CBHG Module"
+    # "The convolution outputs are stacked together and further max pooled along time to increase
+    # local invariances."
     return tf.concat(filter_banks)
+
+    # See: section "3.1 CBHG Module"
+    # We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
+    # are added with the original input sequence via residual connections (He et al., 2016).

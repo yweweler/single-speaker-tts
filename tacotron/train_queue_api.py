@@ -216,7 +216,7 @@ def train(checkpoint_dir):
 
     train_start = time.time()
 
-    while True:
+    while not session.should_stop():
         try:
             session.run([train_op])
         except tf.errors.OutOfRangeError:

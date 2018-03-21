@@ -62,7 +62,8 @@ class Tacotron:
             tf.summary.image('linear_spec',
                              tf.expand_dims(
                                  tf.reshape(self.inp_linear_spec[0],
-                                            (1, -1, (1 + self.hparams.n_fft // 2))), -1), max_outputs=1)
+                                            (1, -1, (1 + self.hparams.n_fft // 2))), -1),
+                             max_outputs=1)
 
         # with tf.name_scope('reduced_outputs'):
         #     # tf.summary.image('inp_linear_spec', tf.expand_dims(self.inp_linear_spec, -1), max_outputs=1)
@@ -72,7 +73,8 @@ class Tacotron:
             tf.summary.image('linear_spec',
                              tf.expand_dims(
                                  tf.reshape(self.pred_linear_spec[0],
-                                            (1, -1, (1 + self.hparams.n_fft // 2))), -1), max_outputs=1)
+                                            (1, -1, (1 + self.hparams.n_fft // 2))), -1),
+                             max_outputs=1)
 
         return tf.summary.merge_all()
 
