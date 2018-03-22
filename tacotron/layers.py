@@ -221,7 +221,7 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
                                        filters=n_filters,
                                        kernel_size=bank + 1,
                                        strides=1,
-                                       padding='same')
+                                       padding='SAME')
 
         filter_banks.append(filter_bank)
 
@@ -229,11 +229,10 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
     # Note: The Tacotron paper is not clear at this point. One could either apply BN K times to each
     # filter bank and concatenate them or concatenate them and apply BN once.
 
-    # TODO: Check on which axis the concatenation is executed.
     # See: section "3.1 CBHG Module"
     # "The convolution outputs are stacked together and further max pooled along time to increase
     # local invariances."
-    return tf.concat(filter_banks)
+    return tf.concat(filter_banks, axis=-1)
 
     # See: section "3.1 CBHG Module"
     # We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
