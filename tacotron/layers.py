@@ -212,11 +212,10 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
     # k-th set contains C_k filters of width k (i.e. k = 1, 2, ... , K)."
     filter_banks = []
     for bank in range(n_banks):
-        # TODO: I thought I got the dimensionality calculations right, but currently I am not
-        # sure if same padding was the right solution.
-
         # See: section "3.1 CBHG Module"
         # "Note that we use a stride of 1 to preserve the original time resolution."
+        # ------------------------------------------------------------------------------------------
+        # Each conv1d bank will produce an output with shape=(B, T, n_filters).
         filter_bank = tf.layers.conv1d(inputs=inputs,
                                        filters=n_filters,
                                        kernel_size=bank + 1,
@@ -232,6 +231,9 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
     # See: section "3.1 CBHG Module"
     # "The convolution outputs are stacked together and further max pooled along time to increase
     # local invariances."
+    # ------------------------------------------------------------------------------------------
+    # Stacking the filter outputs for each spectrogram frame produces an output
+    # with shape=(B, T, C_k * K).
     return tf.concat(filter_banks, axis=-1)
 
     # See: section "3.1 CBHG Module"
