@@ -203,7 +203,9 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
         return network
 
 
-def conv_1d_filter_banks(inputs, n_banks, n_filters):
+def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu):
+    # TODO: Add documentation.
+
     # K := Number of filter banks. (n_banks)
     # C_k := Number of filters in the K-th filter bank. (n_filters)
 
@@ -220,13 +222,17 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters):
                                        filters=n_filters,
                                        kernel_size=bank + 1,
                                        strides=1,
+                                       activation=activation,
                                        padding='SAME')
 
         filter_banks.append(filter_bank)
 
-    # TODO: What would be the best solution when applying BN to the filter banks?
+    # TODO: Compare the generation performance between the two BN approaches?
     # Note: The Tacotron paper is not clear at this point. One could either apply BN K times to each
     # filter bank and concatenate them or concatenate them and apply BN once.
+    # Since they state "Batch normalization (Ioffe & Szegedy, 2015) is used for all
+    # convolutional layers." I will apply BN before concatenation.
+    # TODO: Apply BN to each filter bank.
 
     # See: section "3.1 CBHG Module"
     # "The convolution outputs are stacked together and further max pooled along time to increase
