@@ -22,19 +22,18 @@ class Tacotron:
 
     def postprocess(self, inputs):
         with tf.variable_scope('postprocess'):
-            self.pred_linear_spec = tf.layers.dense(inputs=inputs,
-                                                    units=(
-                                                                  1 + self.hparams.n_fft // 2) * self.hparams.reduction,
-                                                    activation=tf.nn.sigmoid,
-                                                    kernel_initializer=tf.glorot_normal_initializer(),
-                                                    bias_initializer=tf.glorot_normal_initializer())
-
             self.pred_linear_spec = \
-                highway_network(self.pred_linear_spec,
-                                units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
+                highway_network(inputs=inputs,
+                                units=self.hparams.n_mels * self.hparams.reduction,
                                 layers=4,
                                 # activation=prelu,
                                 scope='highway_network')
+
+            self.pred_linear_spec = tf.layers.dense(inputs=self.pred_linear_spec,
+                                                    units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
+                                                    activation=tf.nn.sigmoid,
+                                                    kernel_initializer=tf.glorot_normal_initializer(),
+                                                    bias_initializer=tf.glorot_normal_initializer())
 
         return self.pred_linear_spec
 
