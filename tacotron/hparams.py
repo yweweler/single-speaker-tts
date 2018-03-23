@@ -6,7 +6,7 @@ hparams = tf.contrib.training.HParams(
     sampling_rate=16000,
 
     # FFT window size.
-    n_fft=512,
+    n_fft=1024,
 
     # Windows length in ms.
     win_len=25.0,

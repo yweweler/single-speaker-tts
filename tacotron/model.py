@@ -30,7 +30,8 @@ class Tacotron:
                                 scope='highway_network')
 
             self.pred_linear_spec = tf.layers.dense(inputs=self.pred_linear_spec,
-                                                    units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
+                                                    units=(
+                                                                  1 + self.hparams.n_fft // 2) * self.hparams.reduction,
                                                     activation=tf.nn.sigmoid,
                                                     kernel_initializer=tf.glorot_normal_initializer(),
                                                     bias_initializer=tf.glorot_normal_initializer())
@@ -57,8 +58,10 @@ class Tacotron:
                                    activation=tf.nn.relu,
                                    padding='SAME')
 
-        # TODO: Since they state that they use a batch_norm layer after each con1 layer I guess
-        # here would be a good place for another one.
+        network = tf.layers.batch_normalization(inputs=network,
+                                                training=True,
+                                                fused=True,
+                                                scale=True)
 
         network = tf.layers.conv1d(inputs=network,
                                    filters=80,
@@ -66,6 +69,11 @@ class Tacotron:
                                    strides=1,
                                    activation=None,
                                    padding='SAME')
+
+        network = tf.layers.batch_normalization(inputs=network,
+                                                training=True,
+                                                fused=True,
+                                                scale=True)
 
         # TODO: Add a residual connection.
         # TODO: I Need to rework all of this to support a Tacotron reduction factor > 1.

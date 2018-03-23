@@ -153,7 +153,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 def train(checkpoint_dir):
     file_listing_path = 'data/train_all.txt'
 
-    n_epochs = 4
+    n_epochs = 10
     batch_size = 4
 
     # Checkpoint every 10 minutes.

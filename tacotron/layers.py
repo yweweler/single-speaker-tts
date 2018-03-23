@@ -231,14 +231,14 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
         # Since they state "Batch normalization (Ioffe & Szegedy, 2015) is used for all
         # convolutional layers." I will apply BN before concatenation.
         # TODO: read the batch normalization paper: http://arxiv.org/abs/1502.03167
-        # filter_bank = tf.layers.batch_normalization(inputs=filter_bank,
-        #                                             training=training,
-        #                                             # name='batch_normalization',
-        #                                             # renorm=True,  # TODO: read the corresp. paper.
-        #                                             fused=True,     # TODO: Speed improvement?
-        #                                             scale=False     # TODO: Is the follow. relu
-        #                                             # proj. layer enough?
-        #                                             )
+        filter_bank = tf.layers.batch_normalization(inputs=filter_bank,
+                                                    training=training,
+                                                    # name='batch_normalization',
+                                                    # renorm=True,  # TODO: read the corresp. paper.
+                                                    fused=True,     # TODO: Speed improvement?
+                                                    scale=False     # TODO: Is the follow. relu
+                                                    # proj. layer enough?
+                                                    )
         # TODO: Read renorm paper: https://arxiv.org/abs/1702.03275
 
         filter_banks.append(filter_bank)
