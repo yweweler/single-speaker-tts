@@ -52,7 +52,7 @@ class Tacotron:
                                           padding='SAME')
 
         network = tf.layers.conv1d(inputs=network,
-                                   filters=128,
+                                   filters=256,
                                    kernel_size=3,
                                    strides=1,
                                    activation=tf.nn.relu,
@@ -62,15 +62,13 @@ class Tacotron:
         # here would be a good place for another one.
 
         network = tf.layers.conv1d(inputs=network,
-                                   filters=128,
+                                   filters=80,
                                    kernel_size=3,
                                    strides=1,
                                    activation=None,
                                    padding='SAME')
 
         # TODO: Add a residual connection.
-        # TODO: The residual connection dimensions do not add up currently. (Do they use n_mels =
-        #  128) ???
         # TODO: I Need to rework all of this to support a Tacotron reduction factor > 1.
         network = tf.add(network, self.inp_mel_spec)
 
