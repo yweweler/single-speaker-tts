@@ -69,7 +69,8 @@ class Tacotron:
                                    padding='SAME')
 
         # TODO: Add a residual connection.
-        # TODO: The residual connection dimensions do not add up currently.
+        # TODO: The residual connection dimensions do not add up currently. (Do they use n_mels =
+        #  128) ???
         # TODO: I Need to rework all of this to support a Tacotron reduction factor > 1.
         network = tf.add(network, self.inp_mel_spec)
 
