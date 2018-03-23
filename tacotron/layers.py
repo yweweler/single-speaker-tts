@@ -225,7 +225,6 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
                                        activation=activation,
                                        padding='SAME')
 
-        # TODO: Compare the generation performance between the two BN approaches?
         # Note: The Tacotron paper is not clear at this point. One could either apply BN K times
         # to each filter bank and concatenate them or concatenate them and apply BN once.
         # Since they state "Batch normalization (Ioffe & Szegedy, 2015) is used for all
