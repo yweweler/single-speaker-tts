@@ -99,6 +99,7 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
 
         activation (:obj:`function`, optional):
             Activation function for the fully connected layer H.
+            Default activation function is `tf.nn.relu`.
 
         t_bias_init (:obj:`float`, optional):
             Constant value for initializing the transform gate bias of the transform gate T.
@@ -204,20 +205,55 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
 
 
 def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, training=True):
-    # TODO: Add documentation.
+    """
+    Implementation of a 1D convolutional filter banks described in "Tacotron: Towards End-to-End
+    Speech Synthesis".
 
-    # K := Number of filter banks. (n_banks)
-    # C_k := Number of filters in the K-th filter bank. (n_filters)
+    See: "Tacotron: Towards End-to-End Speech Synthesis"
+      * Source: [1] https://arxiv.org/abs/1703.10135
 
-    # See: section "3.1 CBHG Module"
+    The Tacotron paper is the main source for the implementation of the filter banks.
+
+    See: "Fully Character-Level Neural Machine Translation without Explicit Segmentation"
+      * Source: [2] https://arxiv.org/abs/1610.03017
+
+    [1] references [2] as the bases the CBHG (1-D convolution bank + highway network +
+    bidirectional GRU) concept was derived from. Especially Figure 2. of [2] section 4.1 gives a
+    nice overview on how the convolutional filters are applied.
+
+    Arguments:
+        inputs (tf.Tensor):
+            The shape is expected to be shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
+
+        n_banks (int):
+            Number of filter banks to use.
+
+        n_filters (int):
+            The dimensionality of the output space of each filter bank (i.e. the number of
+            filters in each bank).
+
+        activation (:obj:`function`, optional):
+            Activation function for the filter banks.
+            Default activation function is `tf.nn.relu`.
+
+        training (boolean):
+            Boolean defining whether to apply the batch normalization or not.
+            Default is True.
+
+    Returns:
+        tf.Tensor:
+            A tensor which shape is expected to be shape=(B, T, n_banks * n_filters) with B being
+            the batch size, T being the number of time frames.
+    """
+    # [1], section 3.1 CBHG Module:
     # "The input sequence is first convolved with K sets of 1-D convolutional filters, where the
     # k-th set contains C_k filters of width k (i.e. k = 1, 2, ... , K)."
     filter_banks = []
     for bank in range(n_banks):
-        # See: section "3.1 CBHG Module"
+        # [1], section 3.1 CBHG Module:
         # "Note that we use a stride of 1 to preserve the original time resolution."
-        # ------------------------------------------------------------------------------------------
-        # Each conv1d bank will produce an output with shape=(B, T, n_filters).
+        # filter_bank.shape = (B, T, n_filters)
         filter_bank = tf.layers.conv1d(inputs=inputs,
                                        filters=n_filters,
                                        kernel_size=bank + 1,
@@ -225,30 +261,28 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
                                        activation=activation,
                                        padding='SAME')
 
-        # Note: The Tacotron paper is not clear at this point. One could either apply BN K times
-        # to each filter bank and concatenate them or concatenate them and apply BN once.
-        # Since they state "Batch normalization (Ioffe & Szegedy, 2015) is used for all
-        # convolutional layers." I will apply BN before concatenation.
+        # Improvement: In my opinion the Tacotron paper is not clear on how to apply batch
+        # normalization on the filter banks.
+        #
+        # I see two ways we can apply BN here:
+        #   1. Apply a separate BN operation to the K filter banks and concatenate the output.
+        #   2. Concatenate the K filter banks and apply a single BN operation.
+        #
+        # As [1] states: "Batch normalization (Ioffe & Szegedy, 2015) is used for all
+        # convolutional layers.", I have decided to implement case 1.
+
+        # Improvement: What would be the effect of setting renorm=True?
         filter_bank = tf.layers.batch_normalization(inputs=filter_bank,
                                                     training=training,
-                                                    # renorm=True,  # TODO: Possible improvements?
                                                     fused=True,
                                                     scale=False)
-        # TODO: Read renorm paper: https://arxiv.org/abs/1702.03275
 
+        # filter_bank.shape = (B, T, n_filters)
         filter_banks.append(filter_bank)
 
-    # See: section "3.1 CBHG Module"
-    # "The convolution outputs are stacked together and further max pooled along time to increase
-    # local invariances."
-    # ------------------------------------------------------------------------------------------
-    # Stacking the filter outputs for each spectrogram frame produces an output
-    # with shape=(B, T, C_k * K).
+    # [1], section 3.1 CBHG Module: "The convolution outputs are stacked together [...]"
+    # shape=(B, T, n_banks * n_filters)
     return tf.concat(filter_banks, axis=-1)
-
-    # See: section "3.1 CBHG Module"
-    # We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
-    # are added with the original input sequence via residual connections (He et al., 2016).
 
 
 def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):

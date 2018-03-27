@@ -31,12 +31,19 @@ class Tacotron:
             # Produces shape=(B, T, E//2 * K)
             network = conv_1d_filter_banks(inputs, K, Ck)
 
+            # See: section "3.1 CBHG Module"
+            # "The convolution outputs are stacked together and further max pooled along time to increase
+            # local invariances."
+
             # Produces shape=(B, T, E//2 * K)
             network = tf.layers.max_pooling1d(inputs=network,
                                               pool_size=2,
                                               strides=1,
                                               padding='SAME')
 
+            # See: section "3.1 CBHG Module"
+            # We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
+            # are added with the original input sequence via residual connections (He et al., 2016).
             network = conv_1d_projection(inputs=network,
                                          n_filters=256,
                                          kernel_size=3,
