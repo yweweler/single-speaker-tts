@@ -252,7 +252,37 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
 
 
 def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):
-    # TODO: Add documentation.
+    """
+    Implementation of a 1D convolution projection described in "Tacotron: Towards End-to-End Speech
+    Synthesis".
+
+    See: https://arxiv.org/abs/1703.10135
+
+    The purpose of this operation is to project the fed data from the entered dimensionality
+    in the last rank (F) into the dimensionality 'n_filters' using 1D convolution filters.
+
+    Arguments:
+        inputs (tf.Tensor):
+            The shape is expected to be shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
+
+        n_filters (int):
+            The dimensionality of the output space (i.e. the number of filters in the convolution).
+
+        kernel_size (int):
+            Length of the 1D convolution window.
+
+        activation:
+            Activation function. Set it to None to maintain a linear activation.
+
+        scope (str):
+            Tensorflow variable scope to wrap the layers in.
+
+    Returns:
+        tf.Tensor:
+            A tensor which shape is expected to be shape=(B, T, n_filters) with B being the batch
+            size, T being the number of time frames.
+    """
     with tf.variable_scope(scope):
         network = tf.layers.conv1d(inputs=inputs,
                                    filters=n_filters,
@@ -261,6 +291,7 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):
                                    activation=activation,
                                    padding='SAME')
 
+        # Improvement: What would be the effect of setting renorm=True?
         network = tf.layers.batch_normalization(inputs=network,
                                                 training=True,
                                                 fused=True,
