@@ -229,15 +229,11 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
         # to each filter bank and concatenate them or concatenate them and apply BN once.
         # Since they state "Batch normalization (Ioffe & Szegedy, 2015) is used for all
         # convolutional layers." I will apply BN before concatenation.
-        # TODO: read the batch normalization paper: http://arxiv.org/abs/1502.03167
         filter_bank = tf.layers.batch_normalization(inputs=filter_bank,
                                                     training=training,
-                                                    # name='batch_normalization',
-                                                    # renorm=True,  # TODO: read the corresp. paper.
-                                                    fused=True,     # TODO: Speed improvement?
-                                                    scale=False     # TODO: Is the follow. relu
-                                                    # proj. layer enough?
-                                                    )
+                                                    # renorm=True,  # TODO: Possible improvements?
+                                                    fused=True,
+                                                    scale=False)
         # TODO: Read renorm paper: https://arxiv.org/abs/1702.03275
 
         filter_banks.append(filter_bank)
@@ -253,3 +249,21 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
     # See: section "3.1 CBHG Module"
     # We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
     # are added with the original input sequence via residual connections (He et al., 2016).
+
+
+def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):
+    # TODO: Add documentation.
+    with tf.variable_scope(scope):
+        network = tf.layers.conv1d(inputs=inputs,
+                                   filters=n_filters,
+                                   kernel_size=kernel_size,
+                                   strides=1,
+                                   activation=activation,
+                                   padding='SAME')
+
+        network = tf.layers.batch_normalization(inputs=network,
+                                                training=True,
+                                                fused=True,
+                                                scale=True)
+
+    return network
