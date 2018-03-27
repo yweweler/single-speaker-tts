@@ -3,7 +3,7 @@ import librosa
 
 def pitch_shift(wav, sampling_rate, octaves):
     """
-    Pitch-shift the waveform by `octaves` octaves.
+    Pitch-shift a waveform by `octaves` octaves.
 
     Arguments:
         wav (np.ndarray):
@@ -24,3 +24,9 @@ def pitch_shift(wav, sampling_rate, octaves):
     """
     n_bins = 12
     return librosa.effects.pitch_shift(wav, sampling_rate, n_bins * octaves, n_bins)
+
+
+def time_stretch(wav, sampling_rate, rate):
+    # TODO: Not implemented yet!
+    # librosa.effects.time_stretch()
+    pass
