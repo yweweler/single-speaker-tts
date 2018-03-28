@@ -5,7 +5,7 @@ import pysptk
 from audio.conversion import ms_to_samples
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
 from audio.io import load_wav, save_wav
-from audio.effects import pitch_shift, pitch_shift_adv
+from audio.effects import pitch_shift
 from audio.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
 from tacotron.hparams import hparams
 
@@ -121,13 +121,11 @@ wav, sr = load_wav(wav_path)
 win_len = ms_to_samples(hparams.win_len, sampling_rate=sr)
 hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 
-wav_ps1 = pitch_shift(wav, sr, -0.5)
-wav_ps2 = pitch_shift_adv(wav, sr, -0.5)
+wav_ps = pitch_shift(wav, sr, -0.5)
 
 # plot_waveform(wav, hparams.sampling_rate, title="Mega original")
 
-save_wav('/tmp/wav_ps1.wav', wav_ps1, sr, True)
-save_wav('/tmp/wav_ps2.wav', wav_ps2, sr, True)
+save_wav('/tmp/ps.wav', wav_ps, sr, True)
 
 # calculate_linear_spec(wav, hop_len, win_len)
 # calculate_mfccs_and_deltas(wav, hop_len, win_len)
