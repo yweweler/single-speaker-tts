@@ -1,4 +1,8 @@
 import librosa
+import numpy as np
+
+from audio.features import linear_scale_spectrogram
+from audio.synthesis import spectrogram_to_wav
 
 
 def pitch_shift(wav, sampling_rate, octaves):
@@ -51,3 +55,26 @@ def time_stretch(wav, rate):
         raise ValueError('The fixed rate used to stretch the signal must be greater 0.')
 
     return librosa.effects.time_stretch(wav, rate)
+
+
+def time_stretch_adv(wav, rate):
+    if rate <= 0.0:
+        raise ValueError('The fixed rate used to stretch the signal must be greater 0.')
+
+    n_fft = 1024
+    win_len = n_fft
+    hop_len = win_len // 4
+    reconstr_iters = 25
+
+    # Construct the stft.
+    stft = linear_scale_spectrogram(wav, n_fft, hop_len, win_len)
+
+    # Stretch by phase vocoding.
+    stft_stretch = librosa.core.phase_vocoder(stft, rate)
+
+    mag = np.abs(stft_stretch)
+
+    # Invert the stft.
+    reconstr = spectrogram_to_wav(mag, win_len, hop_len, n_fft, reconstr_iters)
+
+    return reconstr
