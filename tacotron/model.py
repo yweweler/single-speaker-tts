@@ -23,32 +23,63 @@ class Tacotron:
         return self.inp_mel_spec, self.inp_linear_spec
 
     def post_process(self, inputs):
+        """
+        Apply the CBHG based post-processing network to the spectrogram.
+
+        Arguments:
+            inputs (tf.Tensor):
+                The shape is expected to be shape=(B, T, n_mels) with B being the
+                batch size and T being the number of time frames.
+
+        Returns:
+            tf.Tensor:
+                A tensor which shape is expected to be shape=(B, T, n_gru_units * 2) with B
+                being the batch size and T being the number of time frames.
+        """
         with tf.variable_scope('post_process'):
-            # network.shape => (B, T//r, (1 + n_fft // 2)*r)
-
-            # TODO: There is actually no point in applying the reduction factor during post-proc.
-            #       - My measurements suggest that there is no benefit.
-            #       - The Tacotron paper does not explicitly state that r was applied here.
-
             network = cbhg(inputs=inputs,
                            n_banks=self.hparams.post.n_banks,
                            n_filters=self.hparams.post.n_filters,
                            n_highway_layers=self.hparams.post.n_highway_layers,
-                           n_highway_units=self.hparams.post.n_highway_units *
-                                           self.hparams.reduction,
-                           n_gru_units=self.hparams.n_gru_units,
+                           n_highway_units=self.hparams.post.n_highway_units,
+                           n_proj_filters=self.hparams.post.n_proj_filters,
+                           n_gru_units=self.hparams.post.n_gru_units,
                            training=True)
 
-        self.pred_linear_spec = network
-        return self.pred_linear_spec
+        return network
 
     def model(self):
         # Input shape=(B, T, E)
 
-        self.post_process(self.inp_mel_spec)
+        # network.shape => (B, T//r, n_mels*r)
+        network = self.inp_mel_spec
+        batch_size = tf.shape(network)[0]
 
-        # tf.losses.absolute_difference could be used either (in case reduction=Reduction.MEAN is used).
-        self.loss_op = tf.reduce_mean(tf.abs(self.inp_linear_spec - self.pred_linear_spec))
+        # Note: The Tacotron paper does not explicitly state that the reduction factor r was
+        # applied during post-processing. My measurements suggest, that there is no benefit
+        # in applying r during post-processing. Therefore the data is reshaped to the
+        # original size before processing.
+
+        # network.shape => (B, T, n_mels)
+        network = tf.reshape(network, [batch_size, -1, self.hparams.n_mels])
+
+        # network.shape => (B, T, n_gru_units * 2)
+        network = self.post_process(network)
+
+        # network.shape => (B, T, (1 + n_fft // 2))
+        network = tf.layers.dense(inputs=network,
+                                  units=(1 + self.hparams.n_fft // 2),
+                                  activation=tf.nn.sigmoid,
+                                  kernel_initializer=tf.glorot_normal_initializer(),
+                                  bias_initializer=tf.glorot_normal_initializer())
+
+        self.pred_linear_spec = network
+
+        # linear_spec.shape = > (B, T, (1 + n_fft // 2))
+        linear_spec = tf.reshape(self.inp_linear_spec,
+                                 [batch_size, -1, (1 + self.hparams.n_fft // 2)])
+
+        self.loss_op = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
 
     def get_loss_op(self):
         return self.loss_op
@@ -61,20 +92,11 @@ class Tacotron:
         #     tf.summary.image('linear_spec', tf.expand_dims(self.inp_linear_spec, -1), max_outputs=1)
 
         with tf.name_scope('normalized_inputs'):
-            # tf.summary.image('mel_spec',
-            #                  tf.expand_dims(
-            #                      tf.reshape(self.inp_mel_spec[0],
-            #                                 (1, -1, self.hparams.n_mels)), -1), max_outputs=1)
-
             tf.summary.image('linear_spec',
                              tf.expand_dims(
                                  tf.reshape(self.inp_linear_spec[0],
                                             (1, -1, (1 + self.hparams.n_fft // 2))), -1),
                              max_outputs=1)
-
-        # with tf.name_scope('reduced_outputs'):
-        #     # tf.summary.image('inp_linear_spec', tf.expand_dims(self.inp_linear_spec, -1), max_outputs=1)
-        #     tf.summary.image('linear_spec', tf.expand_dims(self.pred_linear_spec, -1), max_outputs=1)
 
         with tf.name_scope('normalized_outputs'):
             tf.summary.image('linear_spec',

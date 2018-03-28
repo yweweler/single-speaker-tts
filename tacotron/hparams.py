@@ -38,6 +38,7 @@ hparams = tf.contrib.training.HParams(
         n_filters=128,
         n_highway_layers=4,
         n_highway_units=128,
+        n_proj_filters=256,
         n_gru_units=128
     )
 )

@@ -345,7 +345,8 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope, traini
     return network
 
 
-def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_gru_units, training=True):
+def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_proj_filters,
+         n_gru_units, training=True):
     """
     Implementation of a CBHG (1-D convolution bank + highway network + bidirectional GRU)
     described in "Tacotron: Towards End-to-End Speech Synthesis".
@@ -374,6 +375,10 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_gru_un
             using a dense network to match required shape=(B, T, n_highway_units) for the highway
             network.
 
+        n_proj_filters (int):
+            The dimensionality of the output space of the first 1d convolutional projection
+            (i.e. the number of filters in the first projection layer).
+
         n_gru_units (int):
             The number of units to use for the bi-direction GRU.
 
@@ -386,9 +391,6 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_gru_un
             A tensor which shape is expected to be shape=(B, T, n_gru_units * 2) with B being
             the batch size, T being the number of time frames.
     """
-    # TODO: I Need to rework all of this to support a Tacotron reduction factor > 1.
-
-    # TODO: Why do the filter banks require that much memory? (Does not add up with my calc.)
     # network.shape => (B, T, n_banks * n_filters)
     network = conv_1d_filter_banks(inputs=inputs,
                                    n_banks=n_banks,
@@ -410,15 +412,15 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_gru_un
     # "We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
     # are added with the original input sequence via residual connections [...]."
 
-    # network.shape => (B, T, 256)
+    # network.shape => (B, T, n_proj_filters)
     network = conv_1d_projection(inputs=network,
-                                 n_filters=256*2,
+                                 n_filters=n_proj_filters,
                                  kernel_size=3,
                                  activation=tf.nn.relu,
                                  scope='conv_proj_1',
                                  training=training)
 
-    # network.shape => (B, T, 80)
+    # network.shape => (B, T, inputs.shape[-1])
     network = conv_1d_projection(inputs=network,
                                  n_filters=inputs.shape[-1],
                                  kernel_size=3,
@@ -427,7 +429,7 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_gru_un
                                  training=training)
 
     # Residual connection.
-    # network.shape => (B, T, 80)
+    # network.shape => (B, T, inputs.shape[-1])
     network = tf.add(network, inputs)
 
     # Highway network dimensionality lifter.
@@ -448,13 +450,12 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_gru_un
 
     # TODO: Add a BI-GRU network for the final generation step instead of the FC one.
 
-    # network.shape => (B, T, n_gru_units * 2 + 1)
-    # TODO: Stopped here: rewriting the cbhg for Tacotron r.
+    # network.shape => (B, T, n_gru_units * 2)
     network = tf.layers.dense(inputs=network,
-                              units=n_gru_units * 2 + 1,
-                              activation=tf.nn.sigmoid,
+                              units=n_gru_units * 2,
+                              activation=None,
                               kernel_initializer=tf.glorot_normal_initializer(),
                               bias_initializer=tf.glorot_normal_initializer())
 
-    # network.shape => (B, T, n_highway_units)
+    # network.shape => (B, T, n_gru_units * 2)
     return network
