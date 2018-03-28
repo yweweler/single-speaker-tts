@@ -27,6 +27,9 @@ def pitch_shift(wav, sampling_rate, octaves):
         (np.ndarray):
             Audio time series.
             The shape of the returned array is shape=(n,) and the arrays dtype is np.float32.
+
+    Notes:
+        - This implementation is derived from the function `librosa.effects.pitch_shift`.
     """
     rate = 2.0 ** (-octaves)
 
@@ -58,6 +61,9 @@ def time_stretch(wav, rate):
         (np.ndarray):
             Audio time series.
             The shape of the returned array is shape=(n,) and the arrays dtype is np.float32.
+
+    Notes:
+        - This implementation is derived from the function `librosa.effects.time_stretch`.
     """
     if rate <= 0.0:
         raise ValueError('The fixed rate used to stretch the signal must be greater 0.')
