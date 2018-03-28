@@ -128,6 +128,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     mel.set_shape((None, hparams.n_mels * hparams.reduction))
     mag.set_shape((None, (1 + hparams.n_fft // 2) * hparams.reduction))
 
+    # TODO: tf.train.batch also supports dynamic per batch padding using 'dynamic_pad=True'
     # mels, mags = tf.train.batch([mel, mag], batch_size=batch_size, capacity=64, num_threads=4)
 
     print('n_buckets: {} + 2'.format(len([i for i in range(minlen + 1, maxlen + 1, 4)])))

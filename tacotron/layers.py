@@ -448,14 +448,32 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_proj_f
                               layers=n_highway_layers,
                               scope='highway_network')
 
-    # TODO: Add a BI-GRU network for the final generation step instead of the FC one.
+    # TODO: Transpose / unstack data to be in an more suitable format for the RNN? (time_major)
+    # TODO: Is the tanh default activation on each cell a good choice?
+
+    cell_forward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='forward')
+    cell_backward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='backward')
+
+    outputs, output_states = tf.nn.bidirectional_dynamic_rnn(
+        cell_fw=cell_forward,
+        cell_bw=cell_backward,
+        inputs=network,
+        dtype=tf.float32)
 
     # network.shape => (B, T, n_gru_units * 2)
-    network = tf.layers.dense(inputs=network,
-                              units=n_gru_units * 2,
-                              activation=None,
-                              kernel_initializer=tf.glorot_normal_initializer(),
-                              bias_initializer=tf.glorot_normal_initializer())
+    network = tf.concat(outputs, -1)
 
-    # network.shape => (B, T, n_gru_units * 2)
+    # TODO: Bring the rnn outputs back into a shape desirable for the rest of the network.
+    # (batch_major)
+
     return network
+
+    # # network.shape => (B, T, n_gru_units * 2)
+    # network = tf.layers.dense(inputs=network,
+    #                           units=n_gru_units * 2,
+    #                           activation=None,
+    #                           kernel_initializer=tf.glorot_normal_initializer(),
+    #                           bias_initializer=tf.glorot_normal_initializer())
+    #
+    # # network.shape => (B, T, n_gru_units * 2)
+    # return network
