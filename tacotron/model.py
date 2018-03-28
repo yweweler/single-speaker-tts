@@ -55,6 +55,10 @@ class Tacotron:
         network = self.inp_mel_spec
         batch_size = tf.shape(network)[0]
 
+        # TODO: network = self.encoder(...)
+
+        # TODO: network = self.decoder(...)
+
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
         # applied during post-processing. My measurements suggest, that there is no benefit
         # in applying r during post-processing. Therefore the data is reshaped to the
@@ -88,10 +92,6 @@ class Tacotron:
 
     def summary(self):
         tf.summary.scalar('loss', self.loss_op)
-
-        # with tf.name_scope('reduced_inputs'):
-        #     tf.summary.image('mel_spec', tf.expand_dims(self.inp_mel_spec, -1), max_outputs=1)
-        #     tf.summary.image('linear_spec', tf.expand_dims(self.inp_linear_spec, -1), max_outputs=1)
 
         with tf.name_scope('normalized_inputs'):
             tf.summary.image('linear_spec',

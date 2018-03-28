@@ -451,14 +451,16 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_proj_f
     # TODO: Transpose / unstack data to be in an more suitable format for the RNN? (time_major)
     # TODO: Is the tanh default activation on each cell a good choice?
 
-    cell_forward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='forward')
-    cell_backward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='backward')
+    cell_forward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_fw')
+    cell_backward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_bw')
 
     outputs, output_states = tf.nn.bidirectional_dynamic_rnn(
         cell_fw=cell_forward,
         cell_bw=cell_backward,
         inputs=network,
-        dtype=tf.float32)
+        dtype=tf.float32,
+        scope='gru'
+    )
 
     # network.shape => (B, T, n_gru_units * 2)
     network = tf.concat(outputs, -1)
