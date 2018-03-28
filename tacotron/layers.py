@@ -204,7 +204,7 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
         return network
 
 
-def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, training=True):
+def conv_1d_filter_banks(inputs, n_banks, n_filters, scope, activation=tf.nn.relu, training=True):
     """
     Implementation of a 1D convolutional filter banks described in "Tacotron: Towards End-to-End
     Speech Synthesis".
@@ -227,11 +227,14 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
             number of time frames and F being the size of the features.
 
         n_banks (int):
-            Number of filter banks to use.
+            The number of filter banks to use.
 
         n_filters (int):
             The dimensionality of the output space of each filter bank (i.e. the number of
             filters in each bank).
+
+        scope (str):
+            Tensorflow variable scope to construct the layer in.
 
         activation (:obj:`function`, optional):
             Activation function for the filter banks.
@@ -246,46 +249,50 @@ def conv_1d_filter_banks(inputs, n_banks, n_filters, activation=tf.nn.relu, trai
             A tensor which shape is expected to be shape=(B, T, n_banks * n_filters) with B being
             the batch size, T being the number of time frames.
     """
-    # [1], section 3.1 CBHG Module:
-    # "The input sequence is first convolved with K sets of 1-D convolutional filters, where the
-    # k-th set contains C_k filters of width k (i.e. k = 1, 2, ... , K)."
-    filter_banks = []
-    for bank in range(n_banks):
+    with tf.variable_scope(scope):
         # [1], section 3.1 CBHG Module:
-        # "Note that we use a stride of 1 to preserve the original time resolution."
-        # filter_bank.shape = (B, T, n_filters)
-        filter_bank = tf.layers.conv1d(inputs=inputs,
-                                       filters=n_filters,
-                                       kernel_size=bank + 1,
-                                       strides=1,
-                                       activation=activation,
-                                       padding='SAME')
+        # "The input sequence is first convolved with K sets of 1-D convolutional filters, where the
+        # k-th set contains C_k filters of width k (i.e. k = 1, 2, ... , K)."
+        filter_banks = []
+        for bank in range(n_banks):
+            # [1], section 3.1 CBHG Module:
+            # "Note that we use a stride of 1 to preserve the original time resolution."
+            # filter_bank.shape => (B, T, n_filters)
+            filter_bank = tf.layers.conv1d(inputs=inputs,
+                                           filters=n_filters,
+                                           kernel_size=bank + 1,
+                                           strides=1,
+                                           activation=activation,
+                                           padding='SAME',
+                                           name='conv-{}-{}'.format(bank + 1, n_filters))
 
-        # Improvement: In my opinion the Tacotron paper is not clear on how to apply batch
-        # normalization on the filter banks.
-        #
-        # I see two ways we can apply BN here:
-        #   1. Apply a separate BN operation to the K filter banks and concatenate the output.
-        #   2. Concatenate the K filter banks and apply a single BN operation.
-        #
-        # As [1] states: "Batch normalization (Ioffe & Szegedy, 2015) is used for all
-        # convolutional layers.", I have decided to implement case 1.
+            # Improvement: In my opinion the Tacotron paper is not clear on how to apply batch
+            # normalization on the filter banks.
+            #
+            # I see two ways we can apply BN here:
+            #   1. Apply a separate BN operation to the K filter banks and concatenate the output.
+            #   2. Concatenate the K filter banks and apply a single BN operation.
+            #
+            # As [1] states: "Batch normalization (Ioffe & Szegedy, 2015) is used for all
+            # convolutional layers.", I have decided to implement case 1.
 
-        # Improvement: What would be the effect of setting renorm=True?
-        filter_bank = tf.layers.batch_normalization(inputs=filter_bank,
-                                                    training=training,
-                                                    fused=True,
-                                                    scale=False)
+            # Improvement: What would be the effect of setting renorm=True?
+            filter_bank = tf.layers.batch_normalization(inputs=filter_bank,
+                                                        training=training,
+                                                        fused=True,
+                                                        scale=False)
 
-        # filter_bank.shape = (B, T, n_filters)
-        filter_banks.append(filter_bank)
+            # filter_bank.shape => (B, T, n_filters)
+            filter_banks.append(filter_bank)
 
-    # [1], section 3.1 CBHG Module: "The convolution outputs are stacked together [...]"
-    # shape=(B, T, n_banks * n_filters)
-    return tf.concat(filter_banks, axis=-1)
+        # [1], section 3.1 CBHG Module: "The convolution outputs are stacked together [...]"
+        # shape=(B, T, n_banks * n_filters)
+        stacked_banks = tf.concat(filter_banks, axis=-1)
+
+    return stacked_banks
 
 
-def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):
+def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope, training=True):
     """
     Implementation of a 1D convolution projection described in "Tacotron: Towards End-to-End Speech
     Synthesis".
@@ -312,6 +319,10 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):
         scope (str):
             Tensorflow variable scope to wrap the layers in.
 
+        training (boolean):
+            Boolean defining whether to apply the batch normalization or not.
+            Default is True.
+
     Returns:
         tf.Tensor:
             A tensor which shape is expected to be shape=(B, T, n_filters) with B being the batch
@@ -327,8 +338,112 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope):
 
         # Improvement: What would be the effect of setting renorm=True?
         network = tf.layers.batch_normalization(inputs=network,
-                                                training=True,
+                                                training=training,
                                                 fused=True,
                                                 scale=True)
 
+    return network
+
+
+def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, training=True):
+    """
+    Implementation of a CBHG (1-D convolution bank + highway network + bidirectional GRU)
+    described in "Tacotron: Towards End-to-End Speech Synthesis".
+
+    See: "Tacotron: Towards End-to-End Speech Synthesis"
+      * Source: [1] https://arxiv.org/abs/1703.10135
+
+    Arguments:
+        inputs (tf.Tensor):
+            The shape is expected to be shape=(B, T, F) with B being the batch size, T being the
+            number of time frames and F being the size of the features.
+
+        n_banks (int):
+            The number of 1D convolutional filter banks to use.
+
+        n_filters (int):
+            The dimensionality of the output space of each 1d convolutional filter bank (i.e. the
+            number of filters in each bank).
+
+        n_highway_layers (int):
+            The number of highway layers to stack in the highway network.
+
+        n_highway_units:
+            The number of units to use for the highway network layers.
+            Note that the result of the residual connection with shape=(B, T, F) is projected
+            using a dense network to match required shape=(B, T, n_highway_units) for the highway
+            network.
+
+        training (boolean):
+            Boolean defining whether the network will be trained or just used for inference.
+            Default is True.
+
+    Returns:
+        tf.Tensor:
+            A tensor which shape is expected to be shape=(B, T, n_highway_units) with B being
+            the batch size, T being the number of time frames.
+    """
+    # TODO: I Need to rework all of this to support a Tacotron reduction factor > 1.
+
+    # TODO: Why do the filter banks require that much memory? (Does not add up with my calc.)
+    # network.shape => (B, T, n_banks * n_filters)
+    network = conv_1d_filter_banks(inputs=inputs,
+                                   n_banks=n_banks,
+                                   n_filters=n_filters,
+                                   scope='convolution_banks',
+                                   training=training)
+
+    # [1], section 3.1 CBHG Module:
+    # "The convolution outputs are [...] further max pooled along time to increase
+    #  local invariances."
+
+    # network.shape => (B, T, n_banks * n_filters)
+    network = tf.layers.max_pooling1d(inputs=network,
+                                      pool_size=2,
+                                      strides=1,
+                                      padding='SAME')
+
+    # [1], section 3.1 CBHG Module:
+    # "We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
+    # are added with the original input sequence via residual connections [...]."
+
+    # network.shape => (B, T, 256)
+    network = conv_1d_projection(inputs=network,
+                                 n_filters=256,
+                                 kernel_size=3,
+                                 activation=tf.nn.relu,
+                                 scope='conv_proj_1',
+                                 training=training)
+
+    # network.shape => (B, T, 80)
+    network = conv_1d_projection(inputs=network,
+                                 n_filters=80,
+                                 kernel_size=3,
+                                 activation=None,
+                                 scope='conv_proj_2',
+                                 training=training)
+
+    # Residual connection.
+    # network.shape => (B, T, 80)
+    network = tf.add(network, inputs)
+
+    # Highway network dimensionality lifter.
+    # network.shape => (B, T, n_highway_units)
+    network = tf.layers.dense(inputs=network,
+                              units=n_highway_units,
+                              activation=tf.nn.relu,
+                              kernel_initializer=tf.glorot_normal_initializer(),
+                              bias_initializer=tf.glorot_normal_initializer(),
+                              name='lifter')
+
+    # Multi layer highway network.
+    # network.shape => (B, T, n_highway_units)
+    network = highway_network(inputs=network,
+                              units=n_highway_units,
+                              layers=n_highway_layers,
+                              scope='highway_network')
+
+    # TODO: Add a GRU as described in the Tacotron paper.
+
+    # network.shape => (B, T, n_highway_units)
     return network

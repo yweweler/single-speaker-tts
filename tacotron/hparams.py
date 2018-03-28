@@ -9,10 +9,12 @@ hparams = tf.contrib.training.HParams(
     n_fft=1024,
 
     # Windows length in ms.
-    win_len=25.0,
+    # win_len=25.0,
+    win_len=50.0,
 
     # Window stride in ms.
-    win_hop=8.0,
+    # win_hop=8.0,
+    win_hop=12.5,
 
     # Number of Mel bands to generate.
     n_mels=80,
@@ -27,5 +29,13 @@ hparams = tf.contrib.training.HParams(
     n_mfcc=13,
 
     # Tacotron reduction factor r.
-    reduction=1
+    reduction=1,
+
+    # Post-processing network parameters.
+    postproc=tf.contrib.training.HParams(
+        n_banks=8,
+        n_filters=128,
+        n_highway_layers=4,
+        n_highway_units=128
+    )
 )

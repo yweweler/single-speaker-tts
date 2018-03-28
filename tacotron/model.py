@@ -1,7 +1,9 @@
 import tensorflow as tf
 
-from tacotron.layers import highway_network, conv_1d_filter_banks, conv_1d_projection
+from tacotron.layers import cbhg
 
+
+# TODO: Clean up document and comments.
 
 class Tacotron:
     def __init__(self, hparams, inputs):
@@ -21,59 +23,19 @@ class Tacotron:
         return self.inp_mel_spec, self.inp_linear_spec
 
     def post_process(self, inputs):
-        K = 8
-        Ck = 128
-        # TODO: Add dimensionality reminders.
-        # TODO: Clean up and document.
-        # TODO: Remove magic sizes into parameters.
-
         with tf.variable_scope('post_process'):
-            # Produces shape=(B, T, E//2 * K)
-            network = conv_1d_filter_banks(inputs, K, Ck)
-
-            # See: section "3.1 CBHG Module"
-            # "The convolution outputs are stacked together and further max pooled along time to increase
-            # local invariances."
-
-            # Produces shape=(B, T, E//2 * K)
-            network = tf.layers.max_pooling1d(inputs=network,
-                                              pool_size=2,
-                                              strides=1,
-                                              padding='SAME')
-
-            # See: section "3.1 CBHG Module"
-            # We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
-            # are added with the original input sequence via residual connections (He et al., 2016).
-            network = conv_1d_projection(inputs=network,
-                                         n_filters=256,
-                                         kernel_size=3,
-                                         activation=tf.nn.relu,
-                                         scope='projection_1')
-
-            network = conv_1d_projection(inputs=network,
-                                         n_filters=80,
-                                         kernel_size=3,
-                                         activation=None,
-                                         scope='projection_2')
-
-            # TODO: I Need to rework all of this to support a Tacotron reduction factor > 1.
-            network = tf.add(network, inputs)
-
-            # Highway network dimensionality lifter.
-            network = tf.layers.dense(inputs=network,
-                                      units=128 * self.hparams.reduction,
-                                      activation=tf.nn.relu,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      bias_initializer=tf.glorot_normal_initializer(),
-                                      name='highway_network_lifter')
-
-            network = highway_network(inputs=network,
-                                      units=128 * self.hparams.reduction,
-                                      layers=4,
-                                      scope='highway_network')
+            # network.shape => (B, T//r, n_highway_units*r)
+            network = cbhg(inputs=inputs,
+                           n_banks=self.hparams.postproc.n_banks,
+                           n_filters=self.hparams.postproc.n_filters,
+                           n_highway_layers=self.hparams.postproc.n_highway_layers,
+                           n_highway_units=self.hparams.postproc.n_highway_units *
+                                           self.hparams.reduction,
+                           training=True)
 
             # TODO: Add a BI-GRU network for the final generation step instead of the FC one.
 
+            # network.shape => (B, T//r, (1 + n_fft // 2)*r)
             network = tf.layers.dense(inputs=network,
                                       units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
                                       activation=tf.nn.sigmoid,
