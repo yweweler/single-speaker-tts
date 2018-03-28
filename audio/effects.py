@@ -31,7 +31,6 @@ def pitch_shift(wav, sampling_rate, octaves):
     n_bins = 12
     return librosa.effects.pitch_shift(wav, sampling_rate, n_bins * octaves, n_bins)
 
-
 def time_stretch(wav, rate):
     """
     Time-stretch an audio series by a fixed rate.
@@ -54,13 +53,6 @@ def time_stretch(wav, rate):
     if rate <= 0.0:
         raise ValueError('The fixed rate used to stretch the signal must be greater 0.')
 
-    return librosa.effects.time_stretch(wav, rate)
-
-
-def time_stretch_adv(wav, rate):
-    if rate <= 0.0:
-        raise ValueError('The fixed rate used to stretch the signal must be greater 0.')
-
     n_fft = 1024
     win_len = n_fft
     hop_len = win_len // 4
@@ -72,6 +64,7 @@ def time_stretch_adv(wav, rate):
     # Stretch by phase vocoding.
     stft_stretch = librosa.core.phase_vocoder(stft, rate)
 
+    # Get the magnitudes.
     mag = np.abs(stft_stretch)
 
     # Invert the stft.

@@ -4,9 +4,10 @@ import pysptk
 
 from audio.conversion import ms_to_samples
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
-from audio.io import load_wav
+from audio.io import load_wav, save_wav
+from audio.effects import time_stretch
 from audio.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
-from hparams import hparams
+from tacotron.hparams import hparams
 
 
 def resynth_wav_using_mcep(wav, hop_len, n_mceps, mcep_alpha):
@@ -120,7 +121,12 @@ wav, sr = load_wav(wav_path)
 win_len = ms_to_samples(hparams.win_len, sampling_rate=sr)
 hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 
-plot_waveform(wav, hparams.sampling_rate, title="Mega original")
-calculate_linear_spec(wav, hop_len, win_len)
+wav_stretched = time_stretch(wav, 3)
+
+# plot_waveform(wav, hparams.sampling_rate, title="Mega original")
+
+save_wav('/tmp/streched.wav', wav_stretched, sr, True)
+
+# calculate_linear_spec(wav, hop_len, win_len)
 # calculate_mfccs_and_deltas(wav, hop_len, win_len)
 # resynth_wav_using_mcep(wav, hop_len, 25, 0.35)
