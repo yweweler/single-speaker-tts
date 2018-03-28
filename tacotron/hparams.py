@@ -32,6 +32,9 @@ hparams = tf.contrib.training.HParams(
     # Tacotron reduction factor r.
     reduction=1,
 
+    # Flag that controls application of the post-processing network.
+    apply_post_processing=True,
+
     # Post-processing network parameters.
     post=tf.contrib.training.HParams(
         n_banks=8,

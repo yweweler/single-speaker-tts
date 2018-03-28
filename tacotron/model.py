@@ -63,9 +63,11 @@ class Tacotron:
         # network.shape => (B, T, n_mels)
         network = tf.reshape(network, [batch_size, -1, self.hparams.n_mels])
 
-        # network.shape => (B, T, n_gru_units * 2)
-        network = self.post_process(network)
+        if self.hparams.apply_post_processing:
+            # network.shape => (B, T, n_gru_units * 2)
+            network = self.post_process(network)
 
+        # TODO: Should the reduction factor be applied here?
         # network.shape => (B, T, (1 + n_fft // 2))
         network = tf.layers.dense(inputs=network,
                                   units=(1 + self.hparams.n_fft // 2),
