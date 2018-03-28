@@ -24,23 +24,20 @@ class Tacotron:
 
     def post_process(self, inputs):
         with tf.variable_scope('post_process'):
-            # network.shape => (B, T//r, n_highway_units*r)
-            network = cbhg(inputs=inputs,
-                           n_banks=self.hparams.postproc.n_banks,
-                           n_filters=self.hparams.postproc.n_filters,
-                           n_highway_layers=self.hparams.postproc.n_highway_layers,
-                           n_highway_units=self.hparams.postproc.n_highway_units *
-                                           self.hparams.reduction,
-                           training=True)
-
-            # TODO: Add a BI-GRU network for the final generation step instead of the FC one.
-
             # network.shape => (B, T//r, (1 + n_fft // 2)*r)
-            network = tf.layers.dense(inputs=network,
-                                      units=(1 + self.hparams.n_fft // 2) * self.hparams.reduction,
-                                      activation=tf.nn.sigmoid,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      bias_initializer=tf.glorot_normal_initializer())
+
+            # TODO: There is actually no point in applying the reduction factor during post-proc.
+            #       - My measurements suggest that there is no benefit.
+            #       - The Tacotron paper does not explicitly state that r was applied here.
+
+            network = cbhg(inputs=inputs,
+                           n_banks=self.hparams.post.n_banks,
+                           n_filters=self.hparams.post.n_filters,
+                           n_highway_layers=self.hparams.post.n_highway_layers,
+                           n_highway_units=self.hparams.post.n_highway_units *
+                                           self.hparams.reduction,
+                           n_gru_units=self.hparams.n_gru_units,
+                           training=True)
 
         self.pred_linear_spec = network
         return self.pred_linear_spec

@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 # Default hyper-parameters:
 hparams = tf.contrib.training.HParams(
     # Target sampling rate.
@@ -32,10 +33,11 @@ hparams = tf.contrib.training.HParams(
     reduction=1,
 
     # Post-processing network parameters.
-    postproc=tf.contrib.training.HParams(
+    post=tf.contrib.training.HParams(
         n_banks=8,
         n_filters=128,
         n_highway_layers=4,
-        n_highway_units=128
+        n_highway_units=128,
+        n_gru_units=128
     )
 )
