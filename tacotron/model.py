@@ -22,6 +22,12 @@ class Tacotron:
         # inp_linear_spec: shape=(N, T//r, (1 + n_fft // 2)*r)
         return self.inp_mel_spec, self.inp_linear_spec
 
+    def encoder(self, inputs):
+        return inputs
+
+    def decoder(self, inputs):
+        return inputs
+
     def post_process(self, inputs):
         """
         Apply the CBHG based post-processing network to the spectrogram.
@@ -55,9 +61,9 @@ class Tacotron:
         network = self.inp_mel_spec
         batch_size = tf.shape(network)[0]
 
-        # TODO: network = self.encoder(...)
+        network = self.encoder(network)
 
-        # TODO: network = self.decoder(...)
+        network = self.decoder(network)
 
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
         # applied during post-processing. My measurements suggest, that there is no benefit
