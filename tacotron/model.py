@@ -10,7 +10,7 @@ class Tacotron:
         self.hparams = hparams
 
         # Create placeholders for the input data.
-        self.sent_iter, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
+        self.inp_sentences, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
         self.pred_linear_spec = None
         self.loss_op = None
 
@@ -23,6 +23,14 @@ class Tacotron:
         return self.inp_mel_spec, self.inp_linear_spec
 
     def encoder(self, inputs):
+        with tf.variable_scope('encoder'):
+            char_embeddings = tf.get_variable("embedding", [
+                self.hparams.vocabulary_size,
+                self.hparams.encoder.embedding_size
+            ])
+
+            embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
+
         return inputs
 
     def decoder(self, inputs):
@@ -48,7 +56,7 @@ class Tacotron:
                            n_filters=self.hparams.post.n_filters,
                            n_highway_layers=self.hparams.post.n_highway_layers,
                            n_highway_units=self.hparams.post.n_highway_units,
-                           n_proj_filters=self.hparams.post.n_proj_filters,
+                           projections=self.hparams.post.projections,
                            n_gru_units=self.hparams.post.n_gru_units,
                            training=True)
 
@@ -61,7 +69,7 @@ class Tacotron:
         network = self.inp_mel_spec
         batch_size = tf.shape(network)[0]
 
-        network = self.encoder(network)
+        encoder_network = self.encoder(self.inp_sentences)
 
         network = self.decoder(network)
 

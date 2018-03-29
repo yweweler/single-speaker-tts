@@ -94,10 +94,10 @@ def load_text(text_paths):
 
             # Append str. representation so that tf.Tensor handles this as an collection of objects.
             # This allows us to store sequences of different length in a single tensor.
-            lines.append(np.array(idx, dtype=np.uint16).tostring())
+            lines.append(np.array(idx, dtype=np.int32).tostring())
             line_lens.append(len(line))
 
-    print('char_dict:', char_dict)
+    print('char_dict:', len(char_dict))
     return lines, line_lens
 
 
@@ -135,7 +135,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
     # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
-    sentence = tf.decode_raw(sentence, tf.uint16)
+    sentence = tf.decode_raw(sentence, tf.int32)
 
     # Apply load_entry to each wav_path of the tensorflow iterator.
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])

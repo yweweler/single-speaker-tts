@@ -1,10 +1,12 @@
 import tensorflow as tf
 
-
 # Default hyper-parameters:
 hparams = tf.contrib.training.HParams(
     # Target sampling rate.
     sampling_rate=16000,
+
+    # Number of unique characters in the vocabulary.
+    vocabulary_size=63,
 
     # FFT window size.
     n_fft=1024,
@@ -35,13 +37,32 @@ hparams = tf.contrib.training.HParams(
     # Flag that controls application of the post-processing network.
     apply_post_processing=True,
 
+    # Encoder network parameters.
+    encoder=tf.contrib.training.HParams(
+        embedding_size=256,
+        n_banks=16,
+        n_filters=128,
+        n_highway_layers=4,
+        n_highway_units=128,
+        projections=(
+            # (filters, kernel_size, activation).
+            (128, 3, tf.nn.relu),
+            (128, 3, None)
+        ),
+        n_gru_units=128
+    ),
+
     # Post-processing network parameters.
     post=tf.contrib.training.HParams(
         n_banks=8,
         n_filters=128,
         n_highway_layers=4,
         n_highway_units=128,
-        n_proj_filters=256,
+        projections=(
+            # (filters, kernel_size, activation).
+            (256, 3, tf.nn.relu),
+            (80, 3, None)
+        ),
         n_gru_units=128
     )
 )
