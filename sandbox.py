@@ -2,10 +2,10 @@ import librosa
 import numpy as np
 import pysptk
 
-from audio.conversion import ms_to_samples
+from audio.conversion import ms_to_samples, decibel_to_magnitude, magnitude_to_decibel
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
 from audio.io import load_wav, save_wav
-from audio.effects import pitch_shift
+from audio.effects import pitch_shift, trim_silence
 from audio.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
 from tacotron.hparams import hparams
 
@@ -121,12 +121,16 @@ wav, sr = load_wav(wav_path)
 win_len = ms_to_samples(hparams.win_len, sampling_rate=sr)
 hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 
-wav_ps = pitch_shift(wav, sr, 1/12)
+# Pitch shifting.
+# wav_ps = pitch_shift(wav, sr, 1/12)
+# save_wav('/tmp/ps.wav', wav_ps, sr, True)
+
+# Experimental silence trim.
+wav_trim, indices = trim_silence(wav, 40)
+print(indices)
+save_wav('/tmp/trim.wav', wav_trim, sr, True)
 
 # plot_waveform(wav, hparams.sampling_rate, title="Mega original")
-
-save_wav('/tmp/ps.wav', wav_ps, sr, True)
-
 # calculate_linear_spec(wav, hop_len, win_len)
 # calculate_mfccs_and_deltas(wav, hop_len, win_len)
 # resynth_wav_using_mcep(wav, hop_len, 25, 0.35)

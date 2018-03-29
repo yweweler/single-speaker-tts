@@ -88,9 +88,9 @@ def time_stretch(wav, rate):
     return reconstr
 
 
-def crop_silence_left(wav, sampling_rate, length):
+def crop_silence_left(wav, sampling_rate, length_ms, safe_crop=True):
     """
-    Crops a chunk of `length` ms at the beginning of a waveform.
+    Crops a chunk of `length_ms` ms at the beginning of a waveform.
 
     Arguments:
         wav (np.ndarray):
@@ -100,22 +100,45 @@ def crop_silence_left(wav, sampling_rate, length):
         sampling_rate (int):
             Sampling rate of `wav`.
 
-        length (float):
+        length_ms (float):
             Length in ms of the audio chunk to crop.
+
+        safe_crop (boolean):
+            Flag that enables safe cropping of silence. If False, `wav` is cropped even if this
+            would mean removing a non-silence region. If True, it is ensured that only silence
+            is cropped and the non-silence region are left untouched.
+            Default is True.
 
     Returns:
         (np.ndarray):
             Cropped audio time series.
-            The shape of the returned array is shape=(n - length,) and the arrays dtype is
+            The shape of the returned array is shape=(n - n_cropped,) and the arrays dtype is
             np.float32.
+
+        (int):
+            Gives `n_cropped`, the number of sampled that were cropped.
+            n_cropped = min(samples(length_ms), silence_len_left)
     """
-    samples = ms_to_samples(length, sampling_rate)
-    return wav[samples:]
+    assert (length_ms > 0), 'Crop length must be greater 0.'
+
+    samples = ms_to_samples(length_ms, sampling_rate)
+    assert (samples < len(wav)), 'Crop length can not be greater than the total wav length.'
+
+    # Ensure that only silence is cropped.
+    if safe_crop:
+        _, non_silence_region = trim_silence(wav)
+        # Acquire the actual length of silence at the beginning.
+        silence_len_left = non_silence_region[0]
+
+        # Prevent accidental cropping of non-silence.
+        samples = min(samples, silence_len_left)
+
+    return wav[samples:], samples
 
 
-def crop_silence_right(wav, sampling_rate, length):
+def crop_silence_right(wav, sampling_rate, length_ms, safe_crop=True):
     """
-    Crops a chunk of `length` ms at the end of a waveform.
+    Crops a chunk of `length_ms` ms at the end of a waveform.
 
     Arguments:
         wav (np.ndarray):
@@ -125,20 +148,44 @@ def crop_silence_right(wav, sampling_rate, length):
         sampling_rate (int):
             Sampling rate of `wav`.
 
-        length (float):
+        length_ms (float):
             Length in ms of the audio chunk to crop.
+
+        safe_crop (boolean):
+            Flag that enables safe cropping of silence. If False, `wav` is cropped even if this
+            would mean removing a non-silence region. If True, it is ensured that only silence
+            is cropped and the non-silence region are left untouched.
+            Default is True.
 
     Returns:
         (np.ndarray):
             Cropped audio time series.
-            The shape of the returned array is shape=(n - length,) and the arrays dtype is
+            The shape of the returned array is shape=(n - n_cropped,) and the arrays dtype is
             np.float32.
+
+        (int):
+            Gives `n_cropped`, the number of sampled that were cropped.
+            n_cropped = min(samples(length_ms), silence_len_right)
+
     """
-    samples = ms_to_samples(length, sampling_rate)
-    return wav[:-samples]
+    assert (length_ms > 0), 'Crop length must be greater 0.'
+
+    samples = ms_to_samples(length_ms, sampling_rate)
+    assert (samples < len(wav)), 'Crop length can not be greater than the total wav length.'
+
+    # Ensure that only silence is cropped.
+    if safe_crop:
+        _, non_silence_region = trim_silence(wav)
+        # Acquire the actual length of silence at the end.
+        silence_len_right = len(wav) - non_silence_region[1]
+
+        # Prevent accidental cropping of non-silence.
+        samples = min(samples, silence_len_right)
+
+    return wav[:-samples], samples
 
 
-def trim_silence(wav, win_length, hop_length, threshold_db, ref=np.max):
+def trim_silence(wav, threshold_db=40, ref=np.max):
     """
     Trim leading and trailing silence from an audio signal.
 
@@ -147,14 +194,9 @@ def trim_silence(wav, win_length, hop_length, threshold_db, ref=np.max):
             Audio time series to pitch shift.
             The shape is expected to be shape=(n,) for an mono waveform.
 
-        win_length (int):
-            Length of each frame in audio samples.
-
-        hop_length (int):
-            Number of audio samples to hop between frames.
-
         threshold_db (float):
             The threshold (in decibels) below reference to consider as silence.
+            Default is 40 dB.
 
         ref:
             The reference power. By default, it uses `np.max` and compares to the peak power in
@@ -170,4 +212,4 @@ def trim_silence(wav, win_length, hop_length, threshold_db, ref=np.max):
             The trimming operation conforms to trimmed_wav = wav[ indices[0] : indices[1] ]
             The indices shape is shape=(2,).
     """
-    return librosa.effects.trim(wav, threshold_db, ref, win_length, hop_length)
+    return librosa.effects.trim(wav, threshold_db, ref)
