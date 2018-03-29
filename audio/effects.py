@@ -60,7 +60,7 @@ def time_stretch(wav, rate):
     Returns:
         (np.ndarray):
             Audio time series.
-            The shape of the returned array is shape=(n,) and the arrays dtype is np.float32.
+            The shape of the returned array is shape=(n * rate,) and the arrays dtype is np.float32.
 
     Notes:
         - This implementation is derived from the function `librosa.effects.time_stretch`.
@@ -104,8 +104,10 @@ def crop_silence_left(wav, sampling_rate, length):
             Length in ms of the audio chunk to crop.
 
     Returns:
-        (np.ndarray, int):
+        (np.ndarray):
             Cropped audio time series.
+            The shape of the returned array is shape=(n - length,) and the arrays dtype is
+            np.float32.
     """
     samples = ms_to_samples(length, sampling_rate)
     return wav[samples:]
@@ -127,12 +129,45 @@ def crop_silence_right(wav, sampling_rate, length):
             Length in ms of the audio chunk to crop.
 
     Returns:
-        (np.ndarray, int):
+        (np.ndarray):
             Cropped audio time series.
+            The shape of the returned array is shape=(n - length,) and the arrays dtype is
+            np.float32.
     """
     samples = ms_to_samples(length, sampling_rate)
     return wav[:-samples]
 
 
-def trim_silence():
-    pass
+def trim_silence(wav, win_length, hop_length, threshold_db, ref=np.max):
+    """
+    Trim leading and trailing silence from an audio signal.
+
+    Arguments:
+        wav (np.ndarray):
+            Audio time series to pitch shift.
+            The shape is expected to be shape=(n,) for an mono waveform.
+
+        win_length (int):
+            Length of each frame in audio samples.
+
+        hop_length (int):
+            Number of audio samples to hop between frames.
+
+        threshold_db (float):
+            The threshold (in decibels) below reference to consider as silence.
+
+        ref:
+            The reference power. By default, it uses `np.max` and compares to the peak power in
+            the signal.
+
+    Returns:
+        (np.ndarray):
+            Trimmed audio time series.
+            The shape of the returned array is shape=(n',) and the arrays dtype is np.float32.
+
+        (np.ndarray):
+            Audio sample indices encapsulating to the non-silent audio region.
+            The trimming operation conforms to trimmed_wav = wav[ indices[0] : indices[1] ]
+            The indices shape is shape=(2,).
+    """
+    return librosa.effects.trim(wav, threshold_db, ref, win_length, hop_length)

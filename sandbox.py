@@ -121,7 +121,7 @@ wav, sr = load_wav(wav_path)
 win_len = ms_to_samples(hparams.win_len, sampling_rate=sr)
 hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 
-wav_ps = pitch_shift(wav, sr, -0.5)
+wav_ps = pitch_shift(wav, sr, 1/12)
 
 # plot_waveform(wav, hparams.sampling_rate, title="Mega original")
 
