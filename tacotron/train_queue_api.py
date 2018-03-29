@@ -70,18 +70,34 @@ def load_text(text_paths):
     lines = list()
     line_lens = list()
 
+    char_dict = {
+        'pad': 0,   # padding
+        'eos': 1,   # end of sequence
+    }
+
     base_folder = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
     for text_path in text_paths:
         with open(base_folder + text_path, 'r') as text_file:
             line = text_file.readline()
             line = line.replace('\n', '')
             line = line.split(' ', 2)[-1]
+
+            # Update character dictionary with the chars contained in the line.
+            for char in line:
+                if char not in char_dict.keys():
+                    # Character is not contained in the dictionary, we need to add it.
+                    char_dict[char] = len(char_dict.keys())
+
+            # Convert each character into its dictionary index and add the eos token to the end.
+            idx = [char_dict[char] for char in line]
+            idx.append(char_dict['eos'])
+
             # Append str. representation so that tf.Tensor handles this as an collection of objects.
             # This allows us to store sequences of different length in a single tensor.
-            # TODO: char2idx for all lines.
-            lines.append(np.zeros(shape=(len(line)), dtype=np.int32).tostring())
+            lines.append(np.array(idx, dtype=np.uint16).tostring())
             line_lens.append(len(line))
 
+    print('char_dict:', char_dict)
     return lines, line_lens
 
 
@@ -119,7 +135,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
     # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
-    sentence = tf.decode_raw(sentence, tf.int32)
+    sentence = tf.decode_raw(sentence, tf.uint16)
 
     # Apply load_entry to each wav_path of the tensorflow iterator.
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
@@ -172,7 +188,10 @@ def train(checkpoint_dir):
     dataset_duration = time.time() - dataset_start
     print('Dataset generation: {}s'.format(dataset_duration))
 
-    model = Tacotron(hparams=hparams, inputs=(mel_iter, linear_iter, lengths_iter))
+    # For debugging purposes only.
+    mel_iter = tf.Print(mel_iter, [sent_iter], summarize=30)
+
+    model = Tacotron(hparams=hparams, inputs=(sent_iter, mel_iter, linear_iter, lengths_iter))
 
     loss_op = model.get_loss_op()
 

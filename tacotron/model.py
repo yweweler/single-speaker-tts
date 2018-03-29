@@ -10,7 +10,7 @@ class Tacotron:
         self.hparams = hparams
 
         # Create placeholders for the input data.
-        self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
+        self.sent_iter, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
         self.pred_linear_spec = None
         self.loss_op = None
 
