@@ -345,7 +345,7 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope, traini
     return network
 
 
-def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_proj_filters,
+def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projections,
          n_gru_units, training=True):
     """
     Implementation of a CBHG (1-D convolution bank + highway network + bidirectional GRU)
@@ -375,9 +375,13 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_proj_f
             using a dense network to match required shape=(B, T, n_highway_units) for the highway
             network.
 
-        n_proj_filters (int):
-            The dimensionality of the output space of the first 1d convolutional projection
-            (i.e. the number of filters in the first projection layer).
+        projections (:obj:`list` of :obj:`tuple`):
+            A list containing parameter tuples of the form (filters, kernel_size, activation)
+            for each 1D convolutional projection layer to be created.
+            `filters` being the dimensionality of the output space of the 1d convolutional
+            projection (i.e. the number of filters in the projection layer).
+            `kernel_size` being the kernel size of the 1D convolution.
+            `activation` being the used activation function for the projection layer.
 
         n_gru_units (int):
             The number of units to use for the bi-direction GRU.
@@ -412,21 +416,18 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, n_proj_f
     # "We further pass the processed sequence to a few fixed-width 1-D convolutions, whose outputs
     # are added with the original input sequence via residual connections [...]."
 
-    # network.shape => (B, T, n_proj_filters)
-    network = conv_1d_projection(inputs=network,
-                                 n_filters=n_proj_filters,
-                                 kernel_size=3,
-                                 activation=tf.nn.relu,
-                                 scope='conv_proj_1',
-                                 training=training)
+    # network.shape => (B, T, projections[-1].proj_filters)
+    with tf.variable_scope('projections'):
+        for i, (proj_filters, proj_kernel_size, proj_activation) in enumerate(projections):
+            proj_scope = '{}-conv-{}-{}'.format(i + 1, proj_kernel_size, proj_filters)
 
-    # network.shape => (B, T, inputs.shape[-1])
-    network = conv_1d_projection(inputs=network,
-                                 n_filters=inputs.shape[-1],
-                                 kernel_size=3,
-                                 activation=None,
-                                 scope='conv_proj_2',
-                                 training=training)
+            # network.shape => (B, T, proj_filters)
+            network = conv_1d_projection(inputs=network,
+                                         n_filters=proj_filters,
+                                         kernel_size=proj_kernel_size,
+                                         activation=proj_activation,
+                                         scope=proj_scope,
+                                         training=training)
 
     # Residual connection.
     # network.shape => (B, T, inputs.shape[-1])
