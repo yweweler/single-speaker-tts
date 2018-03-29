@@ -1,6 +1,7 @@
 import librosa
 import numpy as np
 
+from audio.conversion import ms_to_samples
 from audio.features import linear_scale_spectrogram
 from audio.synthesis import spectrogram_to_wav
 
@@ -14,9 +15,8 @@ def pitch_shift(wav, sampling_rate, octaves):
             Audio time series to pitch shift.
             The shape is expected to be shape=(n,) for an mono waveform.
 
-        sampling_rate (:obj:`int`, optional):
-            Target sampling rate. When None is used, the sampling rate inferred from the file is used.
-            Defaults to None.
+        sampling_rate (int):
+            Sampling rate of `wav`.
 
         octaves (float):
             Octaves to shift the pitch up or down.
@@ -86,3 +86,53 @@ def time_stretch(wav, rate):
     reconstr = spectrogram_to_wav(mag, win_len, hop_len, n_fft, reconstr_iters)
 
     return reconstr
+
+
+def crop_silence_left(wav, sampling_rate, length):
+    """
+    Crops a chunk of `length` ms at the beginning of a waveform.
+
+    Arguments:
+        wav (np.ndarray):
+            Audio time series to time stretch.
+            The shape is expected to be shape=(n,) for an mono waveform.
+
+        sampling_rate (int):
+            Sampling rate of `wav`.
+
+        length (float):
+            Length in ms of the audio chunk to crop.
+
+    Returns:
+        (np.ndarray, int):
+            Cropped audio time series.
+    """
+    samples = ms_to_samples(length, sampling_rate)
+    return wav[samples:]
+
+
+def crop_silence_right(wav, sampling_rate, length):
+    """
+    Crops a chunk of `length` ms at the end of a waveform.
+
+    Arguments:
+        wav (np.ndarray):
+            Audio time series to time stretch.
+            The shape is expected to be shape=(n,) for an mono waveform.
+
+        sampling_rate (int):
+            Sampling rate of `wav`.
+
+        length (float):
+            Length in ms of the audio chunk to crop.
+
+    Returns:
+        (np.ndarray, int):
+            Cropped audio time series.
+    """
+    samples = ms_to_samples(length, sampling_rate)
+    return wav[:-samples]
+
+
+def trim_silence():
+    pass
