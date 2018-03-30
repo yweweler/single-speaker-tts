@@ -41,7 +41,7 @@ hparams = tf.contrib.training.HParams(
     encoder=tf.contrib.training.HParams(
         embedding_size=256,
 
-        pre_net=(
+        pre_net_layers=(
             # (units, dropout, activation).
             (256, 0.5, tf.nn.relu),
             (128, 0.5, tf.nn.relu)

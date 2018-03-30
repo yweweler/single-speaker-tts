@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from tacotron.layers import cbhg
+from tacotron.layers import cbhg, pre_net
 
 
 # TODO: Clean up document and comments.
@@ -30,6 +30,21 @@ class Tacotron:
             ])
 
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
+
+            # network.shape => (B, T, n_gru_units * 2)
+            network = pre_net(inputs=embedded_char_ids,
+                              layers=self.hparams.encoder.pre_net_layers,
+                              training=True)
+
+            # network.shape => (B, T, n_gru_units * 2)
+            network = cbhg(inputs=network,
+                           n_banks=self.hparams.encoder.n_banks,
+                           n_filters=self.hparams.encoder.n_filters,
+                           n_highway_layers=self.hparams.encoder.n_highway_layers,
+                           n_highway_units=self.hparams.encoder.n_highway_units,
+                           projections=self.hparams.encoder.projections,
+                           n_gru_units=self.hparams.encoder.n_gru_units,
+                           training=True)
 
         return inputs
 
