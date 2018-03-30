@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.contrib import seq2seq
 
 from tacotron.layers import cbhg, pre_net
 
@@ -10,9 +11,11 @@ class Tacotron:
         self.hparams = hparams
 
         # Create placeholders for the input data.
-        self.inp_sentences, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths = inputs
+        self.inp_sentences, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths, self.inp_time_steps = inputs
         self.pred_linear_spec = None
         self.loss_op = None
+
+        self.debug_decoder_output = None
 
         # Construct the network.
         self.model()
@@ -27,14 +30,15 @@ class Tacotron:
             char_embeddings = tf.get_variable("embedding", [
                 self.hparams.vocabulary_size,
                 self.hparams.encoder.embedding_size
-            ])
+            ],
+                                              dtype=tf.float32)
 
             # network.shape => (B, T, 256)
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
 
             embedded_char_ids = tf.Print(embedded_char_ids,
-                                         [tf.shape(embedded_char_ids)],
-                                         'encoder.embedded_char_ids.shape')
+                                         [tf.shape(embedded_char_ids), embedded_char_ids],
+                                         'encoder.embedded_char_ids')
 
             # network.shape => (B, T, 128)
             network = pre_net(inputs=embedded_char_ids,
@@ -44,26 +48,29 @@ class Tacotron:
             network = tf.Print(network, [tf.shape(network)], 'encoder.network.shape')
 
             # network.shape => (B, T, 128 * 2)
-            network = cbhg(inputs=network,
-                           n_banks=self.hparams.encoder.n_banks,
-                           n_filters=self.hparams.encoder.n_filters,
-                           n_highway_layers=self.hparams.encoder.n_highway_layers,
-                           n_highway_units=self.hparams.encoder.n_highway_units,
-                           projections=self.hparams.encoder.projections,
-                           n_gru_units=self.hparams.encoder.n_gru_units,
-                           training=True)
+            network, state = cbhg(inputs=network,
+                                  n_banks=self.hparams.encoder.n_banks,
+                                  n_filters=self.hparams.encoder.n_filters,
+                                  n_highway_layers=self.hparams.encoder.n_highway_layers,
+                                  n_highway_units=self.hparams.encoder.n_highway_units,
+                                  projections=self.hparams.encoder.projections,
+                                  n_gru_units=self.hparams.encoder.n_gru_units,
+                                  training=True)
 
             network = tf.Print(network, [tf.shape(network)], 'encoder.cbhg.shape')
+            state = tf.Print(state, [tf.shape(state)], 'encoder.cbhg.state.shape')
 
             # TODO: Encoder timestamps exactly match the number of character inputs.
             #       To my current understanding this so incorrect however since at some point I
             #       have to return a constant size encoded context representation.
 
-        return network
+        return network, state
 
-    def decoder(self, inputs):
+    def decoder(self, inputs, encoder_state):
         with tf.variable_scope('decoder'):
             inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
+            encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
+                                     'decoder.encoder_state.shape')
 
             # network.shape => (B, T, 128)
             network = pre_net(inputs=inputs,
@@ -77,33 +84,57 @@ class Tacotron:
 
             # TODO: As far as I can see the paper does not use an BI-GRU for the decoder.
 
-            n_gru_layers = self.hparams.decoder.n_gru_layers
-            n_gru_units = self.hparams.decoder.n_gru_units
-            cells = []
-            for i in range(n_gru_layers):
-                cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
-                residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
-                cells.append(residual_cell)
-
-            stacked_cells = tf.nn.rnn_cell.MultiRNNCell(cells)
-
             # TODO: Experiment with time_major input data to see what the performance gain could be.
-            outputs, state = tf.nn.dynamic_rnn(cell=stacked_cells,
-                                               inputs=network,
-                                               dtype=tf.float32,
-                                               # sequence_length=self.seq_lengths,
-                                               scope='stacked_gru')
 
-            outputs = tf.Print(outputs, [tf.shape(outputs)], 'decoder.stacked_gru.shape')
+            # Decoder training helper.
+            helper = seq2seq.TrainingHelper(
+                inputs=self.inp_mel_spec,
+                sequence_length=self.inp_time_steps,
+                time_major=False)
 
-            network = tf.layers.dense(inputs=outputs,
-                                      units=self.hparams.decoder.target_size,
-                                      activation=None,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      bias_initializer=tf.zeros_initializer(),
-                                      name='target_lifter')
+            # TODO: Removed for initial seq2eq debug purposes.
+            # n_gru_layers = self.hparams.decoder.n_gru_layers
+            # n_gru_units = self.hparams.decoder.n_gru_units
+            # cells = []
+            # for i in range(n_gru_layers):
+            #     cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
+            #     residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
+            #     cells.append(residual_cell)
+            #
+            # stacked_cells = tf.nn.rnn_cell.MultiRNNCell(cells)
 
-            network = tf.Print(network, [tf.shape(network)], 'decoder.lifter.shape')
+            stacked_cells = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell')
+
+            projection_layer = tf.layers.Dense(units=self.hparams.decoder.target_size,
+                                               activation=tf.nn.sigmoid,
+                                               use_bias=True,
+                                               kernel_initializer=tf.glorot_normal_initializer(),
+                                               bias_initializer=tf.zeros_initializer(),
+                                               name='gru_projection')
+
+            # Create a decoder that handles feeding the data to the cells.
+            # We initialize the decoder rnn with the final encoder state.
+            decoder = seq2seq.BasicDecoder(cell=stacked_cells,
+                                           helper=helper,
+                                           initial_state=encoder_state,
+                                           output_layer=projection_layer)
+
+            # Use dynamic decoding of each sequence in the batch. (Decodes until the <EOS> token).
+            final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
+                decoder,
+                output_time_major=False,
+                impute_finished=True,
+                maximum_iterations=None)  # TODO: There should definitely be an upper limit.
+
+            # TODO: What am I doing wrong here? Why does this return an int32?
+            final_outputs = tf.cast(final_outputs[0], tf.float32)
+
+            final_outputs = tf.Print(final_outputs, [tf.shape(final_outputs), final_outputs],
+                                     'decoder.stacked_gru.final_outputs')
+
+            network = final_outputs
+
+            self.debug_decoder_output = network
 
             # TODO: 1 layer attention GRU (256 cells).
 
@@ -124,14 +155,14 @@ class Tacotron:
                 being the batch size and T being the number of time frames.
         """
         with tf.variable_scope('post_process'):
-            network = cbhg(inputs=inputs,
-                           n_banks=self.hparams.post.n_banks,
-                           n_filters=self.hparams.post.n_filters,
-                           n_highway_layers=self.hparams.post.n_highway_layers,
-                           n_highway_units=self.hparams.post.n_highway_units,
-                           projections=self.hparams.post.projections,
-                           n_gru_units=self.hparams.post.n_gru_units,
-                           training=True)
+            network, state = cbhg(inputs=inputs,
+                                  n_banks=self.hparams.post.n_banks,
+                                  n_filters=self.hparams.post.n_filters,
+                                  n_highway_layers=self.hparams.post.n_highway_layers,
+                                  n_highway_units=self.hparams.post.n_highway_units,
+                                  projections=self.hparams.post.projections,
+                                  n_gru_units=self.hparams.post.n_gru_units,
+                                  training=True)
 
         return network
 
@@ -142,9 +173,9 @@ class Tacotron:
         network = self.inp_mel_spec
         batch_size = tf.shape(network)[0]
 
-        network = self.encoder(self.inp_sentences)
+        network, encoder_state = self.encoder(self.inp_sentences)
 
-        network = self.decoder(network)
+        network = self.decoder(network, encoder_state)
 
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
         # applied during post-processing. My measurements suggest, that there is no benefit
@@ -188,6 +219,12 @@ class Tacotron:
                              max_outputs=1)
 
         with tf.name_scope('normalized_outputs'):
+            tf.summary.image('decoder_mel_spec',
+                             tf.expand_dims(
+                                 tf.reshape(self.debug_decoder_output[0],
+                                            (1, -1, self.hparams.n_mels)), -1),
+                             max_outputs=1)
+
             tf.summary.image('linear_spec',
                              tf.expand_dims(
                                  tf.reshape(self.pred_linear_spec[0],

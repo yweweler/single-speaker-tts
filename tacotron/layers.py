@@ -461,4 +461,4 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
     # network.shape => (B, T, n_gru_units * 2)
     network = tf.concat(outputs, -1)
 
-    return network
+    return network, tf.concat(output_states, -1)

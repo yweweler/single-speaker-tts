@@ -71,8 +71,8 @@ def load_text(text_paths):
     line_lens = list()
 
     char_dict = {
-        'pad': 0,   # padding
-        'eos': 1,   # end of sequence
+        'pad': 0,  # padding
+        'eos': 1,  # end of sequence
     }
 
     base_folder = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
@@ -144,27 +144,32 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     mel.set_shape((None, hparams.n_mels * hparams.reduction))
     mag.set_shape((None, (1 + hparams.n_fft // 2) * hparams.reduction))
 
+    # Get the number spectrogram time-steps (later used as sequence lengths for the spectrograms).
+    time_steps = tf.shape(mel)[0]
+
     # TODO: tf.train.batch also supports dynamic per batch padding using 'dynamic_pad=True'
     # mels, mags = tf.train.batch([mel, mag], batch_size=batch_size, capacity=64, num_threads=4)
 
     print('n_buckets: {} + 2'.format(len([i for i in range(minlen + 1, maxlen + 1, 4)])))
-    batch_sequence_lengths, (sents, mels, mags) = tf.contrib.training.bucket_by_sequence_length(
-        input_length=sentence_length,
-        tensors=[sentence, mel, mag],
-        batch_size=batch_size,
-        bucket_boundaries=[i for i in range(minlen + 1, maxlen + 1, 4)],
-        num_threads=n_threads,
-        capacity=n_threads * batch_size,
-        dynamic_pad=True,
-        allow_smaller_final_batch=True)
+    batch_sequence_lengths, (sents, mels, mags, steps) = \
+        tf.contrib.training.bucket_by_sequence_length(
+            input_length=sentence_length,
+            tensors=[sentence, mel, mag, time_steps],
+            batch_size=batch_size,
+            bucket_boundaries=[i for i in range(minlen + 1, maxlen + 1, 4)],
+            num_threads=n_threads,
+            capacity=n_threads * batch_size,
+            dynamic_pad=True,
+            allow_smaller_final_batch=True)
 
     n_batches = int(math.ceil(len(lines) / batch_size))
 
     print('batched.sentence.shape', sents.shape)
     print('batched.mel.shape', mels.shape)
     print('batched.mag.shape', mags.shape)
+    print('batched.steps', steps)
 
-    return batch_sequence_lengths, sents, mels, mags, n_batches
+    return batch_sequence_lengths, sents, mels, mags, steps, n_batches
 
 
 def train(checkpoint_dir):
@@ -181,7 +186,7 @@ def train(checkpoint_dir):
     summary_counter_steps = 100
 
     dataset_start = time.time()
-    lengths_iter, sent_iter, mel_iter, linear_iter, n_batches = train_data_buckets(
+    lengths_iter, sent_iter, mel_iter, linear_iter, time_steps_iter, n_batches = train_data_buckets(
         file_listing_path,
         n_epochs,
         batch_size)
@@ -192,7 +197,8 @@ def train(checkpoint_dir):
     # mel_iter = tf.Print(mel_iter, [sent_iter], summarize=30)
     mel_iter = tf.Print(mel_iter, [tf.shape(linear_iter)], summarize=30)
 
-    model = Tacotron(hparams=hparams, inputs=(sent_iter, mel_iter, linear_iter, lengths_iter))
+    model = Tacotron(hparams=hparams,
+                     inputs=(sent_iter, mel_iter, linear_iter, lengths_iter, time_steps_iter))
 
     loss_op = model.get_loss_op()
 
