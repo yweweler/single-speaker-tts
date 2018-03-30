@@ -189,7 +189,8 @@ def train(checkpoint_dir):
     print('Dataset generation: {}s'.format(dataset_duration))
 
     # For debugging purposes only.
-    mel_iter = tf.Print(mel_iter, [sent_iter], summarize=30)
+    # mel_iter = tf.Print(mel_iter, [sent_iter], summarize=30)
+    mel_iter = tf.Print(mel_iter, [tf.shape(linear_iter)], summarize=30)
 
     model = Tacotron(hparams=hparams, inputs=(sent_iter, mel_iter, linear_iter, lengths_iter))
 
@@ -248,6 +249,8 @@ def train(checkpoint_dir):
         config=session_config,
         checkpoint_dir=checkpoint_dir)
 
+    tf.train.start_queue_runners(sess=session)
+
     train_start = time.time()
 
     while not session.should_stop():
@@ -258,7 +261,7 @@ def train(checkpoint_dir):
             break
 
     train_duration = time.time() - train_start
-    print('Training duration: {}s'.format(train_duration))
+    print('Training duration: {}min.'.format(train_duration / 60))
 
     session.close()
 

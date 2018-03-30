@@ -32,10 +32,16 @@ class Tacotron:
             # network.shape => (B, T, 256)
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
 
+            embedded_char_ids = tf.Print(embedded_char_ids,
+                                         [tf.shape(embedded_char_ids)],
+                                         'encoder.embedded_char_ids.shape')
+
             # network.shape => (B, T, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
                               training=True)
+
+            network = tf.Print(network, [tf.shape(network)], 'encoder.network.shape')
 
             # network.shape => (B, T, 128 * 2)
             network = cbhg(inputs=network,
@@ -47,16 +53,58 @@ class Tacotron:
                            n_gru_units=self.hparams.encoder.n_gru_units,
                            training=True)
 
+            network = tf.Print(network, [tf.shape(network)], 'encoder.cbhg.shape')
+
+            # TODO: Encoder timestamps exactly match the number of character inputs.
+            #       To my current understanding this so incorrect however since at some point I
+            #       have to return a constant size encoded context representation.
+
         return network
 
     def decoder(self, inputs):
         with tf.variable_scope('decoder'):
+            inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
+
             # network.shape => (B, T, 128)
             network = pre_net(inputs=inputs,
                               layers=self.hparams.decoder.pre_net_layers,
                               training=True)
 
-            # TODO: 2 layer residual GRU (256 cells).
+            network = tf.Print(network, [tf.shape(network)], 'decoder.pre_net.shape')
+
+            # TODO: I am not sure how to handle the 128 pre-net to 256 gru conversion (
+            # Does the attention con into play here?).
+
+            # TODO: As far as I can see the paper does not use an BI-GRU for the decoder.
+
+            n_gru_layers = self.hparams.decoder.n_gru_layers
+            n_gru_units = self.hparams.decoder.n_gru_units
+            cells = []
+            for i in range(n_gru_layers):
+                cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
+                residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
+                cells.append(residual_cell)
+
+            stacked_cells = tf.nn.rnn_cell.MultiRNNCell(cells)
+
+            # TODO: Experiment with time_major input data to see what the performance gain could be.
+            outputs, state = tf.nn.dynamic_rnn(cell=stacked_cells,
+                                               inputs=network,
+                                               dtype=tf.float32,
+                                               # sequence_length=self.seq_lengths,
+                                               scope='stacked_gru')
+
+            outputs = tf.Print(outputs, [tf.shape(outputs)], 'decoder.stacked_gru.shape')
+
+            network = tf.layers.dense(inputs=outputs,
+                                      units=self.hparams.decoder.target_size,
+                                      activation=None,
+                                      kernel_initializer=tf.glorot_normal_initializer(),
+                                      bias_initializer=tf.zeros_initializer(),
+                                      name='target_lifter')
+
+            network = tf.Print(network, [tf.shape(network)], 'decoder.lifter.shape')
+
             # TODO: 1 layer attention GRU (256 cells).
 
         return network
@@ -94,9 +142,9 @@ class Tacotron:
         network = self.inp_mel_spec
         batch_size = tf.shape(network)[0]
 
-        encoder_network = self.encoder(self.inp_sentences)
+        network = self.encoder(self.inp_sentences)
 
-        decoder_network = self.decoder(encoder_network)
+        network = self.decoder(network)
 
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
         # applied during post-processing. My measurements suggest, that there is no benefit
