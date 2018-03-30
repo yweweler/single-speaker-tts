@@ -1,40 +1,7 @@
 import tensorflow as tf
 
 
-def prelu(inputs, layer_wise=False):
-    """
-    Implements a Parametric Rectified Linear Unit (PReLU).
-
-    See: https://arxiv.org/abs/1502.01852
-
-    Arguments:
-        inputs (tf.Tensor):
-            An input tensor to be activated.
-
-        layer_wise (boolean):
-            If True, only creates one trainable activation coefficient `alpha` for all
-            elements of the input. If False (default) a separate activation coefficient `alpha` is
-            created for each element of the last dimension of the input tensor. Resulting in `alpha`
-            being a vector with `inputs.shape[-1]` elements.
-
-    Returns:
-        tf.Tensor:
-            Activation of the input tensor.
-    """
-    zeros = tf.constant(value=0.0, shape=[inputs.shape[-1]])
-
-    if layer_wise:
-        alpha_shape = 1
-    else:
-        alpha_shape = inputs.shape[-1]
-
-    alpha = tf.get_variable('alpha',
-                            shape=alpha_shape,
-                            initializer=tf.constant_initializer(0.01))
-
-    tf.summary.histogram('alpha', alpha)
-
-    return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
+def prelu(inputs, layer_wise=Falsparametrised
 
 
 def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
@@ -152,7 +119,7 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
     return (h * t) + (inputs * (1.0 - t))
 
 
-def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', training=True):
+def pre_net(inputs, layers, scope='pre_net', training=True):
     """
     Implementation of the pre-net described in "Tacotron: Towards End-to-End Speech Synthesis".
 
@@ -163,13 +130,9 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
             The shape is expected to be shape=(B, T, F) with B being the batch size, T being the
             number of time frames and F being the size of the features.
 
-        units (:obj:`list` of int):
-            A list of length L defining the number of units for L layers.
-            Defaults to (256, 128).
-
-        dropout (:obj:`list` of float):
-            A list of length L defining the dropout rates for L layers.
-            Defaults to (0.5, 0.5).
+        layers (:obj:`list` of :obj:`tuple`):
+            A list of length L containing tuples of the form (units, dropout, activation ) defining
+            the number of units the dropout rate and the activation function for L layers.
 
         scope (str):
             Tensorflow variable scope to wrap the layers in.
@@ -180,21 +143,18 @@ def pre_net(inputs, units=(256, 128), dropout=(0.5, 0.5), scope='pre_net', train
 
     Returns:
         tf.Tensor:
-            A tensor which shape is expected to be shape=(B, T, units[-1]) with B being the batch
-            size, T being the number of time frames.
+            A tensor which shape is expected to be shape=(B, T, layers[-1].units) with B being
+            the batch size, T being the number of time frames.
     """
-    assert (len(units) == len(dropout)), 'The number of supplied units does not match the number ' \
-                                         'of supplied dropout rates.'
-
     network = inputs
     with tf.variable_scope(scope):
-        for layer_units, layer_dropout in zip(units, dropout):
+        for layer_units, layer_dropout, layer_activation in layers:
             network = tf.layers.dense(inputs=network,
                                       units=layer_units,
-                                      activation=tf.nn.relu,
+                                      activation=layer_activation,
                                       kernel_initializer=tf.glorot_normal_initializer(),
                                       bias_initializer=tf.zeros_initializer(),
-                                      name='FC-{}-ReLU'.format(layer_units))
+                                      name='FC-{}'.format(layer_units))
 
             network = tf.layers.dropout(inputs=network,
                                         rate=layer_dropout,
