@@ -1,7 +1,40 @@
 import tensorflow as tf
 
 
-def prelu(inputs, layer_wise=Falsparametrised
+def prelu(inputs, layer_wise=False):
+    """
+    Implements a Parametric Rectified Linear Unit (PReLU).
+
+    See: https://arxiv.org/abs/1502.01852
+
+    Arguments:
+        inputs (tf.Tensor):
+            An input tensor to be activated.
+
+        layer_wise (boolean):
+            If True, only creates one trainable activation coefficient `alpha` for all
+            elements of the input. If False (default) a separate activation coefficient `alpha` is
+            created for each element of the last dimension of the input tensor. Resulting in `alpha`
+            being a vector with `inputs.shape[-1]` elements.
+
+    Returns:
+        tf.Tensor:
+            Activation of the input tensor.
+    """
+    zeros = tf.constant(value=0.0, shape=[inputs.shape[-1]])
+
+    if layer_wise:
+        alpha_shape = 1
+    else:
+        alpha_shape = inputs.shape[-1]
+
+    alpha = tf.get_variable('alpha',
+                            shape=alpha_shape,
+                            initializer=tf.constant_initializer(0.01))
+
+    tf.summary.histogram('alpha', alpha)
+
+    return tf.maximum(zeros, inputs) + alpha * tf.minimum(zeros, inputs)
 
 
 def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
