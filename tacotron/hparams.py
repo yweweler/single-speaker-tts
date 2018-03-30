@@ -40,6 +40,13 @@ hparams = tf.contrib.training.HParams(
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
         embedding_size=256,
+
+        pre_net=(
+            # (units, dropout, activation).
+            (256, 0.5, tf.nn.relu),
+            (128, 0.5, tf.nn.relu)
+        ),
+
         n_banks=16,
         n_filters=128,
         n_highway_layers=4,
