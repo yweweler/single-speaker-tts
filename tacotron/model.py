@@ -29,14 +29,15 @@ class Tacotron:
                 self.hparams.encoder.embedding_size
             ])
 
+            # network.shape => (B, T, 256)
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
 
-            # network.shape => (B, T, n_gru_units * 2)
+            # network.shape => (B, T, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
                               training=True)
 
-            # network.shape => (B, T, n_gru_units * 2)
+            # network.shape => (B, T, 128 * 2)
             network = cbhg(inputs=network,
                            n_banks=self.hparams.encoder.n_banks,
                            n_filters=self.hparams.encoder.n_filters,
@@ -46,7 +47,7 @@ class Tacotron:
                            n_gru_units=self.hparams.encoder.n_gru_units,
                            training=True)
 
-        return inputs
+        return network
 
     def decoder(self, inputs):
         return inputs
