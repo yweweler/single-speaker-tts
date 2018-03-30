@@ -50,7 +50,16 @@ class Tacotron:
         return network
 
     def decoder(self, inputs):
-        return inputs
+        with tf.variable_scope('decoder'):
+            # network.shape => (B, T, 128)
+            network = pre_net(inputs=inputs,
+                              layers=self.hparams.decoder.pre_net_layers,
+                              training=True)
+
+            # TODO: 2 layer residual GRU (256 cells).
+            # TODO: 1 layer attention GRU (256 cells).
+
+        return network
 
     def post_process(self, inputs):
         """
@@ -87,7 +96,7 @@ class Tacotron:
 
         encoder_network = self.encoder(self.inp_sentences)
 
-        network = self.decoder(network)
+        decoder_network = self.decoder(encoder_network)
 
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
         # applied during post-processing. My measurements suggest, that there is no benefit

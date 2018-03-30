@@ -59,6 +59,15 @@ hparams = tf.contrib.training.HParams(
         n_gru_units=128
     ),
 
+    # Decoder network parameters.
+    decoder=tf.contrib.training.HParams(
+        pre_net_layers=(
+            # (units, dropout, activation).
+            (256, 0.5, tf.nn.relu),
+            (128, 0.5, tf.nn.relu)
+        ),
+    ),
+
     # Post-processing network parameters.
     post=tf.contrib.training.HParams(
         n_banks=8,
