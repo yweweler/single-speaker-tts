@@ -69,7 +69,7 @@ class Tacotron:
 
     def decoder(self, inputs, encoder_state, training=True):
         with tf.variable_scope('decoder'):
-
+            # TODO: Experiment with time_major input data to see what the performance gain could be.
             inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
 
             encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
@@ -85,6 +85,7 @@ class Tacotron:
             n_gru_layers = self.hparams.decoder.n_gru_layers
             n_gru_units = self.hparams.decoder.n_gru_units
 
+            # Stack several GRU cells and apply a residual connection after each cell.
             cells = []
             for i in range(n_gru_layers):
                 cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
@@ -125,11 +126,14 @@ class Tacotron:
                 #     sample_dtype=tf.float32
                 # )
 
+                # TODO: I have currently no idea how the decoder is supposted to know when to stop.
+
             decoder = seq2seq.BasicDecoder(cell=stacked_cell,
                                            helper=helper,
                                            initial_state=encoder_state,
                                            output_layer=None)
 
+            # TODO: There should definitely be an upper limit on the iterations.
             final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
                 decoder,
                 output_time_major=False,
@@ -141,69 +145,10 @@ class Tacotron:
 
             network = tf.Print(network, [tf.shape(network)], 'decoder.outputs.shape')
 
+            # TODO: 1 layer attention GRU (256 cells).
+
         self.debug_decoder_output = network
         return network
-
-        #     # TODO: I am not sure how to handle the 128 pre-net to 256 gru conversion (
-        #     # Does the attention come into play here?).
-        #
-        #     # TODO: As far as I can see the paper does not use an BI-GRU for the decoder.
-        #
-        #     # TODO: Experiment with time_major input data to see what the performance gain could be.
-        #
-        #     # Decoder training helper.
-        #     helper = seq2seq.TrainingHelper(
-        #         inputs=self.inp_mel_spec,
-        #         sequence_length=self.inp_time_steps,
-        #         time_major=False)
-        #
-        #     # TODO: Removed for initial seq2eq debug purposes.
-        #     # n_gru_layers = self.hparams.decoder.n_gru_layers
-        #     # n_gru_units = self.hparams.decoder.n_gru_units
-        #     # cells = []
-        #     # for i in range(n_gru_layers):
-        #     #     cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
-        #     #     residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
-        #     #     cells.append(residual_cell)
-        #     #
-        #     # stacked_cells = tf.nn.rnn_cell.MultiRNNCell(cells)
-        #
-        #     stacked_cells = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell')
-        #
-        #     projection_layer = tf.layers.Dense(units=self.hparams.decoder.target_size,
-        #                                        activation=tf.nn.sigmoid,
-        #                                        use_bias=True,
-        #                                        kernel_initializer=tf.glorot_normal_initializer(),
-        #                                        bias_initializer=tf.zeros_initializer(),
-        #                                        name='gru_projection')
-        #
-        #     # Create a decoder that handles feeding the data to the cells.
-        #     # We initialize the decoder rnn with the final encoder state.
-        #     decoder = seq2seq.BasicDecoder(cell=stacked_cells,
-        #                                    helper=helper,
-        #                                    initial_state=encoder_state,
-        #                                    output_layer=projection_layer)
-        #
-        #     # Use dynamic decoding of each sequence in the batch. (Decodes until the <EOS> token).
-        #     final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
-        #         decoder,
-        #         output_time_major=False,
-        #         impute_finished=True,
-        #         maximum_iterations=None)  # TODO: There should definitely be an upper limit.
-        #
-        #     # TODO: What am I doing wrong here? Why does this return an int32?
-        #     final_outputs = tf.cast(final_outputs[0], tf.float32)
-        #
-        #     final_outputs = tf.Print(final_outputs, [tf.shape(final_outputs), final_outputs],
-        #                              'decoder.stacked_gru.final_outputs')
-        #
-        #     network = final_outputs
-        #
-        #     self.debug_decoder_output = network
-        #
-        #     # TODO: 1 layer attention GRU (256 cells).
-        #
-        # return network
 
     def post_process(self, inputs):
         """
