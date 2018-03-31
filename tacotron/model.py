@@ -93,6 +93,8 @@ class Tacotron:
 
             stacked_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=False)
 
+            # TODO: Documentation suggest that the XXXProjectionWrapper functions are rather slow.
+
             # Project the first cells inputs to the number of decoder units (this way the inputs
             # can be added to the cells outputs using residual connections).
             stacked_cell = contrib_rnn.InputProjectionWrapper(
@@ -123,17 +125,10 @@ class Tacotron:
                 #     sample_dtype=tf.float32
                 # )
 
-            projection_layer = tf.layers.Dense(units=self.hparams.decoder.target_size,
-                                               activation=tf.nn.sigmoid,
-                                               use_bias=True,
-                                               kernel_initializer=tf.glorot_normal_initializer(),
-                                               bias_initializer=tf.zeros_initializer(),
-                                               name='gru_projection')
-
             decoder = seq2seq.BasicDecoder(cell=stacked_cell,
                                            helper=helper,
                                            initial_state=encoder_state,
-                                           output_layer=projection_layer)
+                                           output_layer=None)
 
             final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
                 decoder,
