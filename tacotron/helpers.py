@@ -13,12 +13,10 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
     @property
     def sample_ids_shape(self):
-        # TODO: In case we do not override this property, the super impl. also raises an exception.
         raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     @property
     def sample_ids_dtype(self):
-        # TODO: In case we do not override this property, the super impl. also raises an exception.
         raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     def initialize(self, name=None):
