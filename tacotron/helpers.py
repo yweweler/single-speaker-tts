@@ -30,10 +30,26 @@ class TacotronInferenceHelper(seq2seq.Helper):
         return initial_finished, initial_inputs
 
     def sample(self, time, outputs, state, name=None):
-        pass
+        # A callable that takes outputs and emits tensor sample_ids.
+        raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
+
+    def __is_decoding_finished(self, batch):
+        # TODO: Since I am not sure when to stop I will let the decoder stop run into max_steps.
+        finished = tf.tile([False], [self._batch_size])
+
+        return finished
 
     def next_inputs(self, time, outputs, state, sample_ids, name=None):
-        pass
+        del time, outputs  # unused by next_inputs
+
+        # TODO: Not sure why the arguments name must be "sample_ids".
+        # TODO: Were I am supposed to get the states and inputs from? (Pass them into __init__ ?)
+        finished = self.__is_decoding_finished(sample_ids)
+
+        next_inputs = sample_ids
+        next_state = state
+
+        return finished, next_inputs, next_state
 
 
 class InferenceHelper(seq2seq.Helper):
