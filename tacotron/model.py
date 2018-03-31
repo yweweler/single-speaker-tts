@@ -66,44 +66,37 @@ class Tacotron:
 
         return network, state
 
-    def decoder(self, inputs, encoder_state):
+    def decoder(self, inputs, encoder_state, training=True):
         with tf.variable_scope('decoder'):
+
             inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
+
             encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
                                      'decoder.encoder_state.shape')
 
             # network.shape => (B, T, 128)
             network = pre_net(inputs=inputs,
                               layers=self.hparams.decoder.pre_net_layers,
-                              training=True)
+                              training=training)
 
             network = tf.Print(network, [tf.shape(network)], 'decoder.pre_net.shape')
 
-            # TODO: I am not sure how to handle the 128 pre-net to 256 gru conversion (
-            # Does the attention con into play here?).
+            cell = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell')
 
-            # TODO: As far as I can see the paper does not use an BI-GRU for the decoder.
-
-            # TODO: Experiment with time_major input data to see what the performance gain could be.
-
-            # Decoder training helper.
-            helper = seq2seq.TrainingHelper(
-                inputs=self.inp_mel_spec,
-                sequence_length=self.inp_time_steps,
-                time_major=False)
-
-            # TODO: Removed for initial seq2eq debug purposes.
-            # n_gru_layers = self.hparams.decoder.n_gru_layers
-            # n_gru_units = self.hparams.decoder.n_gru_units
-            # cells = []
-            # for i in range(n_gru_layers):
-            #     cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
-            #     residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
-            #     cells.append(residual_cell)
-            #
-            # stacked_cells = tf.nn.rnn_cell.MultiRNNCell(cells)
-
-            stacked_cells = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell')
+            if training:
+                helper = seq2seq.TrainingHelper(
+                    inputs=self.inp_mel_spec,
+                    sequence_length=self.inp_time_steps,
+                    time_major=False
+                )
+            else:
+                # TODO: the default seq2seq inference helper only works with embedding id's ;(.
+                raise Exception('Inference does is WIP currently.')
+                # helper = seq2seq.InferenceHelper(
+                #     sample_fn=???,
+                #     sample_shape=self.hparams.n_mels,
+                #     sample_dtype=tf.float32
+                # )
 
             projection_layer = tf.layers.Dense(units=self.hparams.decoder.target_size,
                                                activation=tf.nn.sigmoid,
@@ -112,33 +105,85 @@ class Tacotron:
                                                bias_initializer=tf.zeros_initializer(),
                                                name='gru_projection')
 
-            # Create a decoder that handles feeding the data to the cells.
-            # We initialize the decoder rnn with the final encoder state.
-            decoder = seq2seq.BasicDecoder(cell=stacked_cells,
+            decoder = seq2seq.BasicDecoder(cell=cell,
                                            helper=helper,
                                            initial_state=encoder_state,
                                            output_layer=projection_layer)
 
-            # Use dynamic decoding of each sequence in the batch. (Decodes until the <EOS> token).
             final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
                 decoder,
                 output_time_major=False,
                 impute_finished=True,
-                maximum_iterations=None)  # TODO: There should definitely be an upper limit.
+                maximum_iterations=None)
 
-            # TODO: What am I doing wrong here? Why does this return an int32?
-            final_outputs = tf.cast(final_outputs[0], tf.float32)
+            # final_outputs.type == seq2seq.BasicDecoderOutput
+            network = final_outputs.rnn_output
 
-            final_outputs = tf.Print(final_outputs, [tf.shape(final_outputs), final_outputs],
-                                     'decoder.stacked_gru.final_outputs')
+            network = tf.Print(network, [tf.shape(network)], 'decoder.outputs.shape')
 
-            network = final_outputs
-
-            self.debug_decoder_output = network
-
-            # TODO: 1 layer attention GRU (256 cells).
-
+        self.debug_decoder_output = network
         return network
+
+        #     # TODO: I am not sure how to handle the 128 pre-net to 256 gru conversion (
+        #     # Does the attention come into play here?).
+        #
+        #     # TODO: As far as I can see the paper does not use an BI-GRU for the decoder.
+        #
+        #     # TODO: Experiment with time_major input data to see what the performance gain could be.
+        #
+        #     # Decoder training helper.
+        #     helper = seq2seq.TrainingHelper(
+        #         inputs=self.inp_mel_spec,
+        #         sequence_length=self.inp_time_steps,
+        #         time_major=False)
+        #
+        #     # TODO: Removed for initial seq2eq debug purposes.
+        #     # n_gru_layers = self.hparams.decoder.n_gru_layers
+        #     # n_gru_units = self.hparams.decoder.n_gru_units
+        #     # cells = []
+        #     # for i in range(n_gru_layers):
+        #     #     cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
+        #     #     residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
+        #     #     cells.append(residual_cell)
+        #     #
+        #     # stacked_cells = tf.nn.rnn_cell.MultiRNNCell(cells)
+        #
+        #     stacked_cells = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell')
+        #
+        #     projection_layer = tf.layers.Dense(units=self.hparams.decoder.target_size,
+        #                                        activation=tf.nn.sigmoid,
+        #                                        use_bias=True,
+        #                                        kernel_initializer=tf.glorot_normal_initializer(),
+        #                                        bias_initializer=tf.zeros_initializer(),
+        #                                        name='gru_projection')
+        #
+        #     # Create a decoder that handles feeding the data to the cells.
+        #     # We initialize the decoder rnn with the final encoder state.
+        #     decoder = seq2seq.BasicDecoder(cell=stacked_cells,
+        #                                    helper=helper,
+        #                                    initial_state=encoder_state,
+        #                                    output_layer=projection_layer)
+        #
+        #     # Use dynamic decoding of each sequence in the batch. (Decodes until the <EOS> token).
+        #     final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
+        #         decoder,
+        #         output_time_major=False,
+        #         impute_finished=True,
+        #         maximum_iterations=None)  # TODO: There should definitely be an upper limit.
+        #
+        #     # TODO: What am I doing wrong here? Why does this return an int32?
+        #     final_outputs = tf.cast(final_outputs[0], tf.float32)
+        #
+        #     final_outputs = tf.Print(final_outputs, [tf.shape(final_outputs), final_outputs],
+        #                              'decoder.stacked_gru.final_outputs')
+        #
+        #     network = final_outputs
+        #
+        #     self.debug_decoder_output = network
+        #
+        #     # TODO: 1 layer attention GRU (256 cells).
+        #
+        # return network
 
     def post_process(self, inputs):
         """
@@ -203,7 +248,8 @@ class Tacotron:
         linear_spec = tf.reshape(self.inp_linear_spec,
                                  [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
-        self.loss_op = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
+        self.loss_op = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec)) + \
+                       tf.reduce_mean(tf.abs(self.inp_mel_spec - self.debug_decoder_output))
 
     def get_loss_op(self):
         return self.loss_op
@@ -212,6 +258,12 @@ class Tacotron:
         tf.summary.scalar('loss', self.loss_op)
 
         with tf.name_scope('normalized_inputs'):
+            tf.summary.image('mel_spec',
+                             tf.expand_dims(
+                                 tf.reshape(self.inp_mel_spec[0],
+                                            (1, -1, self.hparams.n_mels)), -1),
+                             max_outputs=1)
+
             tf.summary.image('linear_spec',
                              tf.expand_dims(
                                  tf.reshape(self.inp_linear_spec[0],

@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
+from audio.effects import trim_silence
 from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
 from audio.io import load_wav
 from tacotron.hparams import hparams
@@ -19,6 +20,10 @@ def load_entry(entry):
     hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
 
     wav, sr = load_wav(base_path + entry.decode())
+
+    # Remove silence at the beginning and end of the wav so the network does not have to learn
+    # some random initial silence delay after which it is allowed to speak.
+    wav, _ = trim_silence(wav)
 
     linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
 
@@ -175,14 +180,14 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 def train(checkpoint_dir):
     file_listing_path = 'data/train_all.txt'
 
-    n_epochs = 10
-    batch_size = 4
+    n_epochs = 20
+    batch_size = 2
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
 
     # Save summary every 10 steps.
-    summary_save_steps = 10
+    summary_save_steps = 100
     summary_counter_steps = 100
 
     dataset_start = time.time()
