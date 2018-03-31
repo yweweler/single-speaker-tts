@@ -126,7 +126,16 @@ class Tacotron:
                 #     sample_dtype=tf.float32
                 # )
 
-                # TODO: I have currently no idea how the decoder is supposted to know when to stop.
+                # TODO: I have currently no idea how the decoder is supposed to know when to stop.
+                # TODO: Wellllll, I guess the simplest thing could be to just decode all samples
+                # up to an maximum size X, with X being large enough to hold everything we throw
+                # into the network (longest recorded sentence).
+                # Alternatively the user has to supply an <float> that tells us how long the
+                # audio chunk is that he would like to have (No matter if the generated speech
+                # actually fits the supplied length or not).
+                # Another way could be to define a maximal length of silence after which we
+                # would stop decoding. This however would require the network to actually produce
+                # silence after it is finished producing speech.
 
             decoder = seq2seq.BasicDecoder(cell=stacked_cell,
                                            helper=helper,
