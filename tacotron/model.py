@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.contrib import rnn as contrib_rnn
 from tensorflow.contrib import seq2seq
 
 from tacotron.layers import cbhg, pre_net
@@ -81,7 +82,31 @@ class Tacotron:
 
             network = tf.Print(network, [tf.shape(network)], 'decoder.pre_net.shape')
 
-            cell = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell')
+            n_gru_layers = self.hparams.decoder.n_gru_layers
+            n_gru_units = self.hparams.decoder.n_gru_units
+
+            cells = []
+            for i in range(n_gru_layers):
+                cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
+                residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
+                cells.append(residual_cell)
+
+            stacked_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=False)
+
+            # Project the first cells inputs to the number of decoder units (this way the inputs
+            # can be added to the cells outputs using residual connections).
+            stacked_cell = contrib_rnn.InputProjectionWrapper(
+                cell=stacked_cell,
+                num_proj=n_gru_units,
+                activation=None
+            )
+
+            # Project the final cells output to the decoder target size.
+            stacked_cell = contrib_rnn.OutputProjectionWrapper(
+                cell=stacked_cell,
+                output_size=self.hparams.decoder.target_size,
+                activation=tf.nn.sigmoid
+            )
 
             if training:
                 helper = seq2seq.TrainingHelper(
@@ -105,7 +130,7 @@ class Tacotron:
                                                bias_initializer=tf.zeros_initializer(),
                                                name='gru_projection')
 
-            decoder = seq2seq.BasicDecoder(cell=cell,
+            decoder = seq2seq.BasicDecoder(cell=stacked_cell,
                                            helper=helper,
                                            initial_state=encoder_state,
                                            output_layer=projection_layer)
