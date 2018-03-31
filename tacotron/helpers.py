@@ -3,23 +3,33 @@ from tensorflow.contrib import seq2seq
 
 
 class TacotronInferenceHelper(seq2seq.Helper):
-    def __init__(self):
-        pass
+    def __init__(self, batch_size, n_rnn_units):
+        self._batch_size = batch_size
+        self.n_rnn_units = n_rnn_units
 
     @property
     def batch_size(self):
-        pass
+        return self._batch_size
 
     @property
     def sample_ids_shape(self):
-        pass
+        # TODO: In case we do not override this property, the super impl. also raises an exception.
+        raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     @property
     def sample_ids_dtype(self):
-        pass
+        # TODO: In case we do not override this property, the super impl. also raises an exception.
+        raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     def initialize(self, name=None):
-        pass
+        # When the decoder starts, there is no sequence in the batch that is finished.
+        initial_finished = tf.tile([False], [self._batch_size])
+
+        # The initial input for the decoder is considered to be a <GO> frame.
+        # We will input an zero vector as the <GO> frame.
+        initial_inputs = tf.zeros([self._batch_size, self.n_rnn_units], dtype=tf.float32)
+
+        return initial_finished, initial_inputs
 
     def sample(self, time, outputs, state, name=None):
         pass
