@@ -181,13 +181,13 @@ def pre_net(inputs, layers, scope='pre_net', training=True):
     """
     network = inputs
     with tf.variable_scope(scope):
-        for layer_units, layer_dropout, layer_activation in layers:
+        for i, (layer_units, layer_dropout, layer_activation) in enumerate(layers):
             network = tf.layers.dense(inputs=network,
                                       units=layer_units,
                                       activation=layer_activation,
                                       kernel_initializer=tf.glorot_normal_initializer(),
                                       bias_initializer=tf.zeros_initializer(),
-                                      name='FC-{}'.format(layer_units))
+                                      name='{}-FC-{}'.format(i + 1, layer_units))
 
             network = tf.layers.dropout(inputs=network,
                                         rate=layer_dropout,

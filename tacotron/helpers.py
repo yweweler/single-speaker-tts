@@ -1,5 +1,10 @@
 import tensorflow as tf
 from tensorflow.contrib import seq2seq
+from tensorflow.python.framework import tensor_shape
+
+
+class CustomTacotronInferenceHelper(seq2seq.CustomHelper):
+    pass
 
 
 class TacotronInferenceHelper(seq2seq.Helper):
@@ -13,11 +18,15 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
     @property
     def sample_ids_shape(self):
-        raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
+        # Copied from the abstract seq2seq.CustomHelper class.
+        return tensor_shape.TensorShape([])
+        # raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     @property
     def sample_ids_dtype(self):
-        raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
+        # Copied from the abstract seq2seq.CustomHelper class.
+        return tf.int32
+        # raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     def initialize(self, name=None):
         # When the decoder starts, there is no sequence in the batch that is finished.
@@ -31,7 +40,13 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
     def sample(self, time, outputs, state, name=None):
         # A callable that takes outputs and emits tensor sample_ids.
-        raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
+        # Not sure why this is called when it is not actually needed ;(.
+
+        # return None => ValueError: x and y must both be non-None or both be None
+
+        # It seems to work when just returning some tensor of dtype=tf.int32 and random shape.
+        return tf.zeros(1, dtype=tf.int32)
+        # raise NotImplementedError('Not implemented, since the decoder does not output embeddings')
 
     def __is_decoding_finished(self, batch):
         # TODO: Since I am not sure when to stop I will let the decoder stop run into max_steps.
@@ -40,14 +55,20 @@ class TacotronInferenceHelper(seq2seq.Helper):
         return finished
 
     def next_inputs(self, time, outputs, state, sample_ids, name=None):
-        del time, outputs  # unused by next_inputs
+        del time, sample_ids  # unused by next_inputs
 
-        # TODO: Not sure why the arguments name must be "sample_ids".
-        # TODO: Were I am supposed to get the states and inputs from? (Pass them into __init__ ?)
-        finished = self.__is_decoding_finished(sample_ids)
+        # TODO: Make sure that the outputs that are passed to this function are the last steps outp.
+        # Use the last steps outputs as the next steps inputs.
+        next_inputs = outputs
 
-        next_inputs = sample_ids
+        # Use the resulting state from the last step as the next state.
         next_state = state
+
+        tf.Print(next_inputs, [next_inputs], 'InferenceHelper.next_inputs')
+        tf.Print(next_state, [next_state], 'InferenceHelper.next_state')
+
+        # Check if decoding is finished.
+        finished = self.__is_decoding_finished(outputs)
 
         return finished, next_inputs, next_state
 

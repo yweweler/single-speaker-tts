@@ -2,6 +2,10 @@ import tensorflow as tf
 from tensorflow.contrib import rnn as contrib_rnn
 from tensorflow.contrib import seq2seq
 
+from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
+from audio.io import save_wav
+from audio.synthesis import spectrogram_to_wav
+from tacotron.helpers import TacotronInferenceHelper
 from tacotron.layers import cbhg, pre_net
 
 
@@ -14,9 +18,14 @@ class Tacotron:
         # Create placeholders for the input data.
         self.inp_sentences, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths, self.inp_time_steps = inputs
         self.pred_linear_spec = None
+
         self.loss_op = None
+        self.loss_op_post_decoder = None
+        self.loss_op_post_processing = None
 
         self.debug_decoder_output = None
+
+        self.session = None
 
         # Construct the network.
         self.model()
@@ -67,6 +76,7 @@ class Tacotron:
 
         return network, state
 
+    # TODO: Stopped here. The next thing I wanted to try is if my custom inference helper works.
     def decoder(self, inputs, encoder_state, training=True):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
@@ -79,11 +89,15 @@ class Tacotron:
             network = pre_net(inputs=inputs,
                               layers=self.hparams.decoder.pre_net_layers,
                               training=training)
+            # network = inputs
 
             network = tf.Print(network, [tf.shape(network)], 'decoder.pre_net.shape')
 
-            n_gru_layers = self.hparams.decoder.n_gru_layers
-            n_gru_units = self.hparams.decoder.n_gru_units
+            n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
+            n_gru_units = self.hparams.decoder.n_gru_units  # 256
+
+            # TODO: Not sure how to handle projection here, since the initial state from the
+            # encoder always hast length 256.
 
             # Stack several GRU cells and apply a residual connection after each cell.
             cells = []
@@ -118,13 +132,9 @@ class Tacotron:
                     time_major=False
                 )
             else:
-                # TODO: the default seq2seq inference helper only works with embedding id's ;(.
-                raise Exception('Inference does is WIP currently.')
-                # helper = seq2seq.InferenceHelper(
-                #     sample_fn=???,
-                #     sample_shape=self.hparams.n_mels,
-                #     sample_dtype=tf.float32
-                # )
+                batch_size = tf.shape(network)[0]
+                # TODO: Not sure why I have use 80 here and not 256 (output projection broken?).
+                helper = TacotronInferenceHelper(batch_size=batch_size, n_rnn_units=80)
 
                 # TODO: I have currently no idea how the decoder is supposed to know when to stop.
                 # TODO: Wellllll, I guess the simplest thing could be to just decode all samples
@@ -151,6 +161,14 @@ class Tacotron:
 
             # final_outputs.type == seq2seq.BasicDecoderOutput
             network = final_outputs.rnn_output
+            network = tf.Print(network, [tf.shape(network)], 'decoder.rnn_output.shape')
+
+            # network = tf.layers.dense(inputs=network,
+            #                           units=80,
+            #                           activation=tf.nn.relu,
+            #                           kernel_initializer=tf.glorot_normal_initializer(),
+            #                           bias_initializer=tf.zeros_initializer(),
+            #                           name='fc-temp-debug-projection')
 
             network = tf.Print(network, [tf.shape(network)], 'decoder.outputs.shape')
 
@@ -186,14 +204,15 @@ class Tacotron:
         return network
 
     def model(self):
-        # Input shape=(B, T, E)
+        batch_size = tf.shape(self.inp_sentences)[0]
 
-        # network.shape => (B, T//r, n_mels*r)
-        network = self.inp_mel_spec
-        batch_size = tf.shape(network)[0]
+        # inp_sentences.shape = (B, T_s, decoder.n_gru_units * 2 ) = (B, T_s, 256)
 
+        # network.shape => (B, T_s, 256)
+        # encoder_state.shape => (B, 256)
         network, encoder_state = self.encoder(self.inp_sentences)
 
+        # network.shape => (B, T_w, 80)
         network = self.decoder(network, encoder_state)
 
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
@@ -222,14 +241,19 @@ class Tacotron:
         linear_spec = tf.reshape(self.inp_linear_spec,
                                  [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
-        self.loss_op = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec)) + \
-                       tf.reduce_mean(tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+        self.loss_op_decoder = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
+        self.loss_op_post_processing = tf.reduce_mean(
+            tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+
+        self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
     def get_loss_op(self):
         return self.loss_op
 
     def summary(self):
         tf.summary.scalar('loss', self.loss_op)
+        tf.summary.scalar('loss_decoder', self.loss_op_decoder)
+        tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
         with tf.name_scope('normalized_inputs'):
             tf.summary.image('mel_spec',
@@ -256,6 +280,34 @@ class Tacotron:
                                  tf.reshape(self.pred_linear_spec[0],
                                             (1, -1, (1 + self.hparams.n_fft // 2))), -1),
                              max_outputs=1)
+
+        with tf.name_scope('inference_reconstruction'):
+            win_len = ms_to_samples(self.hparams.win_len, sampling_rate=self.hparams.sampling_rate)
+            win_hop = ms_to_samples(self.hparams.win_hop, sampling_rate=self.hparams.sampling_rate)
+            n_fft = self.hparams.n_fft
+
+            def __synthesis(spec):
+                print('synthesis ....')
+                linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
+                linear_mag = decibel_to_magnitude(linear_mag_db)
+
+                spec = spectrogram_to_wav(linear_mag,
+                                          win_len,
+                                          win_hop,
+                                          n_fft,
+                                          50)
+
+                save_wav('/tmp/reconstr.wav', spec, 16000, True)
+                return spec
+
+            # reconstruction = tf.py_func(__synthesis,
+            #                             [self.pred_linear_spec[0], win_len, win_hop,
+            #                              self.hparams.n_fft],
+            #                             [tf.float32])
+
+            reconstruction = tf.py_func(__synthesis, [self.pred_linear_spec[0]], [tf.float32])
+
+            tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         return tf.summary.merge_all()
 

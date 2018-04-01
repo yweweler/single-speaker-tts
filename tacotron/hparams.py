@@ -35,7 +35,7 @@ hparams = tf.contrib.training.HParams(
     reduction=1,
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=False,
+    apply_post_processing=True,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
@@ -67,9 +67,8 @@ hparams = tf.contrib.training.HParams(
             (128, 0.5, tf.nn.relu)
         ),
 
-        n_gru_layers=2,
-        # TODO: 256 in the paper.
-        n_gru_units=128,
+        n_gru_layers=1,
+        n_gru_units=256,
         target_size=80
     ),
 

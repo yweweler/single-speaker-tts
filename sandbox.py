@@ -2,11 +2,14 @@ import librosa
 import numpy as np
 import pysptk
 
-from audio.conversion import ms_to_samples, decibel_to_magnitude, magnitude_to_decibel
-from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, calculate_mceps
+from audio.conversion import ms_to_samples, decibel_to_magnitude, magnitude_to_decibel, \
+    normalize_decibel, inv_normalize_decibel
+from audio.effects import trim_silence
+from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, \
+    calculate_mceps
 from audio.io import load_wav, save_wav
-from audio.effects import pitch_shift, trim_silence
-from audio.visualization import plot_spectrogram, plot_feature_frames, plot_waveform
+from audio.synthesis import spectrogram_to_wav
+from audio.visualization import plot_spectrogram, plot_feature_frames
 from tacotron.hparams import hparams
 
 
@@ -126,11 +129,37 @@ hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 # save_wav('/tmp/ps.wav', wav_ps, sr, True)
 
 # Experimental silence trim.
-wav_trim, indices = trim_silence(wav, 40)
-print(indices)
-save_wav('/tmp/trim.wav', wav_trim, sr, True)
+# wav_trim, indices = trim_silence(wav, 40)
+# print(indices)
+# save_wav('/tmp/trim.wav', wav_trim, sr, True)
 
 # plot_waveform(wav, hparams.sampling_rate, title="Mega original")
 # calculate_linear_spec(wav, hop_len, win_len)
 # calculate_mfccs_and_deltas(wav, hop_len, win_len)
 # resynth_wav_using_mcep(wav, hop_len, 25, 0.35)
+
+
+wav, _ = trim_silence(wav)
+
+linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
+
+# dev = 1e-4 / 2
+# mel_spec_noisy = mel_spec + np.random.uniform(low=0.0,
+#                                               high=dev,
+#                                               size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
+# mel_spec = mel_spec_noisy
+
+# Convert the linear spectrogram into decibel representation.
+linear_mag = np.abs(linear_spec)
+linear_mag_db = magnitude_to_decibel(linear_mag)
+linear_mag_db = normalize_decibel(linear_mag_db, 20, 100)
+linear_mag_db = inv_normalize_decibel(linear_mag_db, 20, 100)
+linear_mag = decibel_to_magnitude(linear_mag_db)
+
+reconst_wav = spectrogram_to_wav(linear_mag.T,
+                                 win_len,
+                                 hop_len,
+                                 hparams.n_fft,
+                                 50)
+
+save_wav('/tmp/reconstr.wav', reconst_wav, sr, True)
