@@ -106,7 +106,7 @@ class Tacotron:
                 residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
                 cells.append(residual_cell)
 
-            stacked_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=False)
+            stacked_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
             # TODO: Documentation suggest that the XXXProjectionWrapper functions are rather slow.
 
@@ -133,8 +133,7 @@ class Tacotron:
                 )
             else:
                 batch_size = tf.shape(network)[0]
-                # TODO: Not sure why I have use 80 here and not 256 (output projection broken?).
-                helper = TacotronInferenceHelper(batch_size=batch_size, n_rnn_units=80)
+                helper = TacotronInferenceHelper(batch_size=batch_size, input_size=n_gru_units)
 
                 # TODO: I have currently no idea how the decoder is supposed to know when to stop.
                 # TODO: Wellllll, I guess the simplest thing could be to just decode all samples
@@ -147,9 +146,12 @@ class Tacotron:
                 # would stop decoding. This however would require the network to actually produce
                 # silence after it is finished producing speech.
 
+            # TODO: I am using encoder_state as the initial state for each cell in the stack.
+            # Maybe it would be better to use encoder_state only for the first cell and then
+            # continue with zero_state for all other cells.
             decoder = seq2seq.BasicDecoder(cell=stacked_cell,
                                            helper=helper,
-                                           initial_state=encoder_state,
+                                           initial_state=tuple([encoder_state] * n_gru_layers),
                                            output_layer=None)
 
             # TODO: There should definitely be an upper limit on the iterations.
@@ -162,15 +164,6 @@ class Tacotron:
             # final_outputs.type == seq2seq.BasicDecoderOutput
             network = final_outputs.rnn_output
             network = tf.Print(network, [tf.shape(network)], 'decoder.rnn_output.shape')
-
-            # network = tf.layers.dense(inputs=network,
-            #                           units=80,
-            #                           activation=tf.nn.relu,
-            #                           kernel_initializer=tf.glorot_normal_initializer(),
-            #                           bias_initializer=tf.zeros_initializer(),
-            #                           name='fc-temp-debug-projection')
-
-            network = tf.Print(network, [tf.shape(network)], 'decoder.outputs.shape')
 
             # TODO: 1 layer attention GRU (256 cells).
 

@@ -9,9 +9,9 @@ class CustomTacotronInferenceHelper(seq2seq.CustomHelper):
 
 class TacotronInferenceHelper(seq2seq.Helper):
     # See: https://github.com/tensorflow/tensorflow/issues/12065
-    def __init__(self, batch_size, n_rnn_units):
+    def __init__(self, batch_size, input_size):
         self._batch_size = batch_size
-        self.n_rnn_units = n_rnn_units
+        self.input_size = input_size
 
     @property
     def batch_size(self):
@@ -35,7 +35,7 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
         # The initial input for the decoder is considered to be a <GO> frame.
         # We will input an zero vector as the <GO> frame.
-        initial_inputs = tf.zeros([self._batch_size, self.n_rnn_units], dtype=tf.float32)
+        initial_inputs = tf.zeros([self._batch_size, self.input_size], dtype=tf.float32)
 
         return initial_finished, initial_inputs
 
