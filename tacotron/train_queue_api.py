@@ -260,9 +260,6 @@ def train(checkpoint_dir):
         config=session_config,
         checkpoint_dir=checkpoint_dir)
 
-    # TODO: For debugging purposes.
-    model.session = session
-
     tf.train.start_queue_runners(sess=session)
 
     train_start = time.time()

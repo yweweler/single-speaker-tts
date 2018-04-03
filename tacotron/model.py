@@ -25,8 +25,6 @@ class Tacotron:
 
         self.debug_decoder_output = None
 
-        self.session = None
-
         # Construct the network.
         self.model()
 
