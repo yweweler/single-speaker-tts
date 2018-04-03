@@ -8,6 +8,7 @@ class CustomTacotronInferenceHelper(seq2seq.CustomHelper):
 
 
 class TacotronInferenceHelper(seq2seq.Helper):
+    # See: https://github.com/tensorflow/tensorflow/issues/12065
     def __init__(self, batch_size, n_rnn_units):
         self._batch_size = batch_size
         self.n_rnn_units = n_rnn_units

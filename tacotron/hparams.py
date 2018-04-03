@@ -67,7 +67,7 @@ hparams = tf.contrib.training.HParams(
             (128, 0.5, tf.nn.relu)
         ),
 
-        n_gru_layers=1,
+        n_gru_layers=2,
         n_gru_units=256,
         target_size=80
     ),

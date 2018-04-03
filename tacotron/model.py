@@ -97,6 +97,8 @@ class Tacotron:
             # TODO: Not sure how to handle projection here, since the initial state from the
             # encoder always hast length 256.
 
+            network = tf.Print(network, [tf.shape(network)], 'decoder.ipw.shape')
+
             # Stack several GRU cells and apply a residual connection after each cell.
             cells = []
             for i in range(n_gru_layers):
@@ -239,18 +241,18 @@ class Tacotron:
         linear_spec = tf.reshape(self.inp_linear_spec,
                                  [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
-        self.loss_op_decoder = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
+        self.loss_op_post_decoder = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
         self.loss_op_post_processing = tf.reduce_mean(
             tf.abs(self.inp_mel_spec - self.debug_decoder_output))
 
-        self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
+        self.loss_op = self.loss_op_post_decoder + self.loss_op_post_processing
 
     def get_loss_op(self):
         return self.loss_op
 
     def summary(self):
         tf.summary.scalar('loss', self.loss_op)
-        tf.summary.scalar('loss_decoder', self.loss_op_decoder)
+        tf.summary.scalar('loss_decoder', self.loss_op_post_decoder)
         tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
         with tf.name_scope('normalized_inputs'):
