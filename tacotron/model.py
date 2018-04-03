@@ -108,8 +108,6 @@ class Tacotron:
 
             stacked_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
-            # TODO: Documentation suggest that the XXXProjectionWrapper functions are rather slow.
-
             # Project the first cells inputs to the number of decoder units (this way the inputs
             # can be added to the cells outputs using residual connections).
             stacked_cell = contrib_rnn.InputProjectionWrapper(
