@@ -148,8 +148,7 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
                             bias_initializer=tf.constant_initializer(t_bias_init),
                             name='T')
 
-    # TODO: For some reason pycharm thinks that this is a plain floating point operation.
-    return (h * t) + (inputs * (1.0 - t))
+    return tf.add(tf.mul(h, t), tf.mul(inputs, (1.0 - t)))
 
 
 def pre_net(inputs, layers, scope='pre_net', training=True):
