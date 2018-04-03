@@ -68,10 +68,6 @@ class Tacotron:
             network = tf.Print(network, [tf.shape(network)], 'encoder.cbhg.shape')
             state = tf.Print(state, [tf.shape(state)], 'encoder.cbhg.state.shape')
 
-            # TODO: Encoder timestamps exactly match the number of character inputs.
-            #       To my current understanding this so incorrect however since at some point I
-            #       have to return a constant size encoded context representation.
-
         return network, state
 
     # TODO: Stopped here. The next thing I wanted to try is if my custom inference helper works.
