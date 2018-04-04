@@ -80,6 +80,7 @@ class Tacotron:
             encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
                                      'decoder.encoder_state.shape')
 
+            # TODO: Rewrite: The pre-net has to be applied at each cell step (on the last output).
             # network.shape => (B, T, 128)
             network = pre_net(inputs=inputs,
                               layers=self.hparams.decoder.pre_net_layers,
@@ -108,6 +109,7 @@ class Tacotron:
                 activation=None
             )
 
+            # TODO: Apply the reduction factor here.
             # Project the final cells output to the decoder target size.
             stacked_cell = contrib_rnn.OutputProjectionWrapper(
                 cell=stacked_cell,
@@ -116,6 +118,7 @@ class Tacotron:
             )
 
             if self.training:
+                # TODO: Re-implement train data feeding.
                 helper = seq2seq.TrainingHelper(
                     inputs=self.inp_mel_spec,
                     sequence_length=self.inp_time_steps,
