@@ -11,6 +11,10 @@ from audio.io import load_wav
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
+import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
@@ -169,7 +173,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
     n_batches = int(math.ceil(len(lines) / batch_size))
 
-    print('batched.sentence.shape', sents.shape)
+    print('batched.sentence.shape', sents.shape, sents)
     print('batched.mel.shape', mels.shape)
     print('batched.mag.shape', mags.shape)
     print('batched.steps', steps)
@@ -203,7 +207,8 @@ def train(checkpoint_dir):
     mel_iter = tf.Print(mel_iter, [tf.shape(linear_iter)], summarize=30)
 
     model = Tacotron(hparams=hparams,
-                     inputs=(sent_iter, mel_iter, linear_iter, lengths_iter, time_steps_iter))
+                     inputs=(sent_iter, mel_iter, linear_iter, lengths_iter, time_steps_iter),
+                     training=True)
 
     loss_op = model.get_loss_op()
 
@@ -264,12 +269,13 @@ def train(checkpoint_dir):
 
     train_start = time.time()
 
-    while not session.should_stop():
-        try:
-            session.run([train_op])
-        except tf.errors.OutOfRangeError:
-            print('All batches read.')
-            break
+    with tf.device('/cpu:0'):
+        while not session.should_stop():
+            try:
+                session.run([train_op])
+            except tf.errors.OutOfRangeError:
+                print('All batches read.')
+                break
 
     train_duration = time.time() - train_start
     print('Training duration: {}min.'.format(train_duration / 60))

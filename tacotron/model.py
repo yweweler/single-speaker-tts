@@ -12,7 +12,7 @@ from tacotron.layers import cbhg, pre_net
 # TODO: Clean up document and comments.
 
 class Tacotron:
-    def __init__(self, hparams, inputs):
+    def __init__(self, hparams, inputs, training=True):
         self.hparams = hparams
 
         # Create placeholders for the input data.
@@ -20,10 +20,12 @@ class Tacotron:
         self.pred_linear_spec = None
 
         self.loss_op = None
-        self.loss_op_post_decoder = None
+        self.loss_op_decoder = None
         self.loss_op_post_processing = None
 
         self.debug_decoder_output = None
+
+        self.training = training
 
         # Construct the network.
         self.model()
@@ -51,7 +53,7 @@ class Tacotron:
             # network.shape => (B, T, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
-                              training=True)
+                              training=self.training)
 
             network = tf.Print(network, [tf.shape(network)], 'encoder.network.shape')
 
@@ -63,7 +65,7 @@ class Tacotron:
                                   n_highway_units=self.hparams.encoder.n_highway_units,
                                   projections=self.hparams.encoder.projections,
                                   n_gru_units=self.hparams.encoder.n_gru_units,
-                                  training=True)
+                                  training=self.training)
 
             network = tf.Print(network, [tf.shape(network)], 'encoder.cbhg.shape')
             state = tf.Print(state, [tf.shape(state)], 'encoder.cbhg.state.shape')
@@ -71,7 +73,7 @@ class Tacotron:
         return network, state
 
     # TODO: Stopped here. The next thing I wanted to try is if my custom inference helper works.
-    def decoder(self, inputs, encoder_state, training=True):
+    def decoder(self, inputs, encoder_state):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
             inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
@@ -82,7 +84,7 @@ class Tacotron:
             # network.shape => (B, T, 128)
             network = pre_net(inputs=inputs,
                               layers=self.hparams.decoder.pre_net_layers,
-                              training=training)
+                              training=self.training)
             # network = inputs
 
             network = tf.Print(network, [tf.shape(network)], 'decoder.pre_net.shape')
@@ -92,8 +94,6 @@ class Tacotron:
 
             # TODO: Not sure how to handle projection here, since the initial state from the
             # encoder always hast length 256.
-
-            network = tf.Print(network, [tf.shape(network)], 'decoder.ipw.shape')
 
             # Stack several GRU cells and apply a residual connection after each cell.
             cells = []
@@ -119,7 +119,7 @@ class Tacotron:
                 activation=tf.nn.sigmoid
             )
 
-            if training:
+            if self.training:
                 helper = seq2seq.TrainingHelper(
                     inputs=self.inp_mel_spec,
                     sequence_length=self.inp_time_steps,
@@ -127,7 +127,7 @@ class Tacotron:
                 )
             else:
                 batch_size = tf.shape(network)[0]
-                helper = TacotronInferenceHelper(batch_size=batch_size, input_size=n_gru_units)
+                helper = TacotronInferenceHelper(batch_size=batch_size, input_size=self.hparams.decoder.target_size)
 
                 # TODO: I have currently no idea how the decoder is supposed to know when to stop.
                 # TODO: Wellllll, I guess the simplest thing could be to just decode all samples
@@ -148,12 +148,16 @@ class Tacotron:
                                            initial_state=tuple([encoder_state] * n_gru_layers),
                                            output_layer=None)
 
+            maximum_iterations = None
+            if self.training is False:
+                maximum_iterations = 1000
+
             # TODO: There should definitely be an upper limit on the iterations.
             final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
                 decoder,
                 output_time_major=False,
                 impute_finished=True,
-                maximum_iterations=None)
+                maximum_iterations=maximum_iterations)
 
             # final_outputs.type == seq2seq.BasicDecoderOutput
             network = final_outputs.rnn_output
@@ -186,7 +190,7 @@ class Tacotron:
                                   n_highway_units=self.hparams.post.n_highway_units,
                                   projections=self.hparams.post.projections,
                                   n_gru_units=self.hparams.post.n_gru_units,
-                                  training=True)
+                                  training=self.training)
 
         return network
 
@@ -194,6 +198,10 @@ class Tacotron:
         batch_size = tf.shape(self.inp_sentences)[0]
 
         # inp_sentences.shape = (B, T_s, decoder.n_gru_units * 2 ) = (B, T_s, 256)
+        self.inp_sentences = tf.Print(self.inp_sentences, [
+            tf.shape(self.inp_sentences)
+        ], message='tf.shape(self.inp_sentences)')
+        print('self.inp_sentences', self.inp_sentences)
 
         # network.shape => (B, T_s, 256)
         # encoder_state.shape => (B, 256)
@@ -228,18 +236,18 @@ class Tacotron:
         linear_spec = tf.reshape(self.inp_linear_spec,
                                  [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
-        self.loss_op_post_decoder = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
-        self.loss_op_post_processing = tf.reduce_mean(
-            tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+        if self.training:
+            self.loss_op_decoder = tf.reduce_mean(tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+            self.loss_op_post_processing = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
 
-        self.loss_op = self.loss_op_post_decoder + self.loss_op_post_processing
+            self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
     def get_loss_op(self):
         return self.loss_op
 
     def summary(self):
         tf.summary.scalar('loss', self.loss_op)
-        tf.summary.scalar('loss_decoder', self.loss_op_post_decoder)
+        tf.summary.scalar('loss_decoder', self.loss_op_decoder)
         tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
         with tf.name_scope('normalized_inputs'):
@@ -268,33 +276,34 @@ class Tacotron:
                                             (1, -1, (1 + self.hparams.n_fft // 2))), -1),
                              max_outputs=1)
 
-        with tf.name_scope('inference_reconstruction'):
-            win_len = ms_to_samples(self.hparams.win_len, sampling_rate=self.hparams.sampling_rate)
-            win_hop = ms_to_samples(self.hparams.win_hop, sampling_rate=self.hparams.sampling_rate)
-            n_fft = self.hparams.n_fft
+        if self.training is True:
+            with tf.name_scope('inference_reconstruction'):
+                win_len = ms_to_samples(self.hparams.win_len, sampling_rate=self.hparams.sampling_rate)
+                win_hop = ms_to_samples(self.hparams.win_hop, sampling_rate=self.hparams.sampling_rate)
+                n_fft = self.hparams.n_fft
 
-            def __synthesis(spec):
-                print('synthesis ....')
-                linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
-                linear_mag = decibel_to_magnitude(linear_mag_db)
+                def __synthesis(spec):
+                    print('synthesis ....', spec.shape)
+                    linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
+                    linear_mag = decibel_to_magnitude(linear_mag_db)
 
-                spec = spectrogram_to_wav(linear_mag,
-                                          win_len,
-                                          win_hop,
-                                          n_fft,
-                                          50)
+                    spec = spectrogram_to_wav(linear_mag,
+                                              win_len,
+                                              win_hop,
+                                              n_fft,
+                                              50)
 
-                save_wav('/tmp/reconstr.wav', spec, 16000, True)
-                return spec
+                    save_wav('/tmp/reconstr.wav', spec, 16000, True)
+                    return spec
 
-            # reconstruction = tf.py_func(__synthesis,
-            #                             [self.pred_linear_spec[0], win_len, win_hop,
-            #                              self.hparams.n_fft],
-            #                             [tf.float32])
+                # reconstruction = tf.py_func(__synthesis,
+                #                             [self.pred_linear_spec[0], win_len, win_hop,
+                #                              self.hparams.n_fft],
+                #                             [tf.float32])
 
-            reconstruction = tf.py_func(__synthesis, [self.pred_linear_spec[0]], [tf.float32])
+                reconstruction = tf.py_func(__synthesis, [self.pred_linear_spec[0]], [tf.float32])
 
-            tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
+                tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         return tf.summary.merge_all()
 

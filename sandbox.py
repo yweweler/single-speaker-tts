@@ -135,7 +135,8 @@ hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 
 # plot_waveform(wav, hparams.sampling_rate, title="Mega original")
 # calculate_linear_spec(wav, hop_len, win_len)
-# calculate_mfccs_and_deltas(wav, hop_len, win_len)
+calculate_mfccs_and_deltas(wav, hop_len, win_len)
+exit()
 # resynth_wav_using_mcep(wav, hop_len, 25, 0.35)
 
 
