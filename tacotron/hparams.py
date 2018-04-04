@@ -69,7 +69,10 @@ hparams = tf.contrib.training.HParams(
 
         n_gru_layers=2,
         n_gru_units=256,
-        target_size=80
+        target_size=80,
+
+        # Maximum number of decoder iterations for evaluation and inference.
+        maximum_iterations=1000,
     ),
 
     # Post-processing network parameters.

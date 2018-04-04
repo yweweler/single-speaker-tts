@@ -72,7 +72,6 @@ class Tacotron:
 
         return network, state
 
-    # TODO: Stopped here. The next thing I wanted to try is if my custom inference helper works.
     def decoder(self, inputs, encoder_state):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
@@ -91,9 +90,6 @@ class Tacotron:
 
             n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
             n_gru_units = self.hparams.decoder.n_gru_units  # 256
-
-            # TODO: Not sure how to handle projection here, since the initial state from the
-            # encoder always hast length 256.
 
             # Stack several GRU cells and apply a residual connection after each cell.
             cells = []
@@ -129,17 +125,6 @@ class Tacotron:
                 batch_size = tf.shape(network)[0]
                 helper = TacotronInferenceHelper(batch_size=batch_size, input_size=self.hparams.decoder.target_size)
 
-                # TODO: I have currently no idea how the decoder is supposed to know when to stop.
-                # TODO: Wellllll, I guess the simplest thing could be to just decode all samples
-                # up to an maximum size X, with X being large enough to hold everything we throw
-                # into the network (longest recorded sentence).
-                # Alternatively the user has to supply an <float> that tells us how long the
-                # audio chunk is that he would like to have (No matter if the generated speech
-                # actually fits the supplied length or not).
-                # Another way could be to define a maximal length of silence after which we
-                # would stop decoding. This however would require the network to actually produce
-                # silence after it is finished producing speech.
-
             # TODO: I am using encoder_state as the initial state for each cell in the stack.
             # Maybe it would be better to use encoder_state only for the first cell and then
             # continue with zero_state for all other cells.
@@ -150,9 +135,8 @@ class Tacotron:
 
             maximum_iterations = None
             if self.training is False:
-                maximum_iterations = 1000
+                maximum_iterations = self.hparams.decoder.maximum_iterations
 
-            # TODO: There should definitely be an upper limit on the iterations.
             final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
                 decoder,
                 output_time_major=False,

@@ -56,8 +56,7 @@ def load_entry(entry):
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
-    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (
-                                                                                     n_frames % hparams.reduction) != 0 else 0
+    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (n_frames % hparams.reduction) != 0 else 0
 
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
@@ -142,8 +141,9 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
         num_epochs=n_epochs,
         shuffle=False)
 
-    # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
-    # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
+    # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is
+    # stored in a tensor that hold objects in order to manage sequences of different lengths in a
+    # single tensor.
     sentence = tf.decode_raw(sentence, tf.int32)
 
     # Apply load_entry to each wav_path of the tensorflow iterator.
