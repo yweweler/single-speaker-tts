@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow.contrib as tfc
 from tensorflow.contrib import rnn as contrib_rnn
 from tensorflow.contrib import seq2seq
 
@@ -117,6 +118,23 @@ class Tacotron:
                 activation=tf.nn.sigmoid
             )
 
+            attention_mechanism = tfc.seq2seq.BahdanauAttention(
+                num_units=self.hparams.decoder.target_size, # TODO: Unsure how to choose this param.
+                memory=network,                             # Encoder outputs (with pre-net?).
+                memory_sequence_length=None,
+                dtype=tf.float32
+            )
+
+            attention_cell = tfc.seq2seq.AttentionWrapper(
+                cell=stacked_cell,
+                attention_mechanism=attention_mechanism,
+                attention_layer_size=None,
+                alignment_history=True,
+                output_attention=False, # True for Luong-style att., False for Bhadanau-style.
+                initial_cell_state=None
+            )
+
+            batch_size = tf.shape(network)[0]
             if self.training:
                 # TODO: Re-implement train data feeding.
                 helper = seq2seq.TrainingHelper(
@@ -125,15 +143,19 @@ class Tacotron:
                     time_major=False
                 )
             else:
-                batch_size = tf.shape(network)[0]
-                helper = TacotronInferenceHelper(batch_size=batch_size, input_size=self.hparams.decoder.target_size)
+                helper = TacotronInferenceHelper(batch_size=batch_size,
+                                                 input_size=self.hparams.decoder.target_size)
+
+            # TODO: Init using the encoder state: ".clone(cell_state=encoder_state)"
+            # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
+            decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
 
             # TODO: I am using encoder_state as the initial state for each cell in the stack.
             # Maybe it would be better to use encoder_state only for the first cell and then
             # continue with zero_state for all other cells.
-            decoder = seq2seq.BasicDecoder(cell=stacked_cell,
+            decoder = seq2seq.BasicDecoder(cell=attention_cell,
                                            helper=helper,
-                                           initial_state=tuple([encoder_state] * n_gru_layers),
+                                           initial_state=decoder_initial_state,
                                            output_layer=None)
 
             maximum_iterations = None
@@ -145,6 +167,8 @@ class Tacotron:
                 output_time_major=False,
                 impute_finished=True,
                 maximum_iterations=maximum_iterations)
+
+            Tacotron._create_attention_images_summary(final_state)
 
             # final_outputs.type == seq2seq.BasicDecoderOutput
             network = final_outputs.rnn_output
@@ -224,8 +248,10 @@ class Tacotron:
                                  [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
         if self.training:
-            self.loss_op_decoder = tf.reduce_mean(tf.abs(self.inp_mel_spec - self.debug_decoder_output))
-            self.loss_op_post_processing = tf.reduce_mean(tf.abs(linear_spec - self.pred_linear_spec))
+            self.loss_op_decoder = tf.reduce_mean(
+                tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+            self.loss_op_post_processing = tf.reduce_mean(
+                tf.abs(linear_spec - self.pred_linear_spec))
 
             self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
@@ -265,8 +291,10 @@ class Tacotron:
 
         if self.training is True:
             with tf.name_scope('inference_reconstruction'):
-                win_len = ms_to_samples(self.hparams.win_len, sampling_rate=self.hparams.sampling_rate)
-                win_hop = ms_to_samples(self.hparams.win_hop, sampling_rate=self.hparams.sampling_rate)
+                win_len = ms_to_samples(self.hparams.win_len,
+                                        sampling_rate=self.hparams.sampling_rate)
+                win_hop = ms_to_samples(self.hparams.win_hop,
+                                        sampling_rate=self.hparams.sampling_rate)
                 n_fft = self.hparams.n_fft
 
                 def __synthesis(spec):
@@ -296,3 +324,17 @@ class Tacotron:
 
     def load(self, checkpoint_dir):
         raise NotImplementedError()
+
+    @staticmethod
+    def _create_attention_images_summary(final_context_state):
+        """create attention image and attention summary."""
+        # Copied from: https://github.com/tensorflow/nmt/blob/master/nmt/attention_model.py
+        attention_images = (final_context_state.alignment_history.stack())
+        # Reshape to (batch, src_seq_len, tgt_seq_len,1)
+        attention_images = tf.expand_dims(
+            tf.transpose(attention_images, [1, 2, 0]), -1)
+        # Scale to range [0, 255]
+        attention_images *= 255
+        attention_summary = tf.summary.image("attention_images", attention_images)
+
+        return attention_summary
