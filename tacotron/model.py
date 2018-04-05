@@ -47,16 +47,10 @@ class Tacotron:
             # network.shape => (B, T, 256)
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
 
-            embedded_char_ids = tf.Print(embedded_char_ids,
-                                         [tf.shape(embedded_char_ids), embedded_char_ids],
-                                         'encoder.embedded_char_ids')
-
             # network.shape => (B, T, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
                               training=self.training)
-
-            network = tf.Print(network, [tf.shape(network)], 'encoder.network.shape')
 
             # network.shape => (B, T, 128 * 2)
             network, state = cbhg(inputs=network,
@@ -68,18 +62,15 @@ class Tacotron:
                                   n_gru_units=self.hparams.encoder.n_gru_units,
                                   training=self.training)
 
-            network = tf.Print(network, [tf.shape(network)], 'encoder.cbhg.shape')
-            state = tf.Print(state, [tf.shape(state)], 'encoder.cbhg.state.shape')
-
         return network, state
 
     def decoder(self, inputs, encoder_state):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
-            inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
-
-            encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
-                                     'decoder.encoder_state.shape')
+            # inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
+            #
+            # encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
+            #                          'decoder.encoder_state.shape')
 
             # TODO: Rewrite: The pre-net has to be applied at each cell step (on the last output).
             # network.shape => (B, T, 128)
@@ -87,8 +78,6 @@ class Tacotron:
                               layers=self.hparams.decoder.pre_net_layers,
                               training=self.training)
             # network = inputs
-
-            network = tf.Print(network, [tf.shape(network)], 'decoder.pre_net.shape')
 
             n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
             n_gru_units = self.hparams.decoder.n_gru_units  # 256
@@ -173,7 +162,6 @@ class Tacotron:
             Tacotron._create_attention_images_summary(final_state)
 
             network = final_outputs.rnn_output
-            network = tf.Print(network, [tf.shape(network)], 'decoder.rnn_output.shape')
 
             # TODO: 1 layer attention GRU (256 cells).
 
@@ -210,10 +198,6 @@ class Tacotron:
         batch_size = tf.shape(self.inp_sentences)[0]
 
         # inp_sentences.shape = (B, T_s, decoder.n_gru_units * 2 ) = (B, T_s, 256)
-        self.inp_sentences = tf.Print(self.inp_sentences, [
-            tf.shape(self.inp_sentences)
-        ], message='tf.shape(self.inp_sentences)')
-        print('self.inp_sentences', self.inp_sentences)
 
         # network.shape => (B, T_s, 256)
         # encoder_state.shape => (B, 256)
@@ -312,11 +296,6 @@ class Tacotron:
                     save_wav('/tmp/reconstr.wav', spec, 16000, True)
                     return spec
 
-                # reconstruction = tf.py_func(__synthesis,
-                #                             [self.pred_linear_spec[0], win_len, win_hop,
-                #                              self.hparams.n_fft],
-                #                             [tf.float32])
-
                 reconstruction = tf.py_func(__synthesis, [self.pred_linear_spec[0]], [tf.float32])
 
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
@@ -331,11 +310,14 @@ class Tacotron:
         """create attention image and attention summary."""
         # Copied from: https://github.com/tensorflow/nmt/blob/master/nmt/attention_model.py
         attention_images = (final_context_state.alignment_history.stack())
+
         # Reshape to (batch, src_seq_len, tgt_seq_len,1)
         attention_images = tf.expand_dims(
             tf.transpose(attention_images, [1, 2, 0]), -1)
+
         # Scale to range [0, 255]
         attention_images *= 255
+
         attention_summary = tf.summary.image("attention_images", attention_images)
 
         return attention_summary

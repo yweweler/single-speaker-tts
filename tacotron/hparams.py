@@ -35,7 +35,7 @@ hparams = tf.contrib.training.HParams(
     reduction=1,
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=False,
+    apply_post_processing=True,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
