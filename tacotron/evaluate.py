@@ -1,19 +1,20 @@
 import math
-import time
+import os
 
 import numpy as np
 import tensorflow as tf
 
-from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
+from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel, \
+    inv_normalize_decibel, decibel_to_magnitude
 from audio.effects import trim_silence
 from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
-from audio.io import load_wav
+from audio.io import load_wav, save_wav
+from audio.synthesis import spectrogram_to_wav
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
-import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -56,7 +57,8 @@ def load_entry(entry):
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
-    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (n_frames % hparams.reduction) != 0 else 0
+    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (
+                                                                                     n_frames % hparams.reduction) != 0 else 0
 
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
@@ -141,9 +143,8 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
         num_epochs=n_epochs,
         shuffle=False)
 
-    # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is
-    # stored in a tensor that hold objects in order to manage sequences of different lengths in a
-    # single tensor.
+    # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is stored in
+    # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
     sentence = tf.decode_raw(sentence, tf.int32)
 
     # Apply load_entry to each wav_path of the tensorflow iterator.
@@ -173,7 +174,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
     n_batches = int(math.ceil(len(lines) / batch_size))
 
-    print('batched.sentence.shape', sents.shape, sents)
+    print('batched.sentence.shape', sents.shape)
     print('batched.mel.shape', mels.shape)
     print('batched.mag.shape', mags.shape)
     print('batched.steps', steps)
@@ -181,107 +182,77 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     return batch_sequence_lengths, sents, mels, mags, steps, n_batches
 
 
-def train(checkpoint_dir):
-    file_listing_path = 'data/train_all.txt'
+def model_placeholders(max_len):
+    inp_sentences = tf.placeholder(dtype=tf.int32, shape=(1, max_len), name='ph_inp_sentences')
+    inp_mel_spec = tf.placeholder(dtype=tf.float32)
+    inp_linear_spec = tf.placeholder(dtype=tf.float32)
+    seq_lengths = tf.placeholder(dtype=tf.int32)
+    inp_time_steps = tf.placeholder(dtype=tf.int32)
 
-    n_epochs = 20
-    batch_size = 2
+    return inp_sentences, inp_mel_spec, inp_linear_spec, seq_lengths, inp_time_steps
 
-    # Checkpoint every 10 minutes.
-    checkpoint_save_secs = 60 * 10
 
-    # Save summary every 10 steps.
-    summary_save_steps = 100
-    summary_counter_steps = 100
+def evaluate(checkpoint_dir):
+    checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
 
-    dataset_start = time.time()
-    lengths_iter, sent_iter, mel_iter, linear_iter, time_steps_iter, n_batches = train_data_buckets(
-        file_listing_path,
-        n_epochs,
-        batch_size)
-    dataset_duration = time.time() - dataset_start
-    print('Dataset generation: {}s'.format(dataset_duration))
+    max_len = 60
 
-    # For debugging purposes only.
-    # mel_iter = tf.Print(mel_iter, [sent_iter], summarize=30)
-    mel_iter = tf.Print(mel_iter, [tf.shape(linear_iter)], summarize=30)
+    placeholders = model_placeholders(max_len)
+    model = Tacotron(hparams=hparams, inputs=placeholders, training=False)
+    saver = tf.train.Saver()
 
-    model = Tacotron(hparams=hparams,
-                     inputs=(sent_iter, mel_iter, linear_iter, lengths_iter, time_steps_iter),
-                     training=True)
+    def pad_sentence(_sentence, _max_len):
+        pad = _max_len - len(_sentence)
+        _sentence.extend([0] * pad)
+        return _sentence
 
-    loss_op = model.get_loss_op()
+    # TODO: Load sentences.
+    sentences = [
+        [40, 4, 24, 4, 14, 26, 14, 16, 17, 5, 16, 9, 5, 6, 16, 13, 18, 4, 11, 27, 5, 15, 3, 4,
+         8, 5, 13, 4, 15, 5, 15, 3, 4, 5, 28, 14, 11, 4, 20, 1],
+        [21, 9, 16, 22, 15, 5, 6, 13, 12, 5, 23, 4, 5, 15, 9, 5, 24, 6, 11, 11, 8, 5, 6, 16, 5,
+         9, 14, 19, 8, 5, 11, 6, 17, 5, 19, 14, 12, 4, 5, 15, 3, 6, 15, 20, 1]
+    ]
 
-    # NOTE: The global step has to be created before the optimizer is created.
-    tf.train.create_global_step()
+    with tf.Session() as session:
+        session.run(tf.global_variables_initializer())
+        print('Restoring model...')
+        saver.restore(session, checkpoint_file)
+        print('Restoring finished')
 
-    optimizer = tf.train.AdamOptimizer()
+        win_len = ms_to_samples(hparams.win_len, sampling_rate=hparams.sampling_rate)
+        win_hop = ms_to_samples(hparams.win_hop, sampling_rate=hparams.sampling_rate)
+        n_fft = hparams.n_fft
 
-    # Tell the optimizer to minimize the loss function.
-    train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
+        with tf.device('/cpu:0'):
+            for i, sentence in enumerate(sentences):
+                print('Sentence: {} len: {}'.format(i, len(sentence)))
+                shizzle = pad_sentence(sentence, max_len)
+                print(shizzle)
+                test = np.array([shizzle], dtype=np.int32)
+                print(test.shape, test.dtype)
 
-    summary_op = model.summary()
+                spec = session.run(model.pred_linear_spec, feed_dict={
+                    model.inp_sentences: test
+                })
 
-    # TODO: Not sure what the exact benefit of a scaffold is since it does not hold very much data.
-    session_scaffold = tf.train.Scaffold(
-        init_op=tf.global_variables_initializer(),
-        summary_op=summary_op
-    )
+                print('debug', spec)
 
-    saver_hook = tf.train.CheckpointSaverHook(
-        checkpoint_dir=checkpoint_dir,
-        save_secs=checkpoint_save_secs,
-        scaffold=session_scaffold
-    )
+                spec = spec[0]
+                linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
+                linear_mag = decibel_to_magnitude(linear_mag_db)
 
-    summary_hook = tf.train.SummarySaverHook(
-        output_dir=checkpoint_dir,
-        save_steps=summary_save_steps,
-        scaffold=session_scaffold
-    )
+                print('inversion')
+                spec = spectrogram_to_wav(linear_mag,
+                                          win_len,
+                                          win_hop,
+                                          n_fft,
+                                          50)
 
-    nan_hook = tf.train.NanTensorHook(
-        loss_tensor=loss_op,
-        fail_on_nan_loss=True
-    )
-
-    counter_hook = tf.train.StepCounterHook(
-        output_dir=checkpoint_dir,
-        every_n_steps=summary_counter_steps
-    )
-
-    session_config = tf.ConfigProto(
-        gpu_options=tf.GPUOptions(
-            allow_growth=True,
-        )
-    )
-
-    session = tf.train.SingularMonitoredSession(hooks=[
-        saver_hook,
-        summary_hook,
-        nan_hook,
-        counter_hook],
-        scaffold=session_scaffold,
-        config=session_config,
-        checkpoint_dir=checkpoint_dir)
-
-    tf.train.start_queue_runners(sess=session)
-
-    train_start = time.time()
-
-    with tf.device('/cpu:0'):
-        while not session.should_stop():
-            try:
-                session.run([train_op])
-            except tf.errors.OutOfRangeError:
-                print('All batches read.')
-                break
-
-    train_duration = time.time() - train_start
-    print('Training duration: {}min.'.format(train_duration / 60))
-
-    session.close()
+                print('saving')
+                save_wav('/tmp/eval_{}.wav'.format(i), spec, 16000, True)
+                print('done')
 
 
 if __name__ == '__main__':
-    train(checkpoint_dir='/tmp/tacotron')
+    evaluate(checkpoint_dir='/tmp/tacotron')
