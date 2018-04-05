@@ -135,6 +135,7 @@ class Tacotron:
             )
 
             batch_size = tf.shape(network)[0]
+
             if self.training:
                 # TODO: Re-implement train data feeding.
                 helper = seq2seq.TrainingHelper(
@@ -148,7 +149,8 @@ class Tacotron:
 
             # TODO: Init using the encoder state: ".clone(cell_state=encoder_state)"
             # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
-            decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
+            decoder_initial_state = attention_cell.zero_state(batch_size=batch_size,
+                                                              dtype=tf.float32)
 
             # TODO: I am using encoder_state as the initial state for each cell in the stack.
             # Maybe it would be better to use encoder_state only for the first cell and then
@@ -170,7 +172,6 @@ class Tacotron:
 
             Tacotron._create_attention_images_summary(final_state)
 
-            # final_outputs.type == seq2seq.BasicDecoderOutput
             network = final_outputs.rnn_output
             network = tf.Print(network, [tf.shape(network)], 'decoder.rnn_output.shape')
 

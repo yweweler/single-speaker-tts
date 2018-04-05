@@ -65,9 +65,6 @@ class TacotronInferenceHelper(seq2seq.Helper):
         # Use the resulting state from the last step as the next state.
         next_state = state
 
-        tf.Print(next_inputs, [next_inputs], 'InferenceHelper.next_inputs')
-        tf.Print(next_state, [next_state], 'InferenceHelper.next_state')
-
         # Check if decoding is finished.
         finished = self.__is_decoding_finished(outputs)
 
