@@ -64,6 +64,51 @@ class Tacotron:
 
         return network, state
 
+    def attention_rnn(self, units, inputs, memory):
+        attention_mechanism = tfc.seq2seq.BahdanauAttention(
+            num_units=units,  # TODO: Unsure how to choose this param.
+            memory=memory,
+            memory_sequence_length=None,
+            dtype=tf.float32
+        )
+
+        # TODO: The attention rnn might also be bidirectional I guess?
+        cell = tf.nn.rnn_cell.GRUCell(num_units=units, name='attention_gru_cell')
+
+        attention_cell = tfc.seq2seq.AttentionWrapper(
+            cell=cell,
+            attention_mechanism=attention_mechanism,
+            attention_layer_size=units,
+            alignment_history=True,
+            output_attention=False,  # True for Luong-style att., False for Bhadanau-style.
+            initial_cell_state=None
+        )
+
+        # TODO: Sequence lengths for the attention rnn?
+        outputs, output_state = tf.nn.dynamic_rnn(
+            cell=attention_cell,
+            inputs=inputs,
+            dtype=tf.float32,
+            scope='attention_gru'
+        )
+
+        return outputs, output_state
+
+    def decoder_rnn(self, n_units, inputs):
+        cell_fw = tf.nn.rnn_cell.GRUCell(num_units=n_units)
+        cell_bw = tf.contrib.rnn.GRUCell(num_units=n_units)
+
+        # TODO: Sequence lengths for the decoder rnn?
+        outputs, output_states = tf.nn.bidirectional_dynamic_rnn(
+            cell_fw=cell_fw,
+            cell_bw=cell_bw,
+            inputs=inputs,
+            dtype=tf.float32,
+            scope='decoder_gru'
+        )
+
+        return tf.concat(outputs, -1), tf.concat(output_states, -1)
+
     def decoder(self, inputs, encoder_state):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
@@ -77,7 +122,6 @@ class Tacotron:
             network = pre_net(inputs=inputs,
                               layers=self.hparams.decoder.pre_net_layers,
                               training=self.training)
-            # network = inputs
 
             n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
             n_gru_units = self.hparams.decoder.n_gru_units  # 256
@@ -159,9 +203,25 @@ class Tacotron:
                 impute_finished=True,
                 maximum_iterations=maximum_iterations)
 
+            network = final_outputs.rnn_output
             Tacotron._create_attention_images_summary(final_state)
 
-            network = final_outputs.rnn_output
+            # ======================================================================================
+            # attention_rnn_outputs, final_state = self.attention_rnn(256, self.inp_mel_spec, network)
+            # decoder_rnn_outputs, _ = self.decoder_rnn(128, attention_rnn_outputs)
+            # final_outputs = attention_rnn_outputs + decoder_rnn_outputs
+            #
+            # Tacotron._create_attention_images_summary(final_state)
+            #
+            # # network = final_outputs.rnn_output
+            # network = final_outputs
+            #
+            # network = tf.layers.dense(inputs=network,
+            #                           units=80,
+            #                           activation=tf.nn.sigmoid,
+            #                           kernel_initializer=tf.glorot_normal_initializer(),
+            #                           bias_initializer=tf.glorot_normal_initializer())
+            # ======================================================================================
 
             # TODO: 1 layer attention GRU (256 cells).
 
@@ -309,14 +369,14 @@ class Tacotron:
     def _create_attention_images_summary(final_context_state):
         """create attention image and attention summary."""
         # Copied from: https://github.com/tensorflow/nmt/blob/master/nmt/attention_model.py
-        attention_images = (final_context_state.alignment_history.stack())
+        attention_images = final_context_state.alignment_history.stack()
 
         # Reshape to (batch, src_seq_len, tgt_seq_len,1)
         attention_images = tf.expand_dims(
             tf.transpose(attention_images, [1, 2, 0]), -1)
 
         # Scale to range [0, 255]
-        attention_images *= 255
+        # attention_images *= 255
 
         attention_summary = tf.summary.image("attention_images", attention_images)
 

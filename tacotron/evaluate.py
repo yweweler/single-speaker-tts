@@ -184,7 +184,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
 def model_placeholders(max_len):
     inp_sentences = tf.placeholder(dtype=tf.int32, shape=(1, max_len), name='ph_inp_sentences')
-    inp_mel_spec = tf.placeholder(dtype=tf.float32)
+    inp_mel_spec = tf.placeholder(dtype=tf.float32, shape=(1, 1000, 80))
     inp_linear_spec = tf.placeholder(dtype=tf.float32)
     seq_lengths = tf.placeholder(dtype=tf.int32)
     inp_time_steps = tf.placeholder(dtype=tf.int32)
