@@ -10,6 +10,7 @@ from audio.effects import trim_silence
 from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
 from audio.io import load_wav, save_wav
 from audio.synthesis import spectrogram_to_wav
+from datasets.lj_speech import LJSpeechDatasetHelper
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
@@ -69,8 +70,8 @@ def load_entry(entry):
     linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
     # ==============================================================================================
 
-    # print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
-    # print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
+    # print("load_audio.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
+    # print("load_audio.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
 
     return np.array(mel_mag_db).astype(np.float32), \
            np.array(linear_mag_db).astype(np.float32)
@@ -147,7 +148,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     # a tensor that hold objects in order to manage sequences of different lengths in a single tensor.
     sentence = tf.decode_raw(sentence, tf.int32)
 
-    # Apply load_entry to each wav_path of the tensorflow iterator.
+    # Apply load_audio to each wav_path of the tensorflow iterator.
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
@@ -189,13 +190,49 @@ def model_placeholders(max_len):
     seq_lengths = tf.placeholder(dtype=tf.int32)
     inp_time_steps = tf.placeholder(dtype=tf.int32)
 
-    return inp_sentences, inp_mel_spec, inp_linear_spec, seq_lengths, inp_time_steps
+    return inp_sentences, seq_lengths, inp_mel_spec, inp_linear_spec, inp_time_steps
 
 
 def evaluate(checkpoint_dir):
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
 
-    max_len = 60
+    init_char_dict = {
+        'pad': 0,  # padding
+        'eos': 1,  # end of sequence
+        'p': 2,
+        'r': 3,
+        'i': 4,
+        'n': 5,
+        't': 6,
+        'g': 7,
+        ' ': 8,
+        'h': 9,
+        'e': 10,
+        'o': 11,
+        'l': 12,
+        'y': 13,
+        's': 14,
+        'w': 15,
+        'c': 16,
+        'a': 17,
+        'd': 18,
+        'f': 19,
+        'm': 20,
+        'x': 21,
+        'b': 22,
+        'v': 23,
+        'u': 24,
+        'k': 25,
+        'j': 26,
+        'z': 27,
+        'q': 28,
+    }
+
+    dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
+                                    char_dict=init_char_dict,
+                                    fill_dict=False)
+
+    max_len = 80
 
     placeholders = model_placeholders(max_len)
     model = Tacotron(hparams=hparams, inputs=placeholders, training=False)
@@ -208,10 +245,21 @@ def evaluate(checkpoint_dir):
 
     # TODO: Load sentences.
     sentences = [
-        [40, 4, 24, 4, 14, 26, 14, 16, 17, 5, 16, 9, 5, 6, 16, 13, 18, 4, 11, 27, 5, 15, 3, 4,
-         8, 5, 13, 4, 15, 5, 15, 3, 4, 5, 28, 14, 11, 4, 20, 1],
-        [21, 9, 16, 22, 15, 5, 6, 13, 12, 5, 23, 4, 5, 15, 9, 5, 24, 6, 11, 11, 8, 5, 6, 16, 5,
-         9, 14, 19, 8, 5, 11, 6, 17, 5, 19, 14, 12, 4, 5, 15, 3, 6, 15, 20, 1]
+        # TIMIT
+        # ===========================================================================
+        # [40, 4, 24, 4, 14, 26, 14, 16, 17, 5, 16, 9, 5, 6, 16, 13, 18, 4, 11, 27, 5, 15, 3, 4,
+        #  8, 5, 13, 4, 15, 5, 15, 3, 4, 5, 28, 14, 11, 4, 20],
+        # [21, 9, 16, 22, 15, 5, 6, 13, 12, 5, 23, 4, 5, 15, 9, 5, 24, 6, 11, 11, 8, 5, 6, 16, 5,
+        #  9, 14, 19, 8, 5, 11, 6, 17, 5, 19, 14, 12, 4, 5, 15, 3, 6, 15, 20],
+        #
+        # ===========================================================================
+        # LJSpeech
+        dataset.sent2idx('and it is worth mention in passing that as an example of fine '
+                         'typography'),
+        #
+        # ===========================================================================
+        # Not contained in train.
+        dataset.sent2idx('you are hearing an artificial voice')
     ]
 
     with tf.Session() as session:
@@ -226,6 +274,8 @@ def evaluate(checkpoint_dir):
 
         with tf.device('/cpu:0'):
             for i, sentence in enumerate(sentences):
+                # Append the EOS token.
+                sentence.append(1)
                 print('Sentence: {} len: {}'.format(i, len(sentence)))
                 shizzle = pad_sentence(sentence, max_len)
                 print(shizzle)
@@ -239,7 +289,7 @@ def evaluate(checkpoint_dir):
                 print('debug', spec)
 
                 spec = spec[0]
-                linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
+                linear_mag_db = inv_normalize_decibel(spec.T, 35.7, 100)
                 linear_mag = decibel_to_magnitude(linear_mag_db)
 
                 print('inversion')
@@ -250,9 +300,9 @@ def evaluate(checkpoint_dir):
                                           50)
 
                 print('saving')
-                save_wav('/tmp/eval_{}.wav'.format(i), spec, 16000, True)
+                save_wav('/tmp/eval_{}.wav'.format(i), spec, hparams.sampling_rate, True)
                 print('done')
 
 
 if __name__ == '__main__':
-    evaluate(checkpoint_dir='/tmp/tacotron')
+    evaluate(checkpoint_dir='/tmp/tacotron/ljspeech_all_samples')
