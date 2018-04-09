@@ -259,7 +259,8 @@ def evaluate(checkpoint_dir):
         #
         # ===========================================================================
         # Not contained in train.
-        dataset.sent2idx('you are hearing an artificial voice')
+        dataset.sent2idx('you are hearing an artificial voice'),
+        dataset.sent2idx('we are the borg')
     ]
 
     with tf.Session() as session:

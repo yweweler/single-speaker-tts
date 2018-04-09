@@ -384,9 +384,14 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
             Default is True.
 
     Returns:
-        tf.Tensor:
-            A tensor which shape is expected to be shape=(B, T, n_gru_units * 2) with B being
-            the batch size, T being the number of time frames.
+        (outputs, output_states):
+            outputs (tf.Tensor): The output states (output_fw, output_bw) of the RNN concatenated over time.
+                A tensor which shape is expected to be shape=(B, T, n_gru_units * 2) with B being
+                the batch size, T being the number of time frames.
+
+            output_states (tf.Tensor): A tensor containing the forward and the backward final states
+                (output_state_fw, output_state_bw) of the bidirectional rnn.
+                Its shape is expected to be shape=(2, n_gru_units).
     """
     # network.shape => (B, T, n_banks * n_filters)
     network = conv_1d_filter_banks(inputs=inputs,
@@ -461,4 +466,4 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
     # network.shape => (B, T, n_gru_units * 2)
     network = tf.concat(outputs, -1)
 
-    return network, tf.concat(output_states, -1)
+    return network, output_states

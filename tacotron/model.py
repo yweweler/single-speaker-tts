@@ -4,7 +4,6 @@ from tensorflow.contrib import rnn as contrib_rnn
 from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
-from audio.io import save_wav
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper
 from tacotron.layers import cbhg, pre_net
@@ -18,7 +17,7 @@ class Tacotron:
 
         # Create placeholders for the input data.
         self.inp_sentences, self.seq_lengths, self.inp_mel_spec, self.inp_linear_spec, \
-            self.inp_time_steps = inputs
+        self.inp_time_steps = inputs
 
         self.pred_linear_spec = None
 
@@ -39,22 +38,42 @@ class Tacotron:
         return self.inp_mel_spec, self.inp_linear_spec
 
     def encoder(self, inputs):
+        """
+        Implementation of the CBHG based Tacotron encoder network.
+
+        Arguments:
+            inputs (tf.Tensor):
+            The shape is expected to be shape=(B, T_sent, ) with B being the batch size, T_sent
+            being the number of tokens in the sentence including the EOS token.
+
+        Returns:
+         (outputs, output_states):
+            outputs (tf.Tensor): The output states (output_fw, output_bw) of the RNN concatenated
+                over time. Its shape is expected to be shape=(B, T_sent, 2 * n_gru_units) with B being
+                the batch size, T_sent being the number of tokens in the sentence including the EOS
+                token.
+
+            output_states (tf.Tensor): A tensor containing the forward and the backward final states
+                (output_state_fw, output_state_bw) of the bidirectional rnn.
+                Its shape is expected to be shape=(B, 2, n_gru_units) with B being the batch size.
+        """
         with tf.variable_scope('encoder'):
             char_embeddings = tf.get_variable("embedding", [
-                self.hparams.vocabulary_size,
-                self.hparams.encoder.embedding_size
-            ],
+                                                  self.hparams.vocabulary_size,
+                                                  self.hparams.encoder.embedding_size
+                                              ],
                                               dtype=tf.float32)
 
-            # network.shape => (B, T, 256)
+            # shape => (B, T_sent, 256)
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
 
-            # network.shape => (B, T, 128)
+            # shape => (B, T_sent, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
                               training=self.training)
 
-            # network.shape => (B, T, 128 * 2)
+            # network.shape => (B, T_sent, 2 * n_gru_units)
+            # state.shape   => (2, n_gru_units)
             network, state = cbhg(inputs=network,
                                   n_banks=self.hparams.encoder.n_banks,
                                   n_filters=self.hparams.encoder.n_filters,
@@ -136,7 +155,7 @@ class Tacotron:
                 alignment_history=True,
                 output_attention=False,  # True for Luong-style att., False for Bhadanau-style.
                 initial_cell_state=None
-            )   # => (B, T_sent, 256)
+            )  # => (B, T_sent, 256)
 
             # === Decoder ==========================================================================
             # TODO: Apply the reduction factor.
@@ -236,10 +255,12 @@ class Tacotron:
 
         Returns:
             tf.Tensor:
-                A tensor which shape is expected to be shape=(B, T, n_gru_units * 2) with B
+                A tensor which shape is expected to be shape=(B, T_spec, 2 * n_gru_units) with B
                 being the batch size and T being the number of time frames.
         """
         with tf.variable_scope('post_process'):
+            # network.shape => (B, T_spec, 2 * n_gru_units)
+            # state.shape   => (2, n_gru_units)
             network, state = cbhg(inputs=inputs,
                                   n_banks=self.hparams.post.n_banks,
                                   n_filters=self.hparams.post.n_filters,
@@ -254,29 +275,29 @@ class Tacotron:
     def model(self):
         batch_size = tf.shape(self.inp_sentences)[0]
 
-        # inp_sentences.shape = (B, T_s, decoder.n_gru_units * 2 ) = (B, T_s, 256)
+        # inp_sentences.shape = (B, T_sent, decoder.n_gru_units * 2 ) = (B, T_sent, 256)
 
-        # network.shape => (B, T_s, 256)
-        # encoder_state.shape => (B, 256)
-        network, encoder_state = self.encoder(self.inp_sentences)
+        # network.shape => (B, T_sent, 256)
+        # encoder_state.shape => (B, 2, 256)
+        encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
 
-        # network.shape => (B, T_w, 80)
-        network = self.decoder(network, encoder_state)
+        # shape => (B, T_spec, 80)
+        decoder_outputs = self.decoder(encoder_outputs, encoder_state)
 
         # Note: The Tacotron paper does not explicitly state that the reduction factor r was
         # applied during post-processing. My measurements suggest, that there is no benefit
         # in applying r during post-processing. Therefore the data is reshaped to the
         # original size before processing.
 
-        # network.shape => (B, T, n_mels)
-        network = tf.reshape(network, [batch_size, -1, self.hparams.n_mels])
+        # shape => (B, T_spec, n_mels)
+        network = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
 
         if self.hparams.apply_post_processing:
-            # network.shape => (B, T, n_gru_units * 2)
+            # shape => (B, T_spec, 256)
             network = self.post_process(network)
 
         # TODO: Should the reduction factor be applied here?
-        # network.shape => (B, T, (1 + n_fft // 2))
+        # shape => (B, T_spec, (1 + n_fft // 2))
         network = tf.layers.dense(inputs=network,
                                   units=(1 + self.hparams.n_fft // 2),
                                   activation=tf.nn.sigmoid,
@@ -365,20 +386,6 @@ class Tacotron:
 
     @staticmethod
     def _create_attention_summary(final_context_state):
-        # attention_fw = final_context_state.alignment_history.stack()
-        # attention_bw = final_context_state.alignment_history.stack()
-        #
-        # # Reshape to (batch, src_seq_len, tgt_seq_len,1)
-        # attention_fw_img = tf.expand_dims(
-        #     tf.transpose(attention_fw, [1, 2, 0]), -1)
-        #
-        # attention_bw_img = tf.expand_dims(
-        #     tf.transpose(attention_bw, [1, 2, 0]), -1)
-        #
-        # with tf.name_scope('normalized_inputs'):
-        #     tf.summary.image("forward", attention_fw_img)
-        #     tf.summary.image("backward", attention_bw_img)
-
         attention_wrapper_state, unkn1, unkn2 = final_context_state
 
         cell_state, attention, _, alignments, alignment_history, attention_state = \
