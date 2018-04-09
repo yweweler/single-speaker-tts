@@ -3,17 +3,17 @@ import tensorflow as tf
 # Default hyper-parameters:
 hparams = tf.contrib.training.HParams(
     # Target sampling rate.
-    sampling_rate=16000,
+    sampling_rate=22050,
 
     # Number of unique characters in the vocabulary.
-    vocabulary_size=63,
+    vocabulary_size=29,
 
     # FFT window size.
     n_fft=1024,
 
     # Windows length in ms.
     # win_len=25.0,
-    win_len=50.0,
+    win_len=45.0,
 
     # Window stride in ms.
     # win_hop=8.0,
@@ -35,7 +35,7 @@ hparams = tf.contrib.training.HParams(
     reduction=1,
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=True,
+    apply_post_processing=False,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(

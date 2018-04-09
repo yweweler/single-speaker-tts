@@ -8,16 +8,18 @@ from audio.io import save_wav
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper
 from tacotron.layers import cbhg, pre_net
-
-
 # TODO: Clean up document and comments.
+from tacotron.wrappers import PrenetWrapper, ConcatOutputAndAttentionWrapper
+
 
 class Tacotron:
     def __init__(self, hparams, inputs, training=True):
         self.hparams = hparams
 
         # Create placeholders for the input data.
-        self.inp_sentences, self.inp_mel_spec, self.inp_linear_spec, self.seq_lengths, self.inp_time_steps = inputs
+        self.inp_sentences, self.seq_lengths, self.inp_mel_spec, self.inp_linear_spec, \
+            self.inp_time_steps = inputs
+
         self.pred_linear_spec = None
 
         self.loss_op = None
@@ -112,62 +114,67 @@ class Tacotron:
     def decoder(self, inputs, encoder_state):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
-            # inputs = tf.Print(inputs, [tf.shape(inputs)], 'decoder.inputs.shape')
-            #
-            # encoder_state = tf.Print(encoder_state, [tf.shape(encoder_state)],
-            #                          'decoder.encoder_state.shape')
 
-            # TODO: Rewrite: The pre-net has to be applied at each cell step (on the last output).
-            # network.shape => (B, T, 128)
-            network = pre_net(inputs=inputs,
-                              layers=self.hparams.decoder.pre_net_layers,
-                              training=self.training)
-
-            n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
-            n_gru_units = self.hparams.decoder.n_gru_units  # 256
-
-            # Stack several GRU cells and apply a residual connection after each cell.
-            cells = []
-            for i in range(n_gru_layers):
-                cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
-                residual_cell = tf.nn.rnn_cell.ResidualWrapper(cell)
-                cells.append(residual_cell)
-
-            stacked_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
-
-            # Project the first cells inputs to the number of decoder units (this way the inputs
-            # can be added to the cells outputs using residual connections).
-            stacked_cell = contrib_rnn.InputProjectionWrapper(
-                cell=stacked_cell,
-                num_proj=n_gru_units,
-                activation=None
-            )
-
-            # TODO: Apply the reduction factor here.
-            # Project the final cells output to the decoder target size.
-            stacked_cell = contrib_rnn.OutputProjectionWrapper(
-                cell=stacked_cell,
-                output_size=self.hparams.decoder.target_size,
-                activation=tf.nn.sigmoid
-            )
-
+            # === Attention ========================================================================
             attention_mechanism = tfc.seq2seq.BahdanauAttention(
-                num_units=self.hparams.decoder.target_size, # TODO: Unsure how to choose this param.
-                memory=network,                             # Encoder outputs (with pre-net?).
+                num_units=256,
+                memory=inputs,
                 memory_sequence_length=None,
                 dtype=tf.float32
             )
 
-            attention_cell = tfc.seq2seq.AttentionWrapper(
-                cell=stacked_cell,
+            attention_cell = tf.nn.rnn_cell.GRUCell(num_units=256,
+                                                    name='attention_gru_cell')
+
+            wrapped_attention_cell = tfc.seq2seq.AttentionWrapper(
+                cell=PrenetWrapper(attention_cell,
+                                   self.hparams.decoder.pre_net_layers,
+                                   # network.shape => (B, T, 128)
+                                   self.training),
                 attention_mechanism=attention_mechanism,
                 attention_layer_size=None,
                 alignment_history=True,
-                output_attention=False, # True for Luong-style att., False for Bhadanau-style.
+                output_attention=False,  # True for Luong-style att., False for Bhadanau-style.
                 initial_cell_state=None
+            )   # => (B, T_sent, 256)
+
+            # === Decoder ==========================================================================
+            # TODO: Apply the reduction factor.
+
+            n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
+            n_gru_units = self.hparams.decoder.n_gru_units  # 256
+
+            concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
+            concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, 256)
+
+            # Stack several GRU cells and apply a residual connection after each cell.
+            cells = [concat_cell]
+            for i in range(n_gru_layers):
+                cell = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell')
+                cell = tf.nn.rnn_cell.ResidualWrapper(cell)
+                cells.append(cell)
+
+            decoder_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
+
+            # Project the final cells output to the decoder target size.
+            decoder_cell = contrib_rnn.OutputProjectionWrapper(
+                cell=decoder_cell,
+                output_size=self.hparams.decoder.target_size,
+                activation=tf.nn.sigmoid
             )
 
-            batch_size = tf.shape(network)[0]
+            # Determine batch size.
+            batch_size = tf.shape(inputs)[0]
+
+            # TODO: Init using the encoder state: ".clone(cell_state=encoder_state)"
+            # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
+            decoder_initial_state = decoder_cell.zero_state(
+                batch_size=batch_size,
+                dtype=tf.float32
+            )
+            # TODO: I am using encoder_state as the initial state for each cell in the stack.
+            # Maybe it would be better to use encoder_state only for the first cell and then
+            # continue with zero_state for all other cells.
 
             if self.training:
                 # TODO: Re-implement train data feeding.
@@ -180,31 +187,23 @@ class Tacotron:
                 helper = TacotronInferenceHelper(batch_size=batch_size,
                                                  input_size=self.hparams.decoder.target_size)
 
-            # TODO: Init using the encoder state: ".clone(cell_state=encoder_state)"
-            # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
-            decoder_initial_state = attention_cell.zero_state(batch_size=batch_size,
-                                                              dtype=tf.float32)
-
-            # TODO: I am using encoder_state as the initial state for each cell in the stack.
-            # Maybe it would be better to use encoder_state only for the first cell and then
-            # continue with zero_state for all other cells.
-            decoder = seq2seq.BasicDecoder(cell=attention_cell,
+            decoder = seq2seq.BasicDecoder(cell=decoder_cell,
                                            helper=helper,
-                                           initial_state=decoder_initial_state,
-                                           output_layer=None)
+                                           initial_state=decoder_initial_state)
 
             maximum_iterations = None
             if self.training is False:
                 maximum_iterations = self.hparams.decoder.maximum_iterations
 
             final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
-                decoder,
+                decoder=decoder,
                 output_time_major=False,
-                impute_finished=True,
+                impute_finished=True,  # Not sure if this is necessary if I pass all
+                # sequence length on they way.
                 maximum_iterations=maximum_iterations)
 
             network = final_outputs.rnn_output
-            Tacotron._create_attention_images_summary(final_state)
+            Tacotron._create_attention_summary(final_state)
 
             # ======================================================================================
             # attention_rnn_outputs, final_state = self.attention_rnn(256, self.inp_mel_spec, network)
@@ -222,8 +221,6 @@ class Tacotron:
             #                           kernel_initializer=tf.glorot_normal_initializer(),
             #                           bias_initializer=tf.glorot_normal_initializer())
             # ======================================================================================
-
-            # TODO: 1 layer attention GRU (256 cells).
 
         self.debug_decoder_output = network
         return network
@@ -334,7 +331,8 @@ class Tacotron:
                                             (1, -1, (1 + self.hparams.n_fft // 2))), -1),
                              max_outputs=1)
 
-        if self.training is True:
+        # TODO: Turned off since it is only of use fr debugging.
+        if self.training is True and False:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len,
                                         sampling_rate=self.hparams.sampling_rate)
@@ -344,17 +342,17 @@ class Tacotron:
 
                 def __synthesis(spec):
                     print('synthesis ....', spec.shape)
-                    linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
+                    linear_mag_db = inv_normalize_decibel(spec.T, 35.7, 100)
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
-                    spec = spectrogram_to_wav(linear_mag,
+                    _wav = spectrogram_to_wav(linear_mag,
                                               win_len,
                                               win_hop,
                                               n_fft,
                                               50)
 
-                    save_wav('/tmp/reconstr.wav', spec, 16000, True)
-                    return spec
+                    # save_wav('/tmp/reconstr.wav', _wav, hparams.sampling_rate, True)
+                    return _wav
 
                 reconstruction = tf.py_func(__synthesis, [self.pred_linear_spec[0]], [tf.float32])
 
@@ -366,18 +364,46 @@ class Tacotron:
         raise NotImplementedError()
 
     @staticmethod
-    def _create_attention_images_summary(final_context_state):
-        """create attention image and attention summary."""
-        # Copied from: https://github.com/tensorflow/nmt/blob/master/nmt/attention_model.py
-        attention_images = final_context_state.alignment_history.stack()
+    def _create_attention_summary(final_context_state):
+        # attention_fw = final_context_state.alignment_history.stack()
+        # attention_bw = final_context_state.alignment_history.stack()
+        #
+        # # Reshape to (batch, src_seq_len, tgt_seq_len,1)
+        # attention_fw_img = tf.expand_dims(
+        #     tf.transpose(attention_fw, [1, 2, 0]), -1)
+        #
+        # attention_bw_img = tf.expand_dims(
+        #     tf.transpose(attention_bw, [1, 2, 0]), -1)
+        #
+        # with tf.name_scope('normalized_inputs'):
+        #     tf.summary.image("forward", attention_fw_img)
+        #     tf.summary.image("backward", attention_bw_img)
 
-        # Reshape to (batch, src_seq_len, tgt_seq_len,1)
-        attention_images = tf.expand_dims(
-            tf.transpose(attention_images, [1, 2, 0]), -1)
+        attention_wrapper_state, unkn1, unkn2 = final_context_state
 
-        # Scale to range [0, 255]
-        # attention_images *= 255
+        cell_state, attention, _, alignments, alignment_history, attention_state = \
+            attention_wrapper_state
+        print('cell_state', cell_state)
+        print('attention', attention)
+        print('alignments', alignments)
+        print('alignment_history', alignment_history)
+        print('attention_state', attention_state)
 
-        attention_summary = tf.summary.image("attention_images", attention_images)
+        print('unkn1', unkn1)
+        print('unkn2', unkn2)
 
-        return attention_summary
+        # tf.summary.image("cell_state", tf.expand_dims(tf.reshape(cell_state[0], (1, 1, 256)), -1))
+        # tf.summary.image("attention", tf.expand_dims(tf.reshape(attention[0], (1, 1, 256)), -1))
+        tf.summary.image("alignments", tf.expand_dims(tf.expand_dims(alignments, -1), 0))
+        tf.summary.image("attention_state", tf.expand_dims(tf.expand_dims(attention_state, -1), 0))
+
+        # tf.summary.image("unkn1", tf.expand_dims(tf.reshape(unkn1[0], (1, 1, 256)), -1))
+        # tf.summary.image("unkn2", tf.expand_dims(tf.reshape(unkn2[0], (1, 1, 256)), -1))
+
+        stacked = alignment_history.stack()
+        tf.summary.image("alignments_stacked", tf.expand_dims(stacked, -1))
+
+        alignments = tf.transpose(stacked, [1, 2, 0])
+        tf.summary.image("alignments_final", tf.expand_dims(alignments, -1))
+
+        print('alignment_history_stacked', alignments)

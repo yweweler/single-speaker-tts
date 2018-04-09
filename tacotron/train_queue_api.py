@@ -11,7 +11,6 @@ from audio.io import load_wav
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
-import os
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -56,7 +55,8 @@ def load_entry(entry):
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
-    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (n_frames % hparams.reduction) != 0 else 0
+    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (
+                                                                                     n_frames % hparams.reduction) != 0 else 0
 
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
@@ -67,8 +67,8 @@ def load_entry(entry):
     linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
     # ==============================================================================================
 
-    # print("load_entry.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
-    # print("load_entry.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
+    # print("load_audio.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
+    # print("load_audio.linear.shape", np.array(linear_mag_db).astype(np.float32).shape)
 
     return np.array(mel_mag_db).astype(np.float32), \
            np.array(linear_mag_db).astype(np.float32)
@@ -146,7 +146,7 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     # single tensor.
     sentence = tf.decode_raw(sentence, tf.int32)
 
-    # Apply load_entry to each wav_path of the tensorflow iterator.
+    # Apply load_audio to each wav_path of the tensorflow iterator.
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
@@ -165,7 +165,8 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
             input_length=sentence_length,
             tensors=[sentence, mel, mag, time_steps],
             batch_size=batch_size,
-            bucket_boundaries=[i for i in range(minlen + 1, maxlen + 1, 4)],
+            bucket_boundaries=[10, 20, 30, 40, 50, 60],
+            # bucket_boundaries=[i for i in range(minlen + 1, maxlen + 1, 4)],
             num_threads=n_threads,
             capacity=n_threads * batch_size,
             dynamic_pad=True,
@@ -182,15 +183,15 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
 
 def train(checkpoint_dir):
-    file_listing_path = 'data/train_all.txt'
+    file_listing_path = 'data/train_one_speaker.txt'
 
-    n_epochs = 20
-    batch_size = 2
+    n_epochs = 20000
+    batch_size = 1
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
 
-    # Save summary every 10 steps.
+    # Save summary every 100 steps.
     summary_save_steps = 100
     summary_counter_steps = 100
 
@@ -215,10 +216,23 @@ def train(checkpoint_dir):
     # NOTE: The global step has to be created before the optimizer is created.
     tf.train.create_global_step()
 
-    optimizer = tf.train.AdamOptimizer()
+    with tf.name_scope('optimizer'):
+        optimizer = tf.train.AdamOptimizer()
 
-    # Tell the optimizer to minimize the loss function.
-    train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
+        gradients, variables = zip(*optimizer.compute_gradients(loss_op))
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+
+        for grad_tensor in gradients:
+            tf.summary.histogram('gradients', grad_tensor)
+
+        # Add dependency on UPDATE_OPS; otherwise batchnorm won't work correctly. See:
+        # https://github.com/tensorflow/tensorflow/issues/1122
+        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+            optimize = optimizer.apply_gradients(zip(clipped_gradients, variables),
+                                                 global_step=tf.train.get_global_step())
+
+        # Tell the optimizer to minimize the loss function.
+        # train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
 
     summary_op = model.summary()
 
@@ -269,10 +283,11 @@ def train(checkpoint_dir):
 
     train_start = time.time()
 
+    _global_step = tf.train.get_global_step()
     with tf.device('/cpu:0'):
         while not session.should_stop():
             try:
-                session.run([train_op])
+                session.run([_global_step, loss_op, optimize])
             except tf.errors.OutOfRangeError:
                 print('All batches read.')
                 break
@@ -284,4 +299,4 @@ def train(checkpoint_dir):
 
 
 if __name__ == '__main__':
-    train(checkpoint_dir='/tmp/tacotron')
+    train(checkpoint_dir='/tmp/tacotron/one_speaker_concat_attention')
