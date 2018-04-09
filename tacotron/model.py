@@ -313,6 +313,7 @@ class Tacotron:
         if self.training:
             self.loss_op_decoder = tf.reduce_mean(
                 tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+
             self.loss_op_post_processing = tf.reduce_mean(
                 tf.abs(linear_spec - self.pred_linear_spec))
 
