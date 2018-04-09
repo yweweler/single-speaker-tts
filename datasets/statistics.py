@@ -109,7 +109,7 @@ if __name__ == '__main__':
     # Collect and print the decibel statistics for all the files.
     print("Collecting decibel statistics for {} files ...".format(len(wav_paths)))
     min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(wav_paths)
-    print("avg. min. linear magnitude (dB)", min_linear_db)
-    print("avg. max. linear magnitude (dB)", max_linear_db)
-    print("avg. max. mel magnitude (dB)", min_mel_db)
-    print("avg. max. mel magnitude (dB)", max_mel_db)
+    print("avg. min. linear magnitude (dB)", min_linear_db)     # -99.99 dB
+    print("avg. max. linear magnitude (dB)", max_linear_db)     # +20.08 dB
+    print("avg. min. mel magnitude (dB)", min_mel_db)           # -95.73 dB
+    print("avg. max. mel magnitude (dB)", max_mel_db)           # -07.74 dB
