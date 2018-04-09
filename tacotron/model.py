@@ -58,10 +58,11 @@ class Tacotron:
                 Its shape is expected to be shape=(B, 2, n_gru_units) with B being the batch size.
         """
         with tf.variable_scope('encoder'):
+            # TODO: Initializer?
             char_embeddings = tf.get_variable("embedding", [
-                                                  self.hparams.vocabulary_size,
-                                                  self.hparams.encoder.embedding_size
-                                              ],
+                self.hparams.vocabulary_size,
+                self.hparams.encoder.embedding_size
+            ],
                                               dtype=tf.float32)
 
             # shape => (B, T_sent, 256)
@@ -130,14 +131,14 @@ class Tacotron:
 
         return tf.concat(outputs, -1), tf.concat(output_states, -1)
 
-    def decoder(self, inputs, encoder_state):
+    def decoder(self, encoder_outputs, encoder_state):
         with tf.variable_scope('decoder'):
             # TODO: Experiment with time_major input data to see what the performance gain could be.
 
             # === Attention ========================================================================
             attention_mechanism = tfc.seq2seq.BahdanauAttention(
                 num_units=256,
-                memory=inputs,
+                memory=encoder_outputs,
                 memory_sequence_length=None,
                 dtype=tf.float32
             )
@@ -145,11 +146,12 @@ class Tacotron:
             attention_cell = tf.nn.rnn_cell.GRUCell(num_units=256,
                                                     name='attention_gru_cell')
 
+            attention_cell = PrenetWrapper(attention_cell,
+                                           self.hparams.decoder.pre_net_layers,
+                                           self.training)
+
             wrapped_attention_cell = tfc.seq2seq.AttentionWrapper(
-                cell=PrenetWrapper(attention_cell,
-                                   self.hparams.decoder.pre_net_layers,
-                                   # network.shape => (B, T, 128)
-                                   self.training),
+                cell=attention_cell,
                 attention_mechanism=attention_mechanism,
                 attention_layer_size=None,
                 alignment_history=True,
@@ -163,8 +165,8 @@ class Tacotron:
             n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
             n_gru_units = self.hparams.decoder.n_gru_units  # 256
 
-            concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
-            concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, 256)
+            concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)  # => (B, T_sent, 512)
+            concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, 256)    # => (B, T_sent, 256)
 
             # Stack several GRU cells and apply a residual connection after each cell.
             cells = [concat_cell]
@@ -176,18 +178,18 @@ class Tacotron:
             decoder_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
             # Project the final cells output to the decoder target size.
-            decoder_cell = contrib_rnn.OutputProjectionWrapper(
+            output_cell = contrib_rnn.OutputProjectionWrapper(
                 cell=decoder_cell,
                 output_size=self.hparams.decoder.target_size,
                 activation=tf.nn.sigmoid
             )
 
             # Determine batch size.
-            batch_size = tf.shape(inputs)[0]
+            batch_size = tf.shape(encoder_outputs)[0]
 
             # TODO: Init using the encoder state: ".clone(cell_state=encoder_state)"
             # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
-            decoder_initial_state = decoder_cell.zero_state(
+            decoder_initial_state = output_cell.zero_state(
                 batch_size=batch_size,
                 dtype=tf.float32
             )
@@ -206,7 +208,7 @@ class Tacotron:
                 helper = TacotronInferenceHelper(batch_size=batch_size,
                                                  input_size=self.hparams.decoder.target_size)
 
-            decoder = seq2seq.BasicDecoder(cell=decoder_cell,
+            decoder = seq2seq.BasicDecoder(cell=output_cell,
                                            helper=helper,
                                            initial_state=decoder_initial_state)
 
@@ -214,25 +216,25 @@ class Tacotron:
             if self.training is False:
                 maximum_iterations = self.hparams.decoder.maximum_iterations
 
-            final_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
+            decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
                 decoder=decoder,
                 output_time_major=False,
-                impute_finished=True,  # Not sure if this is necessary if I pass all
+                impute_finished=False,  # Not sure if this is necessary if I pass all
                 # sequence length on they way.
                 maximum_iterations=maximum_iterations)
 
-            network = final_outputs.rnn_output
+            network = decoder_outputs.rnn_output
             Tacotron._create_attention_summary(final_state)
 
             # ======================================================================================
             # attention_rnn_outputs, final_state = self.attention_rnn(256, self.inp_mel_spec, network)
             # decoder_rnn_outputs, _ = self.decoder_rnn(128, attention_rnn_outputs)
-            # final_outputs = attention_rnn_outputs + decoder_rnn_outputs
+            # decoder_outputs = attention_rnn_outputs + decoder_rnn_outputs
             #
             # Tacotron._create_attention_images_summary(final_state)
             #
-            # # network = final_outputs.rnn_output
-            # network = final_outputs
+            # # network = decoder_outputs.rnn_output
+            # network = decoder_outputs
             #
             # network = tf.layers.dense(inputs=network,
             #                           units=80,
@@ -283,11 +285,6 @@ class Tacotron:
 
         # shape => (B, T_spec, 80)
         decoder_outputs = self.decoder(encoder_outputs, encoder_state)
-
-        # Note: The Tacotron paper does not explicitly state that the reduction factor r was
-        # applied during post-processing. My measurements suggest, that there is no benefit
-        # in applying r during post-processing. Therefore the data is reshaped to the
-        # original size before processing.
 
         # shape => (B, T_spec, n_mels)
         network = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
