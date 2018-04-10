@@ -72,13 +72,12 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
 
 class TacotronTrainingHelper(seq2seq.Helper):
-    def __init__(self, inputs, outputs, input_size):
+    def __init__(self, batch_size, inputs, outputs, input_size):
         with tf.name_scope("TacotronTrainingHelper"):
+            self._batch_size = batch_size
             self._inputs = inputs
             self._outputs = outputs
-
-            # Determine the current batch size.
-            self._batch_size = tf.size(self._inputs)[0]
+            self._input_size = input_size
 
             # Get the number of time frames the decoder has to produce.
             n_decoder_steps = tf.shape(self._outputs)[1]
@@ -115,7 +114,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             # The initial input for the decoder is considered to be a <GO> frame.
             # We will input an zero vector as the <GO> frame.
-            initial_inputs = tf.zeros([self._batch_size, self.input_size], dtype=tf.float32)
+            initial_inputs = tf.zeros([self._batch_size, self._input_size], dtype=tf.float32)
 
         return initial_finished, initial_inputs
 
@@ -133,7 +132,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             next_inputs = tf.cond(all_finished,
                                   lambda: self._zero_inputs,
-                                  lambda: self.outputs[:, time, :])
+                                  lambda: self._outputs[:, time, :])
 
             test = tf.Print(next_inputs, [tf.shape(next_inputs)], 'next_inputs.shape')
             tf.summary.tensor_summary('test', test)

@@ -205,9 +205,10 @@ class Tacotron:
                 #     time_major=False
                 # )
                 helper = TacotronTrainingHelper(
+                    batch_size=batch_size,
                     inputs=encoder_outputs,
                     outputs=self.inp_mel_spec,
-                    input_size=0
+                    input_size=80
                 )
             else:
                 helper = TacotronInferenceHelper(batch_size=batch_size,
