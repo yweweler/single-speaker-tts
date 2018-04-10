@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow as tf
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
-from audio.effects import trim_silence
 from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
 from audio.io import load_wav
 from datasets.lj_speech import LJSpeechDatasetHelper
@@ -16,6 +15,53 @@ from tacotron.model import Tacotron
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 tf.logging.set_verbosity(tf.logging.INFO)
+
+
+def apply_reduction(mel_mag_db, linear_mag_db, reduction_factor):
+    """
+    Reduces `reduction_factor` consecutive frames of the mel and linear spectrogram's into single
+    frames by means of concatenating them. Automatically pads with zero frames in the time
+    dimension such that the number of frames is a multiple of `reduction_factor`.
+
+    Arguments:
+        mel_mag_db (np.ndarray):
+            Mel scale spectrogram to be reduced. The shape is expected to be shape=(T, n_mels),
+            with T being the number of frames.
+
+        linear_mag_db (np.ndarray):
+            Linear scale spectrogram to be reduced. The shape is expected to be
+            shape=(T, 1 + n_fft // 2), with T being the number of frames.
+
+        reduction_factor (int):
+            The number of consecutive frames that should be reduced to a single frame.
+
+    Returns:
+        (mel_mag_db, linear_mag_db):
+            mel_mag_db (np.ndarray):
+                Reduced Mel scale spectrogram. The shape is shape=(T // r, n_mels * r),
+                with T being the number of frames.
+            linear_mag_db (np.ndarray):
+                Reduced linear scale spectrogram. The shape is shape=(T // r, (1 + n_fft // 2) * r),
+                with T being the number of frames.
+    """
+    n_frames = mel_mag_db.shape[0]
+
+    # Make sure the number of frames is a multiple of `reduction_factor` for reduction.
+    if (n_frames % reduction_factor) != 0:
+        # Calculate the number of padding frames that have to be added.
+        n_padding_frames = reduction_factor - (n_frames % reduction_factor)
+
+        # Add padding frames containing zeros to the mel spectrogram.
+        mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
+
+        # Pad the linear spectrogram since it has to have the same num. of frames.
+        linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
+
+    # Reduce `reduction_factor` consecutive frames into a single frame.
+    mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
+    linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
+
+    return mel_mag_db, linear_mag_db
 
 
 def load_audio(file_path):
@@ -40,34 +86,22 @@ def load_audio(file_path):
     linear_mag = np.abs(linear_spec)
     linear_mag_db = magnitude_to_decibel(linear_mag)
     linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)
+    # => linear_mag_db.shape = (n_frames, 1 + n_fft // 2)
 
     # Convert the mel spectrogram into decibel representation.
     mel_mag = np.abs(mel_spec)
     mel_mag_db = magnitude_to_decibel(mel_mag)
     mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)
+    # => mel_mag_db.shape = (n_frames, n_mels)
 
-    # ==============================================================================================
     # Tacotron reduction factor.
-    # ==============================================================================================
-    # n_frames = mel_mag_db.shape[0]
-    #
-    # # Calculate how much padding frames have to be added to be a multiple of `reduction`.
-    # n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (
-    #   n_frames % hparams.reduction) != 0 else 0
-    #
-    # # Add padding frames to the mel spectrogram.
-    # mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-    # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * hparams.reduction))
-    #
-    # # Since the magnitude spectrogram has to have the same num. of frames we need to add padding.
-    # linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-    # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
-    # ==============================================================================================
+    if hparams.reduction > 1:
+        # mel_mag_db.shape => (T // r, n_mels * r)
+        # linear_mag_db. shape => (T // r, (1 + n_fft // 2) * r)
+        mel_mag_db, linear_mag_db = apply_reduction(mel_mag_db, linear_mag_db, hparams.reduction)
 
     # print("load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
     # print("load_audio.lin_spec.shape", np.array(linear_mag_db).astype(np.float32).shape)
-
-    # print('loaded:', file_path)
 
     return np.array(mel_mag_db).astype(np.float32), \
            np.array(linear_mag_db).astype(np.float32)
@@ -187,14 +221,14 @@ def train(checkpoint_dir):
                                     fill_dict=False)
 
     n_epochs = 5000
-    batch_size = 8
+    batch_size = 4
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
 
     # Save summary every 100 steps.
-    summary_save_steps = 100
-    summary_counter_steps = 100
+    summary_save_steps = 5
+    summary_counter_steps = 5
 
     dataset_start = time.time()
     placeholders, n_samples = batched_placeholders(dataset, n_epochs, batch_size)
