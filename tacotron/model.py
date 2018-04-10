@@ -224,14 +224,14 @@ class Tacotron:
                 maximum_iterations=maximum_iterations)
 
             network = decoder_outputs.rnn_output
-            Tacotron._create_attention_summary(final_state)
+            self._create_attention_summary(final_state)
 
             # ======================================================================================
             # attention_rnn_outputs, final_state = self.attention_rnn(256, self.inp_mel_spec, network)
             # decoder_rnn_outputs, _ = self.decoder_rnn(128, attention_rnn_outputs)
             # decoder_outputs = attention_rnn_outputs + decoder_rnn_outputs
             #
-            # Tacotron._create_attention_images_summary(final_state)
+            # self._create_attention_images_summary(final_state)
             #
             # # network = decoder_outputs.rnn_output
             # network = decoder_outputs
@@ -275,9 +275,8 @@ class Tacotron:
         return network
 
     def model(self):
-        batch_size = tf.shape(self.inp_sentences)[0]
-
         # inp_sentences.shape = (B, T_sent, decoder.n_gru_units * 2 ) = (B, T_sent, 256)
+        batch_size = tf.shape(self.inp_sentences)[0]
 
         # network.shape => (B, T_sent, 256)
         # encoder_state.shape => (B, 2, 256)
@@ -382,8 +381,7 @@ class Tacotron:
     def load(self, checkpoint_dir):
         raise NotImplementedError()
 
-    @staticmethod
-    def _create_attention_summary(final_context_state):
+    def _create_attention_summary(self, final_context_state):
         attention_wrapper_state, unkn1, unkn2 = final_context_state
 
         cell_state, attention, _, alignments, alignment_history, attention_state = \
@@ -405,10 +403,28 @@ class Tacotron:
         # tf.summary.image("unkn1", tf.expand_dims(tf.reshape(unkn1[0], (1, 1, 256)), -1))
         # tf.summary.image("unkn2", tf.expand_dims(tf.reshape(unkn2[0], (1, 1, 256)), -1))
 
-        stacked = alignment_history.stack()
-        tf.summary.image("alignments_stacked", tf.expand_dims(stacked, -1))
+        stacked_alignment_hist = alignment_history.stack()
+        stacked_alignments = tf.transpose(stacked_alignment_hist, [1, 2, 0])
+        tf.summary.image("stacked_alignments", tf.expand_dims(stacked_alignments, -1))
 
-        alignments = tf.transpose(stacked, [1, 2, 0])
-        tf.summary.image("alignments_final", tf.expand_dims(alignments, -1))
+        # === DEBUG ======================================================================
+        cell_state = tf.Print(cell_state, [tf.shape(cell_state)], 'cell_state.shape')
+        tf.summary.tensor_summary('cell_state', cell_state)
 
-        print('alignment_history_stacked', alignments)
+        attention = tf.Print(attention, [tf.shape(attention)], 'attention.shape')
+        tf.summary.tensor_summary('attention', attention)
+
+        alignments = tf.Print(alignments, [tf.shape(alignments)], 'alignments.shape')
+        tf.summary.tensor_summary('alignments', alignments)
+
+        attention_state = tf.Print(attention_state, [tf.shape(attention_state)], 'attention_state.shape')
+        tf.summary.tensor_summary('attention_state', attention_state)
+
+        unkn1 = tf.Print(unkn1, [tf.shape(unkn1)], 'unkn1.shape')
+        tf.summary.tensor_summary('unkn1', unkn1)
+
+        unkn2 = tf.Print(unkn2, [tf.shape(unkn2)], 'unkn2.shape')
+        tf.summary.tensor_summary('unkn2', unkn2)
+
+        stacked_alignment_hist = tf.Print(stacked_alignments, [tf.shape(stacked_alignments)], 'stacked_alignment_hist.shape')
+        tf.summary.tensor_summary('stacked_alignment_hist', stacked_alignment_hist)
