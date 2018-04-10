@@ -72,18 +72,23 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
 
 class TacotronTrainingHelper(seq2seq.Helper):
-    def __init__(self, batch_size, inputs, outputs, input_size):
+    def __init__(self, batch_size, inputs, outputs, output_size):
         with tf.name_scope("TacotronTrainingHelper"):
             self._batch_size = batch_size
             self._inputs = inputs
             self._outputs = outputs
-            self._input_size = input_size
+            self._output_size = output_size
+
+            print('batch_size', batch_size)
+            print('_inputs', self._inputs)
+            print('_outputs', self._outputs)
+            print('_output_size', self._output_size)
 
             # Get the number of time frames the decoder has to produce.
             n_decoder_steps = tf.shape(self._outputs)[1]
             self._sequence_length = tf.tile([n_decoder_steps], [self._batch_size])
 
-            self._zero_inputs = tf.zeros(tf.shape(self._inputs), dtype=tf.float32)
+            self._zero_inputs = tf.zeros([self._batch_size, 256], dtype=tf.float32)
 
     @property
     def inputs(self):
@@ -114,9 +119,9 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             # The initial input for the decoder is considered to be a <GO> frame.
             # We will input an zero vector as the <GO> frame.
-            initial_inputs = tf.zeros([self._batch_size, self._input_size], dtype=tf.float32)
+            initial_output = tf.zeros([self._batch_size, self._output_size], dtype=tf.float32)
 
-        return initial_finished, initial_inputs
+        return initial_finished, initial_output
 
     def sample(self, time, outputs, name=None, **unused_kwargs):
         # It seems to work when just returning some tensor of dtype=tf.int32 and random shape.
@@ -130,11 +135,13 @@ class TacotronTrainingHelper(seq2seq.Helper):
             finished = (next_time >= self._sequence_length)
             all_finished = tf.reduce_all(finished)
 
-            next_inputs = tf.cond(all_finished,
-                                  lambda: self._zero_inputs,
-                                  lambda: self._outputs[:, time, :])
+            # next_inputs = tf.cond(all_finished,
+            #                       lambda: self._zero_inputs,
+            #                       lambda: self._outputs[:, time, :])
 
-            test = tf.Print(next_inputs, [tf.shape(next_inputs)], 'next_inputs.shape')
-            tf.summary.tensor_summary('test', test)
+            next_inputs = self._outputs[:, time, :]  # self._zero_inputs
+
+            # test = tf.Print(next_inputs, [tf.shape(next_inputs)], 'next_inputs.shape')
+            # tf.summary.tensor_summary('test', test)
 
             return finished, next_inputs, state
