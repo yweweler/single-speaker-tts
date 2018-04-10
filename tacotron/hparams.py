@@ -35,7 +35,7 @@ hparams = tf.contrib.training.HParams(
     reduction=1,
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=False,
+    apply_post_processing=True,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
@@ -43,8 +43,8 @@ hparams = tf.contrib.training.HParams(
 
         pre_net_layers=(
             # (units, dropout, activation).
-            (256, 0.5, tf.nn.relu),
-            (128, 0.5, tf.nn.relu)
+            (256, 0.1, tf.nn.relu),
+            (128, 0.1, tf.nn.relu)
         ),
 
         n_banks=16,
@@ -63,8 +63,8 @@ hparams = tf.contrib.training.HParams(
     decoder=tf.contrib.training.HParams(
         pre_net_layers=(
             # (units, dropout, activation).
-            (256, 0.5, tf.nn.relu),
-            (128, 0.5, tf.nn.relu)
+            (256, 0.1, tf.nn.relu),
+            (128, 0.1, tf.nn.relu)
         ),
 
         n_gru_layers=2,

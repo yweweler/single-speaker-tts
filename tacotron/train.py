@@ -74,9 +74,9 @@ def load_audio(file_path):
 
 
 def batched_placeholders(dataset, n_epochs, batch_size):
-    n_threads = 4
+    n_threads = 8
 
-    sentences, sentence_lengths, wav_paths = dataset.load(max_samples=25)
+    sentences, sentence_lengths, wav_paths = dataset.load(max_samples=250)
     max_len, min_len = max(sentence_lengths), min(sentence_lengths)
 
     # Convert everything into tf.Tensor objects for queue based processing.
@@ -186,15 +186,15 @@ def train(checkpoint_dir):
                                     char_dict=init_char_dict,
                                     fill_dict=False)
 
-    n_epochs = 2000
-    batch_size = 4
+    n_epochs = 5000
+    batch_size = 8
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
 
     # Save summary every 100 steps.
-    summary_save_steps = 5
-    summary_counter_steps = 5
+    summary_save_steps = 100
+    summary_counter_steps = 100
 
     dataset_start = time.time()
     placeholders, n_samples = batched_placeholders(dataset, n_epochs, batch_size)
@@ -215,20 +215,20 @@ def train(checkpoint_dir):
         optimizer = tf.train.AdamOptimizer()
 
         # Apply gradient clipping and collect gradient summaries.
-        # gradients, variables = zip(*optimizer.compute_gradients(loss_op))
-        # clipped_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
-        #
+        gradients, variables = zip(*optimizer.compute_gradients(loss_op))
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+
         # for grad_tensor in gradients:
         #     tf.summary.histogram('gradients', grad_tensor)
-        #
-        # # Add dependency on UPDATE_OPS; otherwise batchnorm won't work correctly. See:
-        # # https://github.com/tensorflow/tensorflow/issues/1122
-        # with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-        #     optimize = optimizer.apply_gradients(zip(clipped_gradients, variables),
-        #                                          global_step=tf.train.get_global_step())
+
+        # Add dependency on UPDATE_OPS; otherwise batchnorm won't work correctly. See:
+        # https://github.com/tensorflow/tensorflow/issues/1122
+        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+            optimize = optimizer.apply_gradients(zip(clipped_gradients, variables),
+                                                 global_step=tf.train.get_global_step())
 
         # Tell the optimizer to minimize the loss function.
-        train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
+        # train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
 
     summary_op = model.summary()
 
@@ -279,11 +279,11 @@ def train(checkpoint_dir):
 
     train_start = time.time()
 
-    # _global_step = tf.train.get_global_step()
+    _global_step = tf.train.get_global_step()
     while not session.should_stop():
         try:
-            # session.run([_global_step, loss_op, optimize])
-            session.run([train_op])
+            session.run([_global_step, loss_op, optimize])
+            # session.run([train_op])
         except tf.errors.OutOfRangeError:
             break
 
@@ -295,4 +295,4 @@ def train(checkpoint_dir):
 
 
 if __name__ == '__main__':
-    train(checkpoint_dir='/tmp/tacotron/ljspeech_all_samples')
+    train(checkpoint_dir='/tmp/tacotron/ljspeech_250_samples')
