@@ -33,8 +33,8 @@ class Tacotron:
         self.model()
 
     def get_inputs_placeholders(self):
-        # inp_mel_spec: shape=(N, T//r, n_mels*r)
-        # inp_linear_spec: shape=(N, T//r, (1 + n_fft // 2)*r)
+        # inp_mel_spec: shape=(B, T_spec // r, n_mels * r)
+        # inp_linear_spec: shape=(B, T_spec // r, (1 + n_fft // 2) * r)
         return self.inp_mel_spec, self.inp_linear_spec
 
     def encoder(self, inputs):
@@ -133,8 +133,6 @@ class Tacotron:
 
     def decoder(self, encoder_outputs, encoder_state):
         with tf.variable_scope('decoder'):
-            # TODO: Experiment with time_major input data to see what the performance gain could be.
-
             # === Attention ========================================================================
             attention_mechanism = tfc.seq2seq.BahdanauAttention(
                 num_units=256,
