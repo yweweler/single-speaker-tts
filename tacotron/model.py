@@ -5,7 +5,7 @@ from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
-from tacotron.helpers import TacotronInferenceHelper
+from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
 # TODO: Clean up document and comments.
 from tacotron.wrappers import PrenetWrapper, ConcatOutputAndAttentionWrapper
@@ -199,10 +199,15 @@ class Tacotron:
 
             if self.training:
                 # TODO: Re-implement train data feeding.
-                helper = seq2seq.TrainingHelper(
-                    inputs=self.inp_mel_spec,
-                    sequence_length=self.inp_time_steps,
-                    time_major=False
+                # helper = seq2seq.TrainingHelper(
+                #     inputs=self.inp_mel_spec,
+                #     sequence_length=self.inp_time_steps,
+                #     time_major=False
+                # )
+                helper = TacotronTrainingHelper(
+                    inputs=encoder_outputs,
+                    outputs=self.inp_mel_spec,
+                    input_size=0
                 )
             else:
                 helper = TacotronInferenceHelper(batch_size=batch_size,
