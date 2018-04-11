@@ -182,23 +182,6 @@ class Tacotron:
             network = decoder_outputs.rnn_output
             self._create_attention_summary(final_state)
 
-            # ======================================================================================
-            # attention_rnn_outputs, final_state = self.attention_rnn(256, self.inp_mel_spec, network)
-            # decoder_rnn_outputs, _ = self.decoder_rnn(128, attention_rnn_outputs)
-            # decoder_outputs = attention_rnn_outputs + decoder_rnn_outputs
-            #
-            # self._create_attention_images_summary(final_state)
-            #
-            # # network = decoder_outputs.rnn_output
-            # network = decoder_outputs
-            #
-            # network = tf.layers.dense(inputs=network,
-            #                           units=80,
-            #                           activation=tf.nn.sigmoid,
-            #                           kernel_initializer=tf.glorot_normal_initializer(),
-            #                           bias_initializer=tf.glorot_normal_initializer())
-            # ======================================================================================
-
         self.debug_decoder_output = network
         return network
 
