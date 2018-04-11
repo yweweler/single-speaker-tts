@@ -75,7 +75,8 @@ def plot_feature_frames(features, sampling_rate, hop_length, title):
         title (str):
             Title of the plot.
     """
-    axes = librosa.display.specshow(features, sr=sampling_rate, hop_length=hop_length, x_axis='time')
+    axes = librosa.display.specshow(data=features, sr=sampling_rate, hop_length=hop_length,
+                                    x_axis='time')
     axes.yaxis.set_major_formatter(ScalarFormatter())
     axes.yaxis.set_ticks(np.arange(features.shape[0] + 1))
     plt.ylim(ymin=0, ymax=features.shape[0])
