@@ -7,7 +7,8 @@ import pysptk
 # https://github.com/eYSIP-2017/eYSIP-2017_Speech_Spoofing_and_Verification
 
 
-def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, hop_length, win_length, power):
+def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, hop_length, win_length,
+                          power):
     """
     Calculate a Mel-scaled spectrogram from a signal.
 
@@ -49,13 +50,17 @@ def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, hop_len
             The shape of the matrix will be shape(n_mels, t)
 
     Notes:
-        - Setting `win_length` to `n_fft` results in exactly the same values the librosa build in functions `librosa.feature.mfcc` and `librosa.feature.melspectrogram` would deliver.
-        - This implementation is directly derived from the function `librosa.feature.melspectrogram`.
+        - Setting `win_length` to `n_fft` results in exactly the same values the librosa build in
+          functions `librosa.feature.mfcc` and `librosa.feature.melspectrogram` would deliver.
+        - This implementation is directly derived from the function
+          `librosa.feature.melspectrogram`.
     """
     # This implementation calculates the Mel-scaled spectrogram and the mfccs step by step.
-    # Both `librosa.feature.mfcc` and `librosa.feature.melspectrogram` could be used to do this in fewer lines of code.
-    # However, they do not allow to control the window length used in the initial stft calculation.
-    # Setting `win_length` to `n_fft` results in exactly the same values the librosa build in functions would deliver.
+    # Both `librosa.feature.mfcc` and `librosa.feature.melspectrogram` could be used to do this in
+    # fewer lines of code. However, they do not allow to control the window length used in the
+    # initial stft calculation.
+    # Setting `win_length` to `n_fft` results in exactly the same values the librosa build in
+    # functions would deliver.
 
     # Short-time Fourier transform of the signal to create a linear-scale spectrogram.
     # Return shape: (n_fft/2 + 1, n_frames), with n_frames being floor(len(wav) / win_hop).
@@ -72,7 +77,12 @@ def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, hop_len
 
     # Create a filter-bank matrix to combine FFT bins into Mel-frequency bins.
     # Return shape: (n_mels, n_fft/2 + 1).
-    mel_basis = librosa.filters.mel(sr=sampling_rate, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax, htk=True)
+    mel_basis = librosa.filters.mel(sr=sampling_rate,
+                                    n_fft=n_fft,
+                                    n_mels=n_mels,
+                                    fmin=fmin,
+                                    fmax=fmax,
+                                    htk=True)
 
     # Apply Mel-filters to create a Mel-scaled spectrogram.
     # Return shape: (n_mels, n_frames).
@@ -133,17 +143,16 @@ def calculate_mceps(wav, n_fft, hop_length, n_mceps, alpha):
         np.ndarray: Mel-cepstrum.
     """
     win_length = n_fft
-    frames = librosa.util.frame(wav,
+    frames = librosa.util.frame(y=wav,
                                 frame_length=win_length,
                                 hop_length=hop_length).astype(np.float64).T
+
     frames *= pysptk.blackman(win_length)
 
     mc = pysptk.mcep(frames, n_mceps, alpha)
-    logH = pysptk.mgc2sp(mc, alpha, 0.0, win_length).real
+    log_h = pysptk.mgc2sp(mc, alpha, 0.0, win_length).real
 
-    # print("logH mceps shape:", logH.T.shape)
-    # print("mc mceps shape:", mc.T.shape)
-    return logH.T, mc
+    return log_h.T, mc
 
 
 def linear_scale_spectrogram(wav, n_fft, hop_length=None, win_length=None):
