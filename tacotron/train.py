@@ -94,14 +94,15 @@ def load_audio(file_path):
     mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)            # TODO: Refactor numbers.
     # => mel_mag_db.shape = (n_frames, n_mels)
 
+    # print("[ORIGINAL] load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
+
     # Tacotron reduction factor.
     if hparams.reduction > 1:
         # mel_mag_db.shape => (T // r, n_mels * r)
         # linear_mag_db. shape => (T // r, (1 + n_fft // 2) * r)
         mel_mag_db, linear_mag_db = apply_reduction(mel_mag_db, linear_mag_db, hparams.reduction)
 
-    # print("load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
-    # print("load_audio.lin_spec.shape", np.array(linear_mag_db).astype(np.float32).shape)
+    # print("[REDUCED] load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
 
     return np.array(mel_mag_db).astype(np.float32), \
            np.array(linear_mag_db).astype(np.float32)
