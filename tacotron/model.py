@@ -86,51 +86,6 @@ class Tacotron:
 
         return network, state
 
-    def attention_rnn(self, units, inputs, memory):
-        attention_mechanism = tfc.seq2seq.BahdanauAttention(
-            num_units=units,  # TODO: Unsure how to choose this param.
-            memory=memory,
-            memory_sequence_length=None,
-            dtype=tf.float32
-        )
-
-        # TODO: The attention rnn might also be bidirectional I guess?
-        cell = tf.nn.rnn_cell.GRUCell(num_units=units, name='attention_gru_cell')
-
-        attention_cell = tfc.seq2seq.AttentionWrapper(
-            cell=cell,
-            attention_mechanism=attention_mechanism,
-            attention_layer_size=units,
-            alignment_history=True,
-            output_attention=False,  # True for Luong-style att., False for Bhadanau-style.
-            initial_cell_state=None
-        )
-
-        # TODO: Sequence lengths for the attention rnn?
-        outputs, output_state = tf.nn.dynamic_rnn(
-            cell=attention_cell,
-            inputs=inputs,
-            dtype=tf.float32,
-            scope='attention_gru'
-        )
-
-        return outputs, output_state
-
-    def decoder_rnn(self, n_units, inputs):
-        cell_fw = tf.nn.rnn_cell.GRUCell(num_units=n_units)
-        cell_bw = tf.contrib.rnn.GRUCell(num_units=n_units)
-
-        # TODO: Sequence lengths for the decoder rnn?
-        outputs, output_states = tf.nn.bidirectional_dynamic_rnn(
-            cell_fw=cell_fw,
-            cell_bw=cell_bw,
-            inputs=inputs,
-            dtype=tf.float32,
-            scope='decoder_gru'
-        )
-
-        return tf.concat(outputs, -1), tf.concat(output_states, -1)
-
     def decoder(self, encoder_outputs, encoder_state):
         with tf.variable_scope('decoder'):
             # === Attention ========================================================================
