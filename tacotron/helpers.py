@@ -76,7 +76,8 @@ class TacotronTrainingHelper(seq2seq.Helper):
         with tf.name_scope("TacotronTrainingHelper"):
             self._batch_size = batch_size
             self._inputs = inputs
-            self._outputs = outputs
+            # TODO: Only use every 3rd frame. (Refactor to use the reduction variable)
+            self._outputs = outputs[:, 2::3, :]
             self._output_size = output_size
 
             test = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')

@@ -1,6 +1,5 @@
 import tensorflow as tf
 import tensorflow.contrib as tfc
-from tensorflow.contrib import rnn as contrib_rnn
 from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
@@ -115,8 +114,8 @@ class Tacotron:
             # === Decoder ==========================================================================
             # TODO: Apply the reduction factor.
 
-            n_gru_layers = self.hparams.decoder.n_gru_layers    # 2
-            n_gru_units = self.hparams.decoder.n_gru_units      # 256
+            n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
+            n_gru_units = self.hparams.decoder.n_gru_units  # 256
 
             # => (B, T_sent, 512)
             concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
@@ -158,9 +157,10 @@ class Tacotron:
                     batch_size=batch_size,
                     inputs=encoder_outputs,
                     outputs=self.inp_mel_spec,
-                    output_size=self.hparams.decoder.target_size * self.hparams.reduction
+                    output_size=self.hparams.decoder.target_size
                 )
             else:
+                # TODO: Refactor to work with the reduction factor.
                 helper = TacotronInferenceHelper(batch_size=batch_size,
                                                  input_size=self.hparams.decoder.target_size)
 
@@ -182,7 +182,6 @@ class Tacotron:
             network = decoder_outputs.rnn_output
             self._create_attention_summary(final_state)
 
-        self.debug_decoder_output = network
         return network
 
     def post_process(self, inputs):
@@ -225,32 +224,29 @@ class Tacotron:
         decoder_outputs = self.decoder(encoder_outputs, encoder_state)
 
         # shape => (B, T_spec, n_mels)
-        network = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
+        decoder_outputs = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
+        self.debug_decoder_output = decoder_outputs
 
+        outputs = decoder_outputs
         if self.hparams.apply_post_processing:
             # shape => (B, T_spec, 256)
-            network = self.post_process(network)
+            outputs = self.post_process(outputs)
 
-        # TODO: Should the reduction factor be applied here?
         # shape => (B, T_spec, (1 + n_fft // 2))
-        network = tf.layers.dense(inputs=network,
+        outputs = tf.layers.dense(inputs=outputs,
                                   units=(1 + self.hparams.n_fft // 2),
                                   activation=tf.nn.sigmoid,
                                   kernel_initializer=tf.glorot_normal_initializer(),
                                   bias_initializer=tf.glorot_normal_initializer())
 
-        self.pred_linear_spec = network
-
-        # linear_spec.shape = > (B, T, (1 + n_fft // 2))
-        inp_linear_spec = tf.reshape(self.inp_linear_spec,
-                                 [batch_size, -1, (1 + self.hparams.n_fft // 2)])
+        self.pred_linear_spec = outputs
 
         if self.training:
             self.loss_op_decoder = tf.reduce_mean(
                 tf.abs(self.inp_mel_spec - decoder_outputs))
 
             self.loss_op_post_processing = tf.reduce_mean(
-                tf.abs(inp_linear_spec - self.pred_linear_spec))
+                tf.abs(self.inp_linear_spec - self.pred_linear_spec))
 
             self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
@@ -366,5 +362,6 @@ class Tacotron:
         # unkn2 = tf.Print(unkn2, [tf.shape(unkn2)], 'unkn2.shape')
         # tf.summary.tensor_summary('unkn2', unkn2)
 
-        stacked_alignment_hist = tf.Print(stacked_alignments, [tf.shape(stacked_alignments)], 'stacked_alignment_hist.shape')
+        stacked_alignment_hist = tf.Print(stacked_alignments, [tf.shape(stacked_alignments)],
+                                          'stacked_alignment_hist.shape')
         tf.summary.tensor_summary('stacked_alignment_hist', stacked_alignment_hist)

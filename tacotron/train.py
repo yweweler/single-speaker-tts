@@ -58,8 +58,8 @@ def apply_reduction(mel_mag_db, linear_mag_db, reduction_factor):
         linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
 
     # Reduce `reduction_factor` consecutive frames into a single frame.
-    mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
-    linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
+    # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
+    # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
 
     return mel_mag_db, linear_mag_db
 
@@ -135,8 +135,8 @@ def batched_placeholders(dataset, n_epochs, batch_size):
     mel_spec, lin_spec = tf.py_func(load_audio, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel_spec.set_shape((None, hparams.n_mels * hparams.reduction))
-    lin_spec.set_shape((None, (1 + hparams.n_fft // 2) * hparams.reduction))
+    mel_spec.set_shape((None, hparams.n_mels))
+    lin_spec.set_shape((None, (1 + hparams.n_fft // 2)))
 
     # Get the number spectrogram time-steps (used as the number of time frames when generating).
     n_time_frames = tf.shape(mel_spec)[0]
