@@ -2,6 +2,13 @@ import tensorflow as tf
 
 # Default hyper-parameters:
 hparams = tf.contrib.training.HParams(
+    # Training parameters.
+    train=tf.contrib.training.HParams(
+        n_epochs=5000,
+        batch_size=4,
+        n_threads=8
+    ),
+
     # Target sampling rate.
     sampling_rate=22050,
 
@@ -32,7 +39,7 @@ hparams = tf.contrib.training.HParams(
     n_mfcc=13,
 
     # Tacotron reduction factor r.
-    reduction=1,
+    reduction=2,
 
     # Flag that controls application of the post-processing network.
     apply_post_processing=True,

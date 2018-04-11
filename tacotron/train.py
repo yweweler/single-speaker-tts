@@ -85,13 +85,13 @@ def load_audio(file_path):
     # Convert the linear spectrogram into decibel representation.
     linear_mag = np.abs(linear_spec)
     linear_mag_db = magnitude_to_decibel(linear_mag)
-    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)
+    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)     # TODO: Refactor numbers.
     # => linear_mag_db.shape = (n_frames, 1 + n_fft // 2)
 
     # Convert the mel spectrogram into decibel representation.
     mel_mag = np.abs(mel_spec)
     mel_mag_db = magnitude_to_decibel(mel_mag)
-    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)
+    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)            # TODO: Refactor numbers.
     # => mel_mag_db.shape = (n_frames, n_mels)
 
     # Tacotron reduction factor.
@@ -108,7 +108,7 @@ def load_audio(file_path):
 
 
 def batched_placeholders(dataset, n_epochs, batch_size):
-    n_threads = 8
+    n_threads = hparams.train.n_threads
 
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=250)
     max_len, min_len = max(sentence_lengths), min(sentence_lengths)
@@ -220,8 +220,8 @@ def train(checkpoint_dir):
                                     char_dict=init_char_dict,
                                     fill_dict=False)
 
-    n_epochs = 5000
-    batch_size = 4
+    n_epochs = hparams.train.n_epochs
+    batch_size = hparams.train.batch_size
 
     # Checkpoint every 10 minutes.
     checkpoint_save_secs = 60 * 10
