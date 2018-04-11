@@ -9,9 +9,9 @@ class CustomTacotronInferenceHelper(seq2seq.CustomHelper):
 
 class TacotronInferenceHelper(seq2seq.Helper):
     # See: https://github.com/tensorflow/tensorflow/issues/12065
-    def __init__(self, batch_size, input_size):
+    def __init__(self, batch_size, output_size):
         self._batch_size = batch_size
-        self.input_size = input_size
+        self._output_size = output_size
 
     @property
     def batch_size(self):
@@ -35,7 +35,7 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
         # The initial input for the decoder is considered to be a <GO> frame.
         # We will input an zero vector as the <GO> frame.
-        initial_inputs = tf.zeros([self._batch_size, self.input_size], dtype=tf.float32)
+        initial_inputs = tf.zeros([self._batch_size, self._output_size], dtype=tf.float32)
 
         return initial_finished, initial_inputs
 
@@ -60,7 +60,7 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
         # TODO: Make sure that the outputs that are passed to this function are the last steps outp.
         # Use the last steps outputs as the next steps inputs.
-        next_inputs = outputs
+        next_inputs = outputs[:, -self._output_size:]
 
         # Use the resulting state from the last step as the next state.
         next_state = state
@@ -72,12 +72,11 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
 
 class TacotronTrainingHelper(seq2seq.Helper):
-    def __init__(self, batch_size, inputs, outputs, output_size):
+    def __init__(self, batch_size, inputs, outputs, output_size, reduction_factor):
         with tf.name_scope("TacotronTrainingHelper"):
             self._batch_size = batch_size
             self._inputs = inputs
-            # TODO: Only use every 3rd frame. (Refactor to use the reduction variable)
-            self._outputs = outputs[:, 2::3, :]
+            self._outputs = outputs[:, reduction_factor-1::reduction_factor, :]
             self._output_size = output_size
 
             test = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')
@@ -142,8 +141,5 @@ class TacotronTrainingHelper(seq2seq.Helper):
             #                       lambda: self._outputs[:, time, :])
 
             next_inputs = self._outputs[:, time, :]  # self._zero_inputs
-
-            # test = tf.Print(next_inputs, [tf.shape(next_inputs)], 'next_inputs.shape')
-            # tf.summary.tensor_summary('test', test)
 
             return finished, next_inputs, state

@@ -63,11 +63,11 @@ def load_entry(entry):
 
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-    mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * hparams.reduction))
+    # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * hparams.reduction))
 
     # Since the magnitude spectrogram has to have the same number of frames we need to add padding.
     linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-    linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
+    # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
     # ==============================================================================================
 
     # print("load_audio.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
@@ -152,8 +152,8 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel.set_shape((None, hparams.n_mels * hparams.reduction))
-    mag.set_shape((None, (1 + hparams.n_fft // 2) * hparams.reduction))
+    mel.set_shape((None, hparams.n_mels))
+    mag.set_shape((None, (1 + hparams.n_fft // 2)))
 
     # Get the number spectrogram time-steps (later used as sequence lengths for the spectrograms).
     time_steps = tf.shape(mel)[0]
@@ -290,7 +290,7 @@ def evaluate(checkpoint_dir):
                 print('debug', spec)
 
                 spec = spec[0]
-                linear_mag_db = inv_normalize_decibel(spec.T, 35.7, 100)
+                linear_mag_db = inv_normalize_decibel(spec.T, 35.7, 100.0)
                 linear_mag = decibel_to_magnitude(linear_mag_db)
 
                 print('inversion')
@@ -306,4 +306,4 @@ def evaluate(checkpoint_dir):
 
 
 if __name__ == '__main__':
-    evaluate(checkpoint_dir='/tmp/tacotron/ljspeech_all_samples')
+    evaluate(checkpoint_dir='/tmp/tacotron/ljspeech_250_samples')

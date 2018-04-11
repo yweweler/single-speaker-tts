@@ -157,12 +157,12 @@ class Tacotron:
                     batch_size=batch_size,
                     inputs=encoder_outputs,
                     outputs=self.inp_mel_spec,
-                    output_size=self.hparams.decoder.target_size
+                    output_size=self.hparams.decoder.target_size,
+                    reduction_factor=self.hparams.reduction
                 )
             else:
-                # TODO: Refactor to work with the reduction factor.
                 helper = TacotronInferenceHelper(batch_size=batch_size,
-                                                 input_size=self.hparams.decoder.target_size)
+                                                 output_size=self.hparams.decoder.target_size)
 
             decoder = seq2seq.BasicDecoder(cell=output_cell,
                                            helper=helper,
