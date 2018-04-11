@@ -148,8 +148,8 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
                             bias_initializer=tf.constant_initializer(t_bias_init),
                             name='T')
 
-    # return tf.add(tf.multiply(h, t), tf.multiply(inputs, (1.0 - t)))
-    return h * t + inputs * (1.0 - t)
+    return tf.add(tf.multiply(h, t), tf.multiply(inputs, (1.0 - t)))
+    # return h * t + inputs * (1.0 - t)
 
 
 def pre_net(inputs, layers, scope='pre_net', training=True):
@@ -385,9 +385,9 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
 
     Returns:
         (outputs, output_states):
-            outputs (tf.Tensor): The output states (output_fw, output_bw) of the RNN concatenated over time.
-                A tensor which shape is expected to be shape=(B, T, n_gru_units * 2) with B being
-                the batch size, T being the number of time frames.
+            outputs (tf.Tensor): The output states (output_fw, output_bw) of the RNN concatenated
+                over time. A tensor which shape is expected to be shape=(B, T, n_gru_units * 2)
+                with B being the batch size, T being the number of time frames.
 
             output_states (tf.Tensor): A tensor containing the forward and the backward final states
                 (output_state_fw, output_state_bw) of the bidirectional rnn.
@@ -446,10 +446,6 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
                               units=n_highway_units,
                               layers=n_highway_layers,
                               scope='highway_network')
-
-    # TODO: Possible speed improvements from transforming to time_major order?
-    # TODO: Speed improvements: Bring back data back to batch_major format after the rnn is applied.
-    # TODO: Possible improvements from using another activation on the gru cells than tanh?
 
     cell_forward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_fw')
     cell_backward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_bw')
