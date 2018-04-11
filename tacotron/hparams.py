@@ -6,7 +6,8 @@ hparams = tf.contrib.training.HParams(
     train=tf.contrib.training.HParams(
         n_epochs=5000,
         batch_size=4,
-        n_threads=8
+        n_threads=8,
+        max_samples=250
     ),
 
     # Target sampling rate.

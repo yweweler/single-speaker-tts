@@ -111,7 +111,7 @@ def load_audio(file_path):
 def batched_placeholders(dataset, n_epochs, batch_size):
     n_threads = hparams.train.n_threads
 
-    sentences, sentence_lengths, wav_paths = dataset.load(max_samples=250)
+    sentences, sentence_lengths, wav_paths = dataset.load(max_samples=hparams.train.max_samples)
     max_len, min_len = max(sentence_lengths), min(sentence_lengths)
 
     # Convert everything into tf.Tensor objects for queue based processing.
