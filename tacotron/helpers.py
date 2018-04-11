@@ -79,16 +79,17 @@ class TacotronTrainingHelper(seq2seq.Helper):
             self._outputs = outputs
             self._output_size = output_size
 
-            print('batch_size', batch_size)
-            print('_inputs', self._inputs)
-            print('_outputs', self._outputs)
-            print('_output_size', self._output_size)
+            test = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')
+            tf.summary.tensor_summary('test', test)
 
             # Get the number of time frames the decoder has to produce.
             n_decoder_steps = tf.shape(self._outputs)[1]
             self._sequence_length = tf.tile([n_decoder_steps], [self._batch_size])
 
-            self._zero_inputs = tf.zeros([self._batch_size, 256], dtype=tf.float32)
+            # Get the feature dimensionality of the input steps.
+            encoder_feature_size = tf.shape(inputs)[-1]
+
+            self._zero_inputs = tf.zeros([self._batch_size, encoder_feature_size], dtype=tf.float32)
 
     @property
     def inputs(self):

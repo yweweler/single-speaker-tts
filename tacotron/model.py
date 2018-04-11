@@ -160,11 +160,14 @@ class Tacotron:
             # === Decoder ==========================================================================
             # TODO: Apply the reduction factor.
 
-            n_gru_layers = self.hparams.decoder.n_gru_layers  # 2
-            n_gru_units = self.hparams.decoder.n_gru_units  # 256
+            n_gru_layers = self.hparams.decoder.n_gru_layers    # 2
+            n_gru_units = self.hparams.decoder.n_gru_units      # 256
 
-            concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)  # => (B, T_sent, 512)
-            concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, 256)    # => (B, T_sent, 256)
+            # => (B, T_sent, 512)
+            concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
+
+            # => (B, T_sent, 256)
+            concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, 256)
 
             # Stack several GRU cells and apply a residual connection after each cell.
             cells = [concat_cell]
@@ -176,9 +179,9 @@ class Tacotron:
             decoder_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
             # Project the final cells output to the decoder target size.
-            output_cell = contrib_rnn.OutputProjectionWrapper(
+            output_cell = tfc.rnn.OutputProjectionWrapper(
                 cell=decoder_cell,
-                output_size=self.hparams.decoder.target_size,
+                output_size=self.hparams.decoder.target_size * self.hparams.reduction,
                 activation=tf.nn.sigmoid
             )
 
@@ -206,7 +209,7 @@ class Tacotron:
                     batch_size=batch_size,
                     inputs=encoder_outputs,
                     outputs=self.inp_mel_spec,
-                    output_size=80
+                    output_size=80*self.hparams.reduction
                 )
             else:
                 helper = TacotronInferenceHelper(batch_size=batch_size,
@@ -286,7 +289,7 @@ class Tacotron:
         # encoder_state.shape => (B, 2, 256)
         encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
 
-        # shape => (B, T_spec, 80)
+        # shape => (B, T_spec // r, n_mels * r)
         decoder_outputs = self.decoder(encoder_outputs, encoder_state)
 
         # shape => (B, T_spec, n_mels)
@@ -307,15 +310,15 @@ class Tacotron:
         self.pred_linear_spec = network
 
         # linear_spec.shape = > (B, T, (1 + n_fft // 2))
-        linear_spec = tf.reshape(self.inp_linear_spec,
+        inp_linear_spec = tf.reshape(self.inp_linear_spec,
                                  [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
         if self.training:
             self.loss_op_decoder = tf.reduce_mean(
-                tf.abs(self.inp_mel_spec - self.debug_decoder_output))
+                tf.abs(self.inp_mel_spec - decoder_outputs))
 
             self.loss_op_post_processing = tf.reduce_mean(
-                tf.abs(linear_spec - self.pred_linear_spec))
+                tf.abs(inp_linear_spec - self.pred_linear_spec))
 
             self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
