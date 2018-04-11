@@ -30,7 +30,8 @@ def magnitude_to_decibel(mag):
 
 def decibel_to_magnitude(mag_db):
     """
-    Convert a magnitude spectrogram in decibel (dB) representation back to raw magnitude representation.
+    Convert a magnitude spectrogram in decibel (dB) representation back to raw magnitude
+    representation.
 
     Arguments:
         mag_db (np.ndarray):
@@ -42,7 +43,10 @@ def decibel_to_magnitude(mag_db):
 
             Calculation: power(10, mag_db / 20)
     """
-    # TODO: Limit mag_db to [-100 dB, +inf dB] before conversion?
+    if any(mag_db < -100.0):
+        raise AssertionError('"conversion.decibel_to_magnitude" was asked to convert a dB value '
+                             'smaller -100 dB.')
+
     mag = np.power(10.0, mag_db / 20.0)
 
     return mag
