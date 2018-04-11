@@ -292,15 +292,6 @@ class Tacotron:
         # shape => (B, T_spec // r, n_mels * r)
         decoder_outputs = self.decoder(encoder_outputs, encoder_state)
 
-        test = tf.Print(decoder_outputs, [tf.shape(decoder_outputs)], 'decoder_outputs.shape')
-        tf.summary.tensor_summary('test', test)
-
-        test2 = tf.Print(self.seq_lengths, [self.seq_lengths], summarize=4, message='seq_lengths')
-        tf.summary.tensor_summary('test2', test2)
-
-        test3 = tf.Print(self.inp_time_steps, [self.inp_time_steps], summarize=4, message='inp_time_steps')
-        tf.summary.tensor_summary('test3', test3)
-
         # shape => (B, T_spec, n_mels)
         network = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
 
