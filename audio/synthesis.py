@@ -73,15 +73,15 @@ def griffin_lim_v2(spectrogram, win_length, hop_length, n_fft, n_iter):
     # Based on: https://github.com/librosa/librosa/issues/434
 
     # TODO: The code is extremely slow. We should try to implement a faster version.
-    # TODO: Another approach to speed this up could be to implement it on the gpu using tf build in functions.
-
+    # TODO: Another approach to speed this up could be to implement it on the gpu using tf.signal.
     window = 'hann'
     angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
 
     for i in range(n_iter):
         full = np.abs(spectrogram).astype(np.complex) * angles
         inverse = librosa.istft(full, win_length=win_length, hop_length=hop_length, window=window)
-        rebuilt = librosa.stft(inverse, n_fft=n_fft, hop_length=hop_length, win_length=win_length, window=window)
+        rebuilt = librosa.stft(inverse, n_fft=n_fft, hop_length=hop_length, win_length=win_length,
+                               window=window)
         angles = np.exp(1j * np.angle(rebuilt))
 
         # Reconstruction quality measurement for debugging purposes.

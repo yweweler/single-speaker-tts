@@ -11,8 +11,8 @@ def load_wav(wav_path, sampling_rate=None, offset=0.0, duration=None):
             Path of the WAV file.
 
         sampling_rate (:obj:`int`, optional):
-            Target sampling rate. When None is used, the sampling rate inferred from the file is used.
-            Defaults to None.
+            Target sampling rate. When None is used, the sampling rate inferred from the file is
+            used. Defaults to None.
 
         offset (:obj:`float`, optional):
             Offset to start loading the file at (in seconds).
