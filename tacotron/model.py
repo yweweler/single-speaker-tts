@@ -199,17 +199,11 @@ class Tacotron:
             # continue with zero_state for all other cells.
 
             if self.training:
-                # TODO: Re-implement train data feeding.
-                # helper = seq2seq.TrainingHelper(
-                #     inputs=self.inp_mel_spec,
-                #     sequence_length=self.inp_time_steps,
-                #     time_major=False
-                # )
                 helper = TacotronTrainingHelper(
                     batch_size=batch_size,
                     inputs=encoder_outputs,
                     outputs=self.inp_mel_spec,
-                    output_size=80*self.hparams.reduction
+                    output_size=self.hparams.decoder.target_size * self.hparams.reduction
                 )
             else:
                 helper = TacotronInferenceHelper(batch_size=batch_size,

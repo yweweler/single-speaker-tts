@@ -39,7 +39,7 @@ hparams = tf.contrib.training.HParams(
     n_mfcc=13,
 
     # Tacotron reduction factor r.
-    reduction=2,
+    reduction=3,
 
     # Flag that controls application of the post-processing network.
     apply_post_processing=True,
