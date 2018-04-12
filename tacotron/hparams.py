@@ -69,17 +69,17 @@ hparams = tf.contrib.training.HParams(
         # Number of filters in each bank.
         n_filters=128,
 
-        # Number of highway network layers.
-        n_highway_layers=4,
-
-        # Number of units in each highway layer.
-        n_highway_units=128,
-
         projections=(
             # (filters, kernel_size, activation).
             (128, 3, tf.nn.relu),
             (128, 3, None)
         ),
+
+        # Number of highway network layers.
+        n_highway_layers=4,
+
+        # Number of units in each highway layer.
+        n_highway_units=128,
 
         # Number of units in the encoder RNN.
         n_gru_units=128
@@ -97,7 +97,10 @@ hparams = tf.contrib.training.HParams(
         n_gru_layers=2,
 
         # Number of units in the decoder RNN.
-        n_gru_units=256,
+        n_decoder_gru_units=256,
+
+        # Number of units in the attention RNN.
+        n_attention_units=256,
 
         # Dimensionality of a single RNN target frame.
         target_size=80,
@@ -114,17 +117,17 @@ hparams = tf.contrib.training.HParams(
         # Number of filters in each bank.
         n_filters=128,
 
-        # Number of highway network layers.
-        n_highway_layers=4,
-
-        # Number of units in each highway layer.
-        n_highway_units=128,
-
         projections=(
             # (filters, kernel_size, activation).
             (256, 3, tf.nn.relu),
             (80, 3, None)
         ),
+
+        # Number of highway network layers.
+        n_highway_layers=4,
+
+        # Number of units in each highway layer.
+        n_highway_units=128,
 
         # Number of units in the post-processing RNN.
         n_gru_units=128
