@@ -4,9 +4,16 @@ import tensorflow as tf
 hparams = tf.contrib.training.HParams(
     # Training parameters.
     train=tf.contrib.training.HParams(
+        # Number of training epochs.
         n_epochs=5000,
+
+        # Batch size used for training.
         batch_size=4,
+
+        # Number of threads used to load data during training.
         n_threads=8,
+
+        # Maximal number of samples to load from the train dataset.
         max_samples=250
     ),
 
@@ -47,6 +54,7 @@ hparams = tf.contrib.training.HParams(
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
+        # Embedding size for each sentence character.
         embedding_size=256,
 
         pre_net_layers=(
@@ -55,15 +63,25 @@ hparams = tf.contrib.training.HParams(
             (128, 0.1, tf.nn.relu)
         ),
 
+        # Number of filter banks.
         n_banks=16,
+
+        # Number of filters in each bank.
         n_filters=128,
+
+        # Number of highway network layers.
         n_highway_layers=4,
+
+        # Number of units in each highway layer.
         n_highway_units=128,
+
         projections=(
             # (filters, kernel_size, activation).
             (128, 3, tf.nn.relu),
             (128, 3, None)
         ),
+
+        # Number of units in the encoder RNN.
         n_gru_units=128
     ),
 
@@ -75,8 +93,13 @@ hparams = tf.contrib.training.HParams(
             (128, 0.1, tf.nn.relu)
         ),
 
+        # Number of decoder RNN layers.
         n_gru_layers=2,
+
+        # Number of units in the decoder RNN.
         n_gru_units=256,
+
+        # Dimensionality of a single RNN target frame.
         target_size=80,
 
         # Maximum number of decoder iterations for evaluation and inference.
@@ -85,15 +108,25 @@ hparams = tf.contrib.training.HParams(
 
     # Post-processing network parameters.
     post=tf.contrib.training.HParams(
+        # Number of filter banks.
         n_banks=8,
+
+        # Number of filters in each bank.
         n_filters=128,
+
+        # Number of highway network layers.
         n_highway_layers=4,
+
+        # Number of units in each highway layer.
         n_highway_units=128,
+
         projections=(
             # (filters, kernel_size, activation).
             (256, 3, tf.nn.relu),
             (80, 3, None)
         ),
+
+        # Number of units in the post-processing RNN.
         n_gru_units=128
     )
 )
