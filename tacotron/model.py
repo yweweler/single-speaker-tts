@@ -157,12 +157,12 @@ class Tacotron:
                     batch_size=batch_size,
                     inputs=encoder_outputs,
                     outputs=self.inp_mel_spec,
-                    output_size=self.hparams.decoder.target_size,
+                    input_size=self.hparams.decoder.target_size,
                     reduction_factor=self.hparams.reduction
                 )
             else:
                 helper = TacotronInferenceHelper(batch_size=batch_size,
-                                                 output_size=self.hparams.decoder.target_size)
+                                                 input_size=self.hparams.decoder.target_size)
 
             decoder = seq2seq.BasicDecoder(cell=output_cell,
                                            helper=helper,
@@ -217,7 +217,7 @@ class Tacotron:
         batch_size = tf.shape(self.inp_sentences)[0]
 
         # network.shape => (B, T_sent, 256)
-        # encoder_state.shape => (B, 2, 256)
+            # encoder_state.shape => (B, 2, 256)
         encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
 
         # shape => (B, T_spec // r, n_mels * r)
