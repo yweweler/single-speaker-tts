@@ -263,6 +263,7 @@ def evaluate(checkpoint_dir):
         dataset.sent2idx('we are the borg')
     ]
 
+    # TODO: Write a custom summary for the inference results.
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
         print('Restoring model...')
@@ -283,7 +284,7 @@ def evaluate(checkpoint_dir):
                 test = np.array([shizzle], dtype=np.int32)
                 print(test.shape, test.dtype)
 
-                spec = session.run(model.pred_linear_spec, feed_dict={
+                spec = session.run(model.output_linear_spec, feed_dict={
                     model.inp_sentences: test
                 })
 
