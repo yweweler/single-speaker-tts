@@ -125,11 +125,13 @@ class PrenetWrapper(tfc.rnn.RNNCell):
 
 
 class ConcatOutputAndAttentionWrapper(tfc.rnn.RNNCell):
-    '''Concatenates RNN cell output with the attention context vector.
+    # TODO: This is actually part of Tacotron 2 and only used for experimental reasons.
+    """
+    Concatenates RNN cell output with the attention context vector.
     This is expected to wrap a cell wrapped with an AttentionWrapper constructed with
     attention_layer_size=None and output_attention=False. Such a cell's state will include an
     "attention" field that is the context vector.
-    '''
+    """
 
     def __init__(self, cell):
         super(ConcatOutputAndAttentionWrapper, self).__init__()
