@@ -88,7 +88,7 @@ class Tacotron:
                 self.hparams.encoder.embedding_size
             ],
                                               dtype=tf.float32,
-                                              initializer=tf.glorot_uniform_initializer)
+                                              initializer=tf.glorot_uniform_initializer())
 
             # shape => (B, T_sent, 256)
             embedded_char_ids = tf.nn.embedding_lookup(char_embeddings, inputs)
