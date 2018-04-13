@@ -223,22 +223,15 @@ def start_session(loss_op, summary_op):
     """
     checkpoint_dir = hparams.train.checkpoint_dir
 
-    # TODO: Not sure what the exact benefit of a scaffold is since it does not hold very much data.
-    session_scaffold = tf.train.Scaffold(
-        init_op=tf.global_variables_initializer(),
-        summary_op=summary_op
-    )
-
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
         save_secs=hparams.train.checkpoint_save_secs,
-        scaffold=session_scaffold
     )
 
     summary_hook = tf.train.SummarySaverHook(
         output_dir=checkpoint_dir,
         save_steps=hparams.train.summary_save_steps,
-        scaffold=session_scaffold
+        summary_op=summary_op
     )
 
     nan_hook = tf.train.NanTensorHook(
@@ -262,7 +255,6 @@ def start_session(loss_op, summary_op):
         summary_hook,
         nan_hook,
         counter_hook],
-        scaffold=session_scaffold,
         config=session_config,
         checkpoint_dir=checkpoint_dir)
 
