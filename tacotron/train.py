@@ -7,7 +7,7 @@ from audio.io import load_wav
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
-# Hack to force tensorflow to run on the CPU. (see issue #152)
+# Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -166,43 +166,62 @@ def batched_placeholders(dataset, n_epochs, batch_size):
     return (ph_sentences, ph_sentence_length, ph_mel_specs, ph_lin_specs, ph_time_frames), n_samples
 
 
-def train(session):
+def train(model):
+    """
+    Trains a Tacotron model.
+
+    Arguments:
+        model (Tacotron):
+            The Tacotron model instance to be trained.
+    """
+    # NOTE: The global step has to be created before the optimizer is created.
+    global_step = tf.train.create_global_step()
+
+    # Get the models loss function.
+    loss_op = model.get_loss_op()
+
     with tf.name_scope('optimizer'):
+        # Create a optimizer.
         optimizer = tf.train.AdamOptimizer()
 
-        # Apply gradient clipping and collect gradient summaries.
+        # Apply gradient clipping by global norm.
         gradients, variables = zip(*optimizer.compute_gradients(loss_op))
-        clipped_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, hparams.train.gradient_clip_norm)
 
-        # for grad_tensor in gradients:
-        #     tf.summary.histogram('gradients', grad_tensor)
+        # Add dependency on UPDATE_OPS; otherwise batch normalization won't work correctly.
+        # See: https://github.com/tensorflow/tensorflow/issues/1122
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            optimize = optimizer.apply_gradients(zip(clipped_gradients, variables), global_step)
 
-        # Add dependency on UPDATE_OPS; otherwise batchnorm won't work correctly. See:
-        # https://github.com/tensorflow/tensorflow/issues/1122
-        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            optimize = optimizer.apply_gradients(zip(clipped_gradients, variables),
-                                                 global_step=tf.train.get_global_step())
+    # Create the training session.
+    session = start_session(loss_op=loss_op, summary_op=model.summary())
 
-        # Tell the optimizer to minimize the loss function.
-        # train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
-
-    _global_step = tf.train.get_global_step()
+    # Start training.
     while not session.should_stop():
         try:
-            session.run([_global_step, loss_op, optimize])
-            # session.run([train_op])
+            session.run([global_step, loss_op, optimize])
         except tf.errors.OutOfRangeError:
             break
 
     session.close()
 
 
-def start_session(loss_op, summary_op, checkpoint_dir):
-    summary_save_steps = 5
-    summary_counter_steps = 5
+def start_session(loss_op, summary_op):
+    """
+    Creates a session that can be used for training.
 
-    # NOTE: The global step has to be created before the optimizer is created.
-    tf.train.create_global_step()
+    Arguments:
+        loss_op (tf.Tensor):
+
+        summary_op (tf.Tensor):
+            A tensor of type `string` containing the serialized `Summary` protocol
+            buffer containing all merged model summaries.
+
+    Returns:
+        tf.train.SingularMonitoredSession
+    """
+    checkpoint_dir = hparams.train.checkpoint_dir
 
     # TODO: Not sure what the exact benefit of a scaffold is since it does not hold very much data.
     session_scaffold = tf.train.Scaffold(
@@ -212,13 +231,13 @@ def start_session(loss_op, summary_op, checkpoint_dir):
 
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
-        save_secs=hparams.checkpoint_save_secs,
+        save_secs=hparams.train.checkpoint_save_secs,
         scaffold=session_scaffold
     )
 
     summary_hook = tf.train.SummarySaverHook(
         output_dir=checkpoint_dir,
-        save_steps=summary_save_steps,
+        save_steps=hparams.train.summary_save_steps,
         scaffold=session_scaffold
     )
 
@@ -229,7 +248,7 @@ def start_session(loss_op, summary_op, checkpoint_dir):
 
     counter_hook = tf.train.StepCounterHook(
         output_dir=checkpoint_dir,
-        every_n_steps=summary_counter_steps
+        every_n_steps=hparams.train.performance_log_steps
     )
 
     session_config = tf.ConfigProto(
@@ -253,19 +272,18 @@ def start_session(loss_op, summary_op, checkpoint_dir):
 
 
 if __name__ == '__main__':
+    # Create a dataset loader.
     dataset = hparams.train.dataset_loader(dataset_folder=hparams.train.dataset_folder,
                                            char_dict=hparams.vocabulary_dict,
                                            fill_dict=False)
 
+    # Create batched placeholders from the dataset.
     placeholders, n_samples = batched_placeholders(dataset=dataset,
                                                    n_epochs=hparams.train.n_epochs,
                                                    batch_size=hparams.train.batch_size)
 
-    model = Tacotron(hparams=hparams, inputs=placeholders, training=True)
+    # Create the Tacotron model.
+    tacotron_model = Tacotron(hparams=hparams, inputs=placeholders, training=True)
 
-    session = start_session(
-        loss_op=model.get_loss_op(),
-        summary_op=model.summary(),
-        checkpoint_dir=hparams.checkpoint_dir)
-
-    train(session)
+    # Train the model.
+    train(tacotron_model)

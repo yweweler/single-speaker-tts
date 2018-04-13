@@ -98,6 +98,15 @@ hparams = tf.contrib.training.HParams(
 
         # Duration in seconds after which to save a checkpoint.
         checkpoint_save_secs=60 * 60,
+
+        # Number of global steps after which to save the model summary.
+        summary_save_steps=5,
+
+        # Number of global steps after which to log the global steps per second.
+        performance_log_steps=5,
+
+        # The clipping ratio used for gradient clipping by global norm.
+        gradient_clip_norm=5.0
     ),
 
     # Flag that controls application of the post-processing network.
