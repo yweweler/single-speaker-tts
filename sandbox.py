@@ -10,14 +10,14 @@ from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calc
 from audio.io import load_wav, save_wav
 from audio.synthesis import spectrogram_to_wav
 from audio.visualization import plot_spectrogram, plot_feature_frames
-from tacotron.hparams import hparams
+from tacotron.params.model import model_params
 
 
 def resynth_wav_using_mcep(wav, hop_len, n_mceps, mcep_alpha):
     from pysptk.synthesis import MLSADF, Synthesizer
 
     # Calculate mceps.
-    mceps, mc = calculate_mceps(wav, n_fft=hparams.n_fft, hop_length=hop_len,
+    mceps, mc = calculate_mceps(wav, n_fft=model_params.n_fft, hop_length=hop_len,
                                 n_mceps=n_mceps, alpha=mcep_alpha)
 
     # Calculate source excitation.
@@ -47,8 +47,8 @@ def resynth_wav_using_mcep(wav, hop_len, n_mceps, mcep_alpha):
     # plot_spectrogram(mc,
     #                  sampling_rate=sr,
     #                  hop_length=hop_len,
-    #                  fmin=hparams.mel_fmin,
-    #                  fmax=hparams.mel_fmax,
+    #                  fmin=model_params.mel_fmin,
+    #                  fmax=model_params.mel_fmax,
     #                  y_axis='linear',
     #                  title='Spectral envelope estimate from mel-cepstrum')
 
@@ -57,26 +57,26 @@ def resynth_wav_using_mcep(wav, hop_len, n_mceps, mcep_alpha):
 
 def calculate_mfccs_and_deltas(wav, hop_len, win_len):
     mel_spec = mel_scale_spectrogram(wav,
-                                     n_fft=hparams.n_fft,
-                                     sampling_rate=hparams.sampling_rate,
+                                     n_fft=model_params.n_fft,
+                                     sampling_rate=model_params.sampling_rate,
                                      hop_length=hop_len,
                                      win_length=win_len,
-                                     n_mels=hparams.n_mels,
-                                     fmin=hparams.mel_fmin,
-                                     fmax=hparams.mel_fmax,
+                                     n_mels=model_params.n_mels,
+                                     fmin=model_params.mel_fmin,
+                                     fmax=model_params.mel_fmax,
                                      power=2)
 
     # Convert the Mel-scaled spectrogram to its decibel representation.
     mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
 
     # Calculate mfcc features.
-    mfccs = calculate_mfccs(mel_spec_db, sr, hparams.n_mfcc)
+    mfccs = calculate_mfccs(mel_spec_db, sr, model_params.n_mfcc)
 
     plot_spectrogram(mel_spec_db,
-                     sampling_rate=hparams.sampling_rate,
+                     sampling_rate=model_params.sampling_rate,
                      hop_length=hop_len,
-                     fmin=hparams.mel_fmin,
-                     fmax=hparams.mel_fmax,
+                     fmin=model_params.mel_fmin,
+                     fmax=model_params.mel_fmax,
                      y_axis='mel',
                      title='Mel-scale power spectrogram')
 
@@ -94,15 +94,15 @@ def calculate_mfccs_and_deltas(wav, hop_len, win_len):
 
 def calculate_linear_spec(wav, hop_len, win_len):
     linear_spec = linear_scale_spectrogram(wav,
-                                           n_fft=hparams.n_fft,
+                                           n_fft=model_params.n_fft,
                                            hop_length=hop_len,
                                            win_length=win_len)
 
     plot_spectrogram(np.abs(linear_spec),
-                     sampling_rate=hparams.sampling_rate,
+                     sampling_rate=model_params.sampling_rate,
                      hop_length=hop_len,
-                     fmin=hparams.mel_fmin,
-                     fmax=hparams.mel_fmax,
+                     fmin=model_params.mel_fmin,
+                     fmax=model_params.mel_fmax,
                      y_axis='linear',
                      title='Raw Linear-scale spectrogram')
 
@@ -110,10 +110,10 @@ def calculate_linear_spec(wav, hop_len, win_len):
     linear_spec_db = librosa.amplitude_to_db(linear_spec, ref=np.max)
 
     plot_spectrogram(linear_spec_db,
-                     sampling_rate=hparams.sampling_rate,
+                     sampling_rate=model_params.sampling_rate,
                      hop_length=hop_len,
-                     fmin=hparams.mel_fmin,
-                     fmax=hparams.mel_fmax,
+                     fmin=model_params.mel_fmin,
+                     fmax=model_params.mel_fmax,
                      y_axis='linear',
                      title='Linear-scale log spectrogram')
 
@@ -121,8 +121,8 @@ def calculate_linear_spec(wav, hop_len, win_len):
 wav_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/TRAIN/DR1/FCJF0/SA1.WAV'
 wav, sr = load_wav(wav_path)
 
-win_len = ms_to_samples(hparams.win_len, sampling_rate=sr)
-hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
+win_len = ms_to_samples(model_params.win_len, sampling_rate=sr)
+hop_len = ms_to_samples(model_params.win_hop, sampling_rate=sr)
 
 # Pitch shifting.
 # wav_ps = pitch_shift(wav, sr, 1/12)
@@ -133,7 +133,7 @@ hop_len = ms_to_samples(hparams.win_hop, sampling_rate=sr)
 # print(indices)
 # save_wav('/tmp/trim.wav', wav_trim, sr, True)
 
-# plot_waveform(wav, hparams.sampling_rate, title="Mega original")
+# plot_waveform(wav, model_params.sampling_rate, title="Mega original")
 # calculate_linear_spec(wav, hop_len, win_len)
 calculate_mfccs_and_deltas(wav, hop_len, win_len)
 exit()
@@ -142,7 +142,7 @@ exit()
 
 wav, _ = trim_silence(wav)
 
-linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
+linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
 
 # dev = 1e-4 / 2
 # mel_spec_noisy = mel_spec + np.random.uniform(low=0.0,
@@ -160,7 +160,7 @@ linear_mag = decibel_to_magnitude(linear_mag_db)
 reconst_wav = spectrogram_to_wav(linear_mag.T,
                                  win_len,
                                  hop_len,
-                                 hparams.n_fft,
+                                 model_params.n_fft,
                                  50)
 
 save_wav('/tmp/reconstr.wav', reconst_wav, sr, True)

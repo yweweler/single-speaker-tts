@@ -1,133 +1,15 @@
-import numpy as np
 import tensorflow as tf
 
-from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
-from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
-from audio.io import load_wav
-from tacotron.hparams import hparams
 from tacotron.model import Tacotron
+from tacotron.params.dataset import dataset_params
+from tacotron.params.model import model_params
+from tacotron.params.training import training_params
 
 # Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 tf.logging.set_verbosity(tf.logging.INFO)
-
-
-def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
-    """
-    Adds zero padding frames in the time axis to the Mel. scale and linear scale spectrogram's such
-    that the number of frames is a multiple of the `reduction_factor`.
-
-    Arguments:
-        mel_mag_db (np.ndarray):
-            Mel scale spectrogram to be reduced. The shape is expected to be shape=(T_spec, n_mels),
-            with T_spec being the number of frames.
-
-        linear_mag_db (np.ndarray):
-            Linear scale spectrogram to be reduced. The shape is expected to be
-            shape=(T_spec, 1 + n_fft // 2), with T_spec being the number of frames.
-
-        reduction_factor (int):
-            The number of consecutive frames.
-
-    Returns:
-        (mel_mag_db, linear_mag_db):
-            mel_mag_db (np.ndarray):
-                Padded Mel. scale spectrogram.
-            linear_mag_db (np.ndarray):
-                padded linear scale spectrogram.
-    """
-    # Number of frames in the spectrogram's.
-    n_frames = mel_mag_db.shape[0]
-
-    # Make sure the number of frames is a multiple of `reduction_factor` for reduction.
-    if (n_frames % reduction_factor) != 0:
-        # Calculate the number of padding frames that have to be added.
-        n_padding_frames = reduction_factor - (n_frames % reduction_factor)
-
-        # Add padding frames containing zeros to the mel spectrogram.
-        mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-
-        # Pad the linear spectrogram since it has to have the same num. of frames.
-        linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-
-    # Reduce `reduction_factor` consecutive frames into a single frame.
-    # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
-    # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
-
-    return mel_mag_db, linear_mag_db
-
-
-def load_audio(file_path):
-    """
-    Load and pre-process and audio file.
-
-    Arguments:
-        file_path (bytes):
-            Path to the file to be loaded.
-
-    Returns:
-        (mel_mag_db, linear_mag_db):
-            mel_mag_db (np.ndarray):
-                Mel. scale magnitude spectrogram of the loaded audio file.
-                The spectrogram's dB values are normalized to the range [0.0, 1.0] over the
-                entire dataset.
-                The shape is shape=(T_spec, n_mels), with T_spec being the number of frames in
-                the spectrogram.
-
-            linear_mag_db (np.ndarray):
-                Linear scale magnitude spectrogram of the loaded audio file.
-                The spectrogram's dB values are normalized to the range [0.0, 1.0] over the
-                entire dataset.
-                The shape is shape=(T_spec, 1 + n_fft // 2), with T_spec being the number of
-                frames in the spectrogram.
-    """
-    # Window length in audio samples.
-    win_len = ms_to_samples(hparams.win_len, hparams.sampling_rate)
-    # Window hop in audio samples.
-    hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
-
-    # Load the actual audio file.
-    wav, sr = load_wav(file_path.decode())
-
-    # TODO: Determine a better silence reference level for the LJSpeech dataset (See: #9).
-    # Remove silence at the beginning and end of the wav so the network does not have to learn
-    # some random initial silence delay after which it is allowed to speak.
-    # wav, _ = trim_silence(wav)
-
-    # Calculate the linear scale spectrogram.
-    # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers for
-    # example are applied to each frame automatically.
-    linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
-
-    # Calculate the Mel. scale spectrogram.
-    # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for example
-    # are applied to each frame automatically.
-    mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
-                                     hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
-
-    # Convert the linear spectrogram into decibel representation.
-    linear_mag = np.abs(linear_spec)
-    linear_mag_db = magnitude_to_decibel(linear_mag)
-    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)  # TODO: Refactor numbers. (See: #9)
-    # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
-
-    # Convert the mel spectrogram into decibel representation.
-    mel_mag = np.abs(mel_spec)
-    mel_mag_db = magnitude_to_decibel(mel_mag)
-    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)  # TODO: Refactor numbers. (See: #9)
-    # => mel_mag_db.shape = (T_spec, n_mels)
-
-    # Tacotron reduction factor.
-    if hparams.reduction > 1:
-        mel_mag_db, linear_mag_db = apply_reduction_padding(mel_mag_db, linear_mag_db,
-                                                            hparams.reduction)
-
-    # print("[REDUCED] load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
-
-    return np.array(mel_mag_db).astype(np.float32), \
-           np.array(linear_mag_db).astype(np.float32)
 
 
 def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
@@ -180,7 +62,7 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
             n_samples (int):
                 Number of samples loaded from the database. Each epoch will contain `n_samples`.
     """
-    n_threads = hparams.train.n_threads
+    n_threads = training_params.n_threads
 
     # Load alĺ sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
@@ -201,7 +83,7 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
         [sentences, sentence_lengths, wav_paths],
         capacity=n_threads * batch_size,
         num_epochs=n_epochs,
-        shuffle=hparams.train.shuffle_smaples)
+        shuffle=training_params.shuffle_samples)
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is
     # stored in a tensor that hold objects in order to manage sequences of different lengths in a
@@ -209,11 +91,11 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     sentence = tf.decode_raw(sentence, tf.int32)
 
     # Apply load_audio to each wav_path of the tensorflow iterator.
-    mel_spec, lin_spec = tf.py_func(load_audio, [wav_path], [tf.float32, tf.float32])
+    mel_spec, lin_spec = tf.py_func(dataset.load_audio, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel_spec.set_shape((None, hparams.n_mels))
-    lin_spec.set_shape((None, (1 + hparams.n_fft // 2)))
+    mel_spec.set_shape((None, model_params.n_mels))
+    lin_spec.set_shape((None, (1 + model_params.n_fft // 2)))
 
     # Get the number spectrogram time-steps (used as the number of time frames when generating).
     n_time_frames = tf.shape(mel_spec)[0]
@@ -230,10 +112,10 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
             batch_size=batch_size,
             bucket_boundaries=buckets,
             num_threads=n_threads,
-            capacity=hparams.train.n_pre_calc_batches,
-            bucket_capacities=[hparams.train.n_samples_per_bucket] * (len(buckets) + 1),
+            capacity=training_params.n_pre_calc_batches,
+            bucket_capacities=[training_params.n_samples_per_bucket] * (len(buckets) + 1),
             dynamic_pad=True,
-            allow_smaller_final_batch=hparams.train.allow_smaller_batches)
+            allow_smaller_final_batch=training_params.allow_smaller_batches)
 
     # print('batched.ph_sentence_length', ph_sentence_length.shape, ph_sentence_length)
     # print('batched.ph_sentences.shape', ph_sentences.shape, ph_sentences)
@@ -273,7 +155,7 @@ def train(model):
 
         # Apply gradient clipping by global norm.
         gradients, variables = zip(*optimizer.compute_gradients(loss_op))
-        clipped_gradients, _ = tf.clip_by_global_norm(gradients, hparams.train.gradient_clip_norm)
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, training_params.gradient_clip_norm)
 
         # Add dependency on UPDATE_OPS; otherwise batch normalization won't work correctly.
         # See: https://github.com/tensorflow/tensorflow/issues/1122
@@ -308,16 +190,16 @@ def start_session(loss_op, summary_op):
     Returns:
         tf.train.SingularMonitoredSession
     """
-    checkpoint_dir = hparams.train.checkpoint_dir
+    checkpoint_dir = training_params.checkpoint_dir
 
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
-        save_secs=hparams.train.checkpoint_save_secs,
+        save_secs=training_params.checkpoint_save_secs,
     )
 
     summary_hook = tf.train.SummarySaverHook(
         output_dir=checkpoint_dir,
-        save_steps=hparams.train.summary_save_steps,
+        save_steps=training_params.summary_save_steps,
         summary_op=summary_op
     )
 
@@ -328,7 +210,7 @@ def start_session(loss_op, summary_op):
 
     counter_hook = tf.train.StepCounterHook(
         output_dir=checkpoint_dir,
-        every_n_steps=hparams.train.performance_log_steps
+        every_n_steps=training_params.performance_log_steps
     )
 
     session_config = tf.ConfigProto(
@@ -352,18 +234,18 @@ def start_session(loss_op, summary_op):
 
 if __name__ == '__main__':
     # Create a dataset loader.
-    train_dataset = hparams.train.dataset_loader(dataset_folder=hparams.train.dataset_folder,
-                                                 char_dict=hparams.vocabulary_dict,
-                                                 fill_dict=False)
+    train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
+                                                  char_dict=dataset_params.vocabulary_dict,
+                                                  fill_dict=False)
 
     # Create batched placeholders from the dataset.
     placeholders, n_samples = batched_placeholders(dataset=train_dataset,
-                                                   max_samples=hparams.train.max_samples,
-                                                   n_epochs=hparams.train.n_epochs,
-                                                   batch_size=hparams.train.batch_size)
+                                                   max_samples=training_params.max_samples,
+                                                   n_epochs=training_params.n_epochs,
+                                                   batch_size=training_params.batch_size)
 
     # Create the Tacotron model.
-    tacotron_model = Tacotron(hparams=hparams, inputs=placeholders, training=True)
+    tacotron_model = Tacotron(inputs=placeholders, training=True)
 
     # Train the model.
     train(tacotron_model)

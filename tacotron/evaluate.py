@@ -11,7 +11,7 @@ from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
 from audio.io import load_wav, save_wav
 from audio.synthesis import spectrogram_to_wav
 from datasets.lj_speech import LJSpeechDatasetHelper
-from tacotron.hparams import hparams
+from tacotron.params.model import model_params
 from tacotron.model import Tacotron
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
@@ -22,8 +22,8 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 def load_entry(entry):
     base_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/'
-    win_len = ms_to_samples(hparams.win_len, hparams.sampling_rate)
-    hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
+    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
+    hop_len = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
 
     wav, sr = load_wav(base_path + entry.decode())
 
@@ -31,10 +31,10 @@ def load_entry(entry):
     # some random initial silence delay after which it is allowed to speak.
     wav, _ = trim_silence(wav)
 
-    linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
+    linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
 
-    mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
-                                     hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
+    mel_spec = mel_scale_spectrogram(wav, model_params.n_fft, sr, model_params.n_mels,
+                                     model_params.mel_fmin, model_params.mel_fmax, hop_len, win_len, 1).T
 
     # dev = 1e-4 / 2
     # mel_spec_noisy = mel_spec + np.random.uniform(low=0.0,
@@ -58,16 +58,16 @@ def load_entry(entry):
     n_frames = mel_mag_db.shape[0]
 
     # Calculate how much padding frames have to be added to be a multiple of `reduction`.
-    n_padding_frames = hparams.reduction - (n_frames % hparams.reduction) if (
-                                                                                     n_frames % hparams.reduction) != 0 else 0
+    n_padding_frames = model_params.reduction - (n_frames % model_params.reduction) if (
+                                                                                               n_frames % model_params.reduction) != 0 else 0
 
     # Add padding frames to the mel spectrogram.
     mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-    # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * hparams.reduction))
+    # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * model_params.reduction))
 
     # Since the magnitude spectrogram has to have the same number of frames we need to add padding.
     linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
-    # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * hparams.reduction))
+    # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * model_params.reduction))
     # ==============================================================================================
 
     # print("load_audio.mel.shape", np.array(mel_mag_db).astype(np.float32).shape)
@@ -152,8 +152,8 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
     mel, mag = tf.py_func(load_entry, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel.set_shape((None, hparams.n_mels))
-    mag.set_shape((None, (1 + hparams.n_fft // 2)))
+    mel.set_shape((None, model_params.n_mels))
+    mag.set_shape((None, (1 + model_params.n_fft // 2)))
 
     # Get the number spectrogram time-steps (later used as sequence lengths for the spectrograms).
     time_steps = tf.shape(mel)[0]
@@ -244,7 +244,7 @@ def evaluate(checkpoint_dir):
     max_len = 80
 
     placeholders = model_placeholders(max_len)
-    model = Tacotron(hparams=hparams, inputs=placeholders, training=False)
+    model = Tacotron(hparams=model_params, inputs=placeholders, training=False)
     saver = tf.train.Saver()
 
     def pad_sentence(_sentence, _max_len):
@@ -279,9 +279,9 @@ def evaluate(checkpoint_dir):
         saver.restore(session, checkpoint_file)
         print('Restoring finished')
 
-        win_len = ms_to_samples(hparams.win_len, sampling_rate=hparams.sampling_rate)
-        win_hop = ms_to_samples(hparams.win_hop, sampling_rate=hparams.sampling_rate)
-        n_fft = hparams.n_fft
+        win_len = ms_to_samples(model_params.win_len, sampling_rate=model_params.sampling_rate)
+        win_hop = ms_to_samples(model_params.win_hop, sampling_rate=model_params.sampling_rate)
+        n_fft = model_params.n_fft
 
         with tf.device('/cpu:0'):
             for i, sentence in enumerate(sentences):
@@ -311,7 +311,7 @@ def evaluate(checkpoint_dir):
                                           50)
 
                 print('saving')
-                save_wav('/tmp/eval_{}.wav'.format(i), spec, hparams.sampling_rate, True)
+                save_wav('/tmp/eval_{}.wav'.format(i), spec, model_params.sampling_rate, True)
                 print('done')
 
 

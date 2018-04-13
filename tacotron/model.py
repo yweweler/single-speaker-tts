@@ -5,6 +5,7 @@ from tensorflow.contrib import seq2seq
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
+from tacotron.params.model import model_params
 from tacotron.layers import cbhg, pre_net
 from tacotron.wrappers import PrenetWrapper, ConcatOutputAndAttentionWrapper
 
@@ -18,14 +19,11 @@ class Tacotron:
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, hparams, inputs, training=True):
+    def __init__(self, inputs, training=True):
         """
         Creates an instance of the Tacotron model.
 
         Arguments:
-            hparams (tf.contrib.training.HParams):
-                Collection of hyper-parameters that control how the model is created.
-
             inputs (:obj:`dict`):
                 Input data placeholders. All data that is used for training or inference is
                 consumed from this placeholders.
@@ -59,7 +57,7 @@ class Tacotron:
                 has to be applied during training. For example, this flags controls the
                 application of dropout.
         """
-        self.hparams = hparams
+        self.hparams = model_params
 
         # Get the placeholders for the input data.
         self.inp_sentences = inputs['ph_sentences']
@@ -444,7 +442,7 @@ class Tacotron:
                                               n_fft,
                                               50)
 
-                    # save_wav('/tmp/reconstr.wav', _wav, hparams.sampling_rate, True)
+                    # save_wav('/tmp/reconstr.wav', _wav, model_params.sampling_rate, True)
                     return _wav
 
                 reconstruction = tf.py_func(__synthesis, [self.output_linear_spec[0]], [tf.float32])

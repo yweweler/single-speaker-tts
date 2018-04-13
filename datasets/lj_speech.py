@@ -4,6 +4,11 @@ import os
 
 import numpy as np
 
+from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
+from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
+from audio.io import load_wav
+from tacotron.params.model import model_params
+
 
 class DatasetHelper:
     def __init__(self, dataset_folder, char_dict, fill_dict):
@@ -79,12 +84,70 @@ class DatasetHelper:
     def load(self, max_samples):
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def load_audio(self, file_path):
+    @staticmethod
+    @abc.abstractstaticmethod
+    def load_audio(file_path):
         raise NotImplementedError
+
+    @staticmethod
+    def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
+        """
+        Adds zero padding frames in the time axis to the Mel. scale and linear scale spectrogram's
+        such that the number of frames is a multiple of the `reduction_factor`.
+
+        Arguments:
+            mel_mag_db (np.ndarray):
+                Mel scale spectrogram to be reduced. The shape is expected to be
+                shape=(T_spec, n_mels), with T_spec being the number of frames.
+
+            linear_mag_db (np.ndarray):
+                Linear scale spectrogram to be reduced. The shape is expected to be
+                shape=(T_spec, 1 + n_fft // 2), with T_spec being the number of frames.
+
+            reduction_factor (int):
+                The number of consecutive frames.
+
+        Returns:
+            (mel_mag_db, linear_mag_db):
+                mel_mag_db (np.ndarray):
+                    Padded Mel. scale spectrogram.
+                linear_mag_db (np.ndarray):
+                    padded linear scale spectrogram.
+        """
+        # Number of frames in the spectrogram's.
+        n_frames = mel_mag_db.shape[0]
+
+        # Make sure the number of frames is a multiple of `reduction_factor` for reduction.
+        if (n_frames % reduction_factor) != 0:
+            # Calculate the number of padding frames that have to be added.
+            n_padding_frames = reduction_factor - (n_frames % reduction_factor)
+
+            # Add padding frames containing zeros to the mel spectrogram.
+            mel_mag_db = np.pad(mel_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
+
+            # Pad the linear spectrogram since it has to have the same num. of frames.
+            linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
+
+        # Reduce `reduction_factor` consecutive frames into a single frame.
+        # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
+        # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
+
+        return mel_mag_db, linear_mag_db
 
 
 class LJSpeechDatasetHelper(DatasetHelper):
+    # Mel. scale spectrogram reference dB over the entire dataset.
+    mel_mag_ref_db = 6.0
+
+    # Mel. scale spectrogram maximum dB over the entire dataset.
+    mel_mag_max_db = 100.0
+
+    # Linear scale spectrogram reference dB over the entire dataset.
+    linear_ref_db = 35.7
+
+    # Linear scale spectrogram maximum dB over the entire dataset.
+    linear_mag_max_db = 100.0
+
     def __init__(self, dataset_folder, char_dict, fill_dict):
         super().__init__(dataset_folder, char_dict, fill_dict)
 
@@ -123,11 +186,6 @@ class LJSpeechDatasetHelper(DatasetHelper):
             '?': '',
         }
 
-        self._avg_min_lin_mag_db = -100.0
-        self._avg_max_lin_mag_db = 35.7
-        self._avg_min_mel_mag_db = -100
-        self._avg_max_mel_mag_db = 6.0
-
     def load(self, max_samples=None):
         data_file = os.path.join(self._dataset_folder, 'metadata.csv')
         wav_folder = os.path.join(self._dataset_folder, 'wavs')
@@ -148,7 +206,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
                 sentences.append(ascii_sentence)
 
                 if max_samples is not None:
-                    if (i+1) == max_samples:
+                    if (i + 1) == max_samples:
                         break
 
         # Normalize sentences, convert the characters to dictionary ids and determine their lengths.
@@ -159,8 +217,56 @@ class LJSpeechDatasetHelper(DatasetHelper):
 
         return id_sentences, sentence_lengths, file_paths
 
-    def load_audio(self, file_path):
-        raise NotImplementedError
+    @staticmethod
+    def load_audio(file_path):
+        # Window length in audio samples.
+        win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
+        # Window hop in audio samples.
+        hop_len = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
+
+        # Load the actual audio file.
+        wav, sr = load_wav(file_path.decode())
+
+        # TODO: Determine a better silence reference level for the LJSpeech dataset (See: #9).
+        # Remove silence at the beginning and end of the wav so the network does not have to learn
+        # some random initial silence delay after which it is allowed to speak.
+        # wav, _ = trim_silence(wav)
+
+        # Calculate the linear scale spectrogram.
+        # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
+        # for example are applied to each frame automatically.
+        linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
+
+        # Calculate the Mel. scale spectrogram.
+        # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for
+        # example are applied to each frame automatically.
+        mel_spec = mel_scale_spectrogram(wav, model_params.n_fft, sr, model_params.n_mels,
+                                         model_params.mel_fmin, model_params.mel_fmax, hop_len, win_len, 1).T
+
+        # Convert the linear spectrogram into decibel representation.
+        linear_mag = np.abs(linear_spec)
+        linear_mag_db = magnitude_to_decibel(linear_mag)
+        linear_mag_db = normalize_decibel(linear_mag_db,
+                                          LJSpeechDatasetHelper.linear_ref_db,
+                                          LJSpeechDatasetHelper.linear_mag_max_db)
+        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
+
+        # Convert the mel spectrogram into decibel representation.
+        mel_mag = np.abs(mel_spec)
+        mel_mag_db = magnitude_to_decibel(mel_mag)
+        mel_mag_db = normalize_decibel(mel_mag_db,
+                                       LJSpeechDatasetHelper.mel_mag_ref_db,
+                                       LJSpeechDatasetHelper.mel_mag_max_db)
+        # => mel_mag_db.shape = (T_spec, n_mels)
+
+        # Tacotron reduction factor.
+        if model_params.reduction > 1:
+            mel_mag_db, linear_mag_db = DatasetHelper.apply_reduction_padding(mel_mag_db,
+                                                                              linear_mag_db,
+                                                                              model_params.reduction)
+
+        return np.array(mel_mag_db).astype(np.float32), \
+               np.array(linear_mag_db).astype(np.float32)
 
 
 if __name__ == '__main__':
@@ -213,5 +319,3 @@ if __name__ == '__main__':
     # print("avg. max. linear magnitude (dB)", max_linear_db)
     # print("avg. min. mel magnitude (dB)", min_mel_db)
     # print("avg. max. mel magnitude (dB)", max_mel_db)
-
-
