@@ -6,7 +6,6 @@ from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
-# TODO: Clean up document and comments.
 from tacotron.wrappers import PrenetWrapper, ConcatOutputAndAttentionWrapper
 
 
@@ -55,6 +54,9 @@ class Tacotron:
         # Decoded Mel. spectrogram, shape=(B, T_spec, n_mels).
         self.output_mel_spec = None
 
+        # Decoded linear spectrogram, shape => (B, T_spec, (1 + n_fft // 2)).
+        self.output_linear_spec = None
+
         self.training = training
 
         # Construct the network.
@@ -72,9 +74,9 @@ class Tacotron:
         Returns:
          (outputs, output_states):
             outputs (tf.Tensor): The output states (output_fw, output_bw) of the RNN concatenated
-                over time. Its shape is expected to be shape=(B, T_sent, 2 * n_gru_units) with B being
-                the batch size, T_sent being the number of tokens in the sentence including the EOS
-                token.
+                over time. Its shape is expected to be shape=(B, T_sent, 2 * n_gru_units) with B
+                being the batch size, T_sent being the number of tokens in the sentence including
+                the EOS token.
 
             output_states (tf.Tensor): A tensor containing the forward and the backward final states
                 (output_state_fw, output_state_bw) of the bidirectional rnn.
@@ -425,49 +427,18 @@ class Tacotron:
 
     @staticmethod
     def _create_attention_summary(final_context_state):
-        # TODO: Add documentation.
+        """
+        Add an attention alignment plot to the models summaries.
+
+        Arguments:
+            final_context_state (tf.contrib.seq2seq.AttentionWrapperState):
+                Final state and attention information of the decoder network.
+        """
         attention_wrapper_state, unkn1, unkn2 = final_context_state
 
         cell_state, attention, _, alignments, alignment_history, attention_state = \
             attention_wrapper_state
 
-        # print('cell_state', cell_state)
-        # print('attention', attention)
-        # print('alignments', alignments)
-        # print('alignment_history', alignment_history)
-        # print('attention_state', attention_state)
-        #
-        # print('unkn1', unkn1)
-        # print('unkn2', unkn2)
-
-        # tf.summary.image("cell_state", tf.expand_dims(tf.reshape(cell_state[0], (1, 1, 256)), -1))
-        # tf.summary.image("attention", tf.expand_dims(tf.reshape(attention[0], (1, 1, 256)), -1))
-        # tf.summary.image("alignments", tf.expand_dims(tf.expand_dims(alignments, -1), 0))
-        # tf.summary.image("attention_state", tf.expand_dims(tf.expand_dims(attention_state, -1),0))
-
-        # tf.summary.image("unkn1", tf.expand_dims(tf.reshape(unkn1[0], (1, 1, 256)), -1))
-        # tf.summary.image("unkn2", tf.expand_dims(tf.reshape(unkn2[0], (1, 1, 256)), -1))
-
         stacked_alignment_hist = alignment_history.stack()
         stacked_alignments = tf.transpose(stacked_alignment_hist, [1, 2, 0])
         tf.summary.image("stacked_alignments", tf.expand_dims(stacked_alignments, -1))
-
-        # === DEBUG ======================================================================
-        # cell_state = tf.Print(cell_state, [tf.shape(cell_state)], 'cell_state.shape')
-        # tf.summary.tensor_summary('cell_state', cell_state)
-        #
-        # attention = tf.Print(attention, [tf.shape(attention)], 'attention.shape')
-        # tf.summary.tensor_summary('attention', attention)
-        #
-        # alignments = tf.Print(alignments, [tf.shape(alignments)], 'alignments.shape')
-        # tf.summary.tensor_summary('alignments', alignments)
-        #
-        # attention_state = tf.Print(attention_state, [tf.shape(attention_state)],
-        #   'attention_state.shape')
-        # tf.summary.tensor_summary('attention_state', attention_state)
-        #
-        # unkn1 = tf.Print(unkn1, [tf.shape(unkn1)], 'unkn1.shape')
-        # tf.summary.tensor_summary('unkn1', unkn1)
-        #
-        # unkn2 = tf.Print(unkn2, [tf.shape(unkn2)], 'unkn2.shape')
-        # tf.summary.tensor_summary('unkn2', unkn2)
