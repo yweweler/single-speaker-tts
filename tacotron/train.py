@@ -105,11 +105,48 @@ def load_audio(file_path):
            np.array(linear_mag_db).astype(np.float32)
 
 
-def batched_placeholders(dataset, n_epochs, batch_size):
+def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
+    """
+    Created batches from an dataset that are bucketed by the input sentences sequence lengths.
+    Creates placeholders that are filled by QueueRunners. Before executing the placeholder it is
+    therefore required to start the corresponding threads using `tf.train.start_queue_runners`.
+
+    Arguments:
+        dataset (datasets.DatasetHelper):
+            A dataset loading helper that handles loading the data.
+
+        max_samples (int):
+            Maximal number of samples to load from the train dataset. If None, all samples from
+            the dataset will be used.
+
+        n_epochs (int):
+            Number of epochs to train the dataset.
+
+        batch_size (int):
+            target size of the batches to create.
+
+    Returns:
+        ((ph_sentences, ph_sentence_length, ph_mel_specs, ph_lin_specs, ph_time_frames), n_samples):
+            ph_sentences (tf.Tensor):
+                TODO
+            ph_sentence_length (tf.Tensor):
+                TODO
+            ph_mel_specs (tf.Tensor):
+                TODO
+            ph_lin_specs (tf.Tensor):
+                TODO
+            ph_time_frames (tf.Tensor):
+                TODO
+            n_samples (int):
+                TODO
+    """
     n_threads = hparams.train.n_threads
 
-    sentences, sentence_lengths, wav_paths = dataset.load(max_samples=hparams.train.max_samples)
+    sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
     max_len, min_len = max(sentence_lengths), min(sentence_lengths)
+
+    # Get the total number of samples in the dataset.
+    n_samples = len(sentence_lengths)
 
     # Convert everything into tf.Tensor objects for queue based processing.
     sentences = tf.convert_to_tensor(sentences)
@@ -159,9 +196,6 @@ def batched_placeholders(dataset, n_epochs, batch_size):
     print('batched.ph_mel_specs.shape', ph_mel_specs.shape, ph_mel_specs)
     print('batched.ph_lin_specs.shape', ph_lin_specs.shape, ph_lin_specs)
     print('batched.ph_time_frames', ph_time_frames.shape, ph_time_frames)
-
-    # get the total number of samples in the dataset.
-    n_samples = sentence_lengths
 
     return (ph_sentences, ph_sentence_length, ph_mel_specs, ph_lin_specs, ph_time_frames), n_samples
 
@@ -265,12 +299,13 @@ def start_session(loss_op, summary_op):
 
 if __name__ == '__main__':
     # Create a dataset loader.
-    dataset = hparams.train.dataset_loader(dataset_folder=hparams.train.dataset_folder,
-                                           char_dict=hparams.vocabulary_dict,
-                                           fill_dict=False)
+    train_dataset = hparams.train.dataset_loader(dataset_folder=hparams.train.dataset_folder,
+                                                 char_dict=hparams.vocabulary_dict,
+                                                 fill_dict=False)
 
     # Create batched placeholders from the dataset.
-    placeholders, n_samples = batched_placeholders(dataset=dataset,
+    placeholders, n_samples = batched_placeholders(dataset=train_dataset,
+                                                   max_samples=hparams.train.max_samples,
                                                    n_epochs=hparams.train.n_epochs,
                                                    batch_size=hparams.train.batch_size)
 
