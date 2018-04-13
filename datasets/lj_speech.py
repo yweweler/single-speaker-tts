@@ -148,6 +148,9 @@ class LJSpeechDatasetHelper(DatasetHelper):
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
 
+    # Raw waveform silence reference signal dB.
+    raw_silence_db = None
+
     def __init__(self, dataset_folder, char_dict, fill_dict):
         super().__init__(dataset_folder, char_dict, fill_dict)
 

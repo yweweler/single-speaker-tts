@@ -72,6 +72,7 @@ def normalize_decibel(db, ref_db, max_db):
 
             Calculation: clip((db - ref_db + max_db) / max_db, 0.0, 1.0)
     """
+    # np.clip(1.0 - (db - max_db) / (ref_db - max_db), 0.0, 1.0)
     return np.clip((db - ref_db + max_db) / max_db, 0.0, 1.0)
 
 
