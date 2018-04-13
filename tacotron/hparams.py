@@ -1,21 +1,45 @@
 import tensorflow as tf
 
+from datasets.lj_speech import LJSpeechDatasetHelper
+
 # Default hyper-parameters:
 hparams = tf.contrib.training.HParams(
-    # Training parameters.
-    train=tf.contrib.training.HParams(
-        # Number of training epochs.
-        n_epochs=5000,
-
-        # Batch size used for training.
-        batch_size=4,
-
-        # Number of threads used to load data during training.
-        n_threads=8,
-
-        # Maximal number of samples to load from the train dataset.
-        max_samples=250
-    ),
+    # Vocabulary definition.
+    # This definition has to include the padding and end of sequence tokens.
+    # Both the padding and eos token should not be changed since they are used internally.
+    vocabulary_dict={
+        'pad': 0,  # padding
+        'eos': 1,  # end of sequence
+        # --------------------------
+        'p': 2,
+        'r': 3,
+        'i': 4,
+        'n': 5,
+        't': 6,
+        'g': 7,
+        ' ': 8,
+        'h': 9,
+        'e': 10,
+        'o': 11,
+        'l': 12,
+        'y': 13,
+        's': 14,
+        'w': 15,
+        'c': 16,
+        'a': 17,
+        'd': 18,
+        'f': 19,
+        'm': 20,
+        'x': 21,
+        'b': 22,
+        'v': 23,
+        'u': 24,
+        'k': 25,
+        'j': 26,
+        'z': 27,
+        'q': 28,
+        # --------------------------
+    },
 
     # Target sampling rate.
     sampling_rate=22050,
@@ -49,6 +73,33 @@ hparams = tf.contrib.training.HParams(
     # Tacotron reduction factor r.
     reduction=3,
 
+    # Training parameters.
+    train=tf.contrib.training.HParams(
+        # Number of training epochs.
+        n_epochs=5000,
+
+        # Batch size used for training.
+        batch_size=4,
+
+        # Number of threads used to load data during training.
+        n_threads=8,
+
+        # Folder containing the dataset.
+        dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
+
+        # Dataset load helper.
+        dataset_loader=LJSpeechDatasetHelper,
+
+        # Maximal number of samples to load from the train dataset.
+        max_samples=250,
+
+        # Checkpoint folder used for training.
+        checkpoint_dir='/tmp/tacotron/ljspeech_250_samples',
+
+        # Duration in seconds after which to save a checkpoint.
+        checkpoint_save_secs=60 * 60,
+    ),
+
     # Flag that controls application of the post-processing network.
     apply_post_processing=True,
 
@@ -59,8 +110,8 @@ hparams = tf.contrib.training.HParams(
 
         pre_net_layers=(
             # (units, dropout, activation).
-            (256, 0.1, tf.nn.relu),
-            (128, 0.1, tf.nn.relu)
+            (256, 0.5, tf.nn.relu),
+            (128, 0.5, tf.nn.relu)
         ),
 
         # Number of filter banks.
@@ -89,8 +140,8 @@ hparams = tf.contrib.training.HParams(
     decoder=tf.contrib.training.HParams(
         pre_net_layers=(
             # (units, dropout, activation).
-            (256, 0.1, tf.nn.relu),
-            (128, 0.1, tf.nn.relu)
+            (256, 0.5, tf.nn.relu),
+            (128, 0.5, tf.nn.relu)
         ),
 
         # Number of decoder RNN layers.

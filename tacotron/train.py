@@ -1,12 +1,9 @@
-import time
-
 import numpy as np
 import tensorflow as tf
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
 from audio.features import mel_scale_spectrogram, linear_scale_spectrogram
 from audio.io import load_wav
-from datasets.lj_speech import LJSpeechDatasetHelper
 from tacotron.hparams import hparams
 from tacotron.model import Tacotron
 
@@ -85,13 +82,13 @@ def load_audio(file_path):
     # Convert the linear spectrogram into decibel representation.
     linear_mag = np.abs(linear_spec)
     linear_mag_db = magnitude_to_decibel(linear_mag)
-    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)     # TODO: Refactor numbers.
+    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)  # TODO: Refactor numbers.
     # => linear_mag_db.shape = (n_frames, 1 + n_fft // 2)
 
     # Convert the mel spectrogram into decibel representation.
     mel_mag = np.abs(mel_spec)
     mel_mag_db = magnitude_to_decibel(mel_mag)
-    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)            # TODO: Refactor numbers.
+    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)  # TODO: Refactor numbers.
     # => mel_mag_db.shape = (n_frames, n_mels)
 
     # print("[ORIGINAL] load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
@@ -144,21 +141,6 @@ def batched_placeholders(dataset, n_epochs, batch_size):
     buckets = [i for i in range(min_len + 1, max_len + 1, 8)]
     print('n_buckets: {} + 2'.format(len(buckets)))
 
-    # Just batch data no matter what sequence length.
-    # ph_sentence_length, ph_sentences, ph_mel_specs, ph_lin_specs, ph_time_frames = tf.train.batch(
-    #     tensors=[
-    #         sentence_length,
-    #         sentence,
-    #         mel_spec,
-    #         lin_spec,
-    #         n_time_frames
-    #     ],
-    #     batch_size=batch_size,
-    #     capacity=20,
-    #     num_threads=n_threads,
-    #     dynamic_pad=True
-    # )
-
     # Batch data based on sequence lengths.
     ph_sentence_length, (ph_sentences, ph_mel_specs, ph_lin_specs, ph_time_frames) = \
         tf.contrib.training.bucket_by_sequence_length(
@@ -184,68 +166,7 @@ def batched_placeholders(dataset, n_epochs, batch_size):
     return (ph_sentences, ph_sentence_length, ph_mel_specs, ph_lin_specs, ph_time_frames), n_samples
 
 
-def train(checkpoint_dir):
-    init_char_dict = {
-        'pad': 0,  # padding
-        'eos': 1,  # end of sequence
-        'p': 2,
-        'r': 3,
-        'i': 4,
-        'n': 5,
-        't': 6,
-        'g': 7,
-        ' ': 8,
-        'h': 9,
-        'e': 10,
-        'o': 11,
-        'l': 12,
-        'y': 13,
-        's': 14,
-        'w': 15,
-        'c': 16,
-        'a': 17,
-        'd': 18,
-        'f': 19,
-        'm': 20,
-        'x': 21,
-        'b': 22,
-        'v': 23,
-        'u': 24,
-        'k': 25,
-        'j': 26,
-        'z': 27,
-        'q': 28,
-    }
-
-    dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
-                                    char_dict=init_char_dict,
-                                    fill_dict=False)
-
-    n_epochs = hparams.train.n_epochs
-    batch_size = hparams.train.batch_size
-
-    # Checkpoint every 10 minutes.
-    checkpoint_save_secs = 60 * 10
-
-    # Save summary every 100 steps.
-    summary_save_steps = 5
-    summary_counter_steps = 5
-
-    dataset_start = time.time()
-    placeholders, n_samples = batched_placeholders(dataset, n_epochs, batch_size)
-    dataset_duration = time.time() - dataset_start
-
-    print('Dataset generation: {}s'.format(dataset_duration))
-
-    model = Tacotron(hparams=hparams,
-                     inputs=placeholders,
-                     training=True)
-
-    loss_op = model.get_loss_op()
-
-    # NOTE: The global step has to be created before the optimizer is created.
-    tf.train.create_global_step()
-
+def train(session):
     with tf.name_scope('optimizer'):
         optimizer = tf.train.AdamOptimizer()
 
@@ -265,7 +186,23 @@ def train(checkpoint_dir):
         # Tell the optimizer to minimize the loss function.
         # train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
 
-    summary_op = model.summary()
+    _global_step = tf.train.get_global_step()
+    while not session.should_stop():
+        try:
+            session.run([_global_step, loss_op, optimize])
+            # session.run([train_op])
+        except tf.errors.OutOfRangeError:
+            break
+
+    session.close()
+
+
+def start_session(loss_op, summary_op, checkpoint_dir):
+    summary_save_steps = 5
+    summary_counter_steps = 5
+
+    # NOTE: The global step has to be created before the optimizer is created.
+    tf.train.create_global_step()
 
     # TODO: Not sure what the exact benefit of a scaffold is since it does not hold very much data.
     session_scaffold = tf.train.Scaffold(
@@ -275,7 +212,7 @@ def train(checkpoint_dir):
 
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
-        save_secs=checkpoint_save_secs,
+        save_secs=hparams.checkpoint_save_secs,
         scaffold=session_scaffold
     )
 
@@ -312,22 +249,23 @@ def train(checkpoint_dir):
 
     tf.train.start_queue_runners(sess=session)
 
-    train_start = time.time()
-
-    _global_step = tf.train.get_global_step()
-    while not session.should_stop():
-        try:
-            session.run([_global_step, loss_op, optimize])
-            # session.run([train_op])
-        except tf.errors.OutOfRangeError:
-            break
-
-    train_duration = time.time() - train_start
-
-    print('Training duration: {:.3f}min.'.format(train_duration / 60.0))
-
-    session.close()
+    return session
 
 
 if __name__ == '__main__':
-    train(checkpoint_dir='/tmp/tacotron/ljspeech_250_samples')
+    dataset = hparams.train.dataset_loader(dataset_folder=hparams.train.dataset_folder,
+                                           char_dict=hparams.vocabulary_dict,
+                                           fill_dict=False)
+
+    placeholders, n_samples = batched_placeholders(dataset=dataset,
+                                                   n_epochs=hparams.train.n_epochs,
+                                                   batch_size=hparams.train.batch_size)
+
+    model = Tacotron(hparams=hparams, inputs=placeholders, training=True)
+
+    session = start_session(
+        loss_op=model.get_loss_op(),
+        summary_op=model.summary(),
+        checkpoint_dir=hparams.checkpoint_dir)
+
+    train(session)
