@@ -26,10 +26,33 @@ class Tacotron:
             hparams (tf.contrib.training.HParams):
                 Collection of hyper-parameters that control how the model is created.
 
-            inputs (:obj:`list` of :obj:`tf.Tensor`):
+            inputs (:obj:`dict`):
                 Input data placeholders. All data that is used for training or inference is
                 consumed from this placeholders.
-                # TODO: Describe all inputs and their shapes.
+                The placeholder dictionary contains the following fields with keys of the same name:
+                    - ph_sentences (tf.Tensor):
+                        Batched integer sentence sequence with appended <EOS> token padded to same
+                        length using the <PAD> token. The characters were converted
+                        converted to their vocabulary id's. The shape is shape=(B, T_sent, ?),
+                        with B being the batch size and T_sent being the sentence length
+                        including the <EOS> token.
+                    - ph_sentence_length (tf.Tensor):
+                        Batched sequence lengths including the <EOS> token, excluding the padding.
+                        The shape is shape=(B), with B being the batch size.
+                    - ph_mel_specs (tf.Tensor):
+                        Batched Mel. spectrogram's that were padded to the same length in the
+                        time axis using zero frames. The shape is shape=(B, T_spec, n_mels),
+                        with B being the batch size and T_spec being the number of frames in the
+                        spectrogram.
+                    - ph_lin_specs (tf.Tensor):
+                        Batched linear spectrogram's that were padded to the same length in the
+                        time axis using zero frames. The shape is shape=(B, T_spec, 1 + n_fft // 2),
+                        with B being the batch size and T_spec being the number of frames in the
+                        spectrogram.
+                    - ph_time_frames (tf.Tensor):
+                        Batched number of frames in the spectrogram's excluding the padding
+                        frames. The shape is shape=(B), with B being the batch size.
+
 
             training (boolean):
                 Flag that controls the application of special architecture behaviour that only
@@ -39,10 +62,11 @@ class Tacotron:
         self.hparams = hparams
 
         # Get the placeholders for the input data.
-        self.inp_sentences, self.seq_lengths, self.inp_mel_spec, self.inp_linear_spec, \
-        self.inp_time_steps = inputs
-
-        self.output_linear_spec = None
+        self.inp_sentences = inputs['ph_sentences']
+        self.seq_lengths = inputs['ph_sentence_length']
+        self.inp_mel_spec = inputs['ph_mel_specs']
+        self.inp_linear_spec = inputs['ph_lin_specs']
+        self.inp_time_steps = inputs['ph_time_frames']
 
         # Merged loss function.
         self.loss_op = None

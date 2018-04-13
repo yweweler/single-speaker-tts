@@ -14,33 +14,31 @@ from tacotron.model import Tacotron
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
-def apply_reduction(mel_mag_db, linear_mag_db, reduction_factor):
+def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
     """
-    Reduces `reduction_factor` consecutive frames of the mel and linear spectrogram's into single
-    frames by means of concatenating them. Automatically pads with zero frames in the time
-    dimension such that the number of frames is a multiple of `reduction_factor`.
+    Adds zero padding frames in the time axis to the Mel. scale and linear scale spectrogram's such
+    that the number of frames is a multiple of the `reduction_factor`.
 
     Arguments:
         mel_mag_db (np.ndarray):
-            Mel scale spectrogram to be reduced. The shape is expected to be shape=(T, n_mels),
-            with T being the number of frames.
+            Mel scale spectrogram to be reduced. The shape is expected to be shape=(T_spec, n_mels),
+            with T_spec being the number of frames.
 
         linear_mag_db (np.ndarray):
             Linear scale spectrogram to be reduced. The shape is expected to be
-            shape=(T, 1 + n_fft // 2), with T being the number of frames.
+            shape=(T_spec, 1 + n_fft // 2), with T_spec being the number of frames.
 
         reduction_factor (int):
-            The number of consecutive frames that should be reduced to a single frame.
+            The number of consecutive frames.
 
     Returns:
         (mel_mag_db, linear_mag_db):
             mel_mag_db (np.ndarray):
-                Reduced Mel scale spectrogram. The shape is shape=(T // r, n_mels * r),
-                with T being the number of frames.
+                Padded Mel. scale spectrogram.
             linear_mag_db (np.ndarray):
-                Reduced linear scale spectrogram. The shape is shape=(T // r, (1 + n_fft // 2) * r),
-                with T being the number of frames.
+                padded linear scale spectrogram.
     """
+    # Number of frames in the spectrogram's.
     n_frames = mel_mag_db.shape[0]
 
     # Make sure the number of frames is a multiple of `reduction_factor` for reduction.
@@ -62,42 +60,69 @@ def apply_reduction(mel_mag_db, linear_mag_db, reduction_factor):
 
 
 def load_audio(file_path):
+    """
+    Load and pre-process and audio file.
+
+    Arguments:
+        file_path (bytes):
+            Path to the file to be loaded.
+
+    Returns:
+        (mel_mag_db, linear_mag_db):
+            mel_mag_db (np.ndarray):
+                Mel. scale magnitude spectrogram of the loaded audio file.
+                The spectrogram's dB values are normalized to the range [0.0, 1.0] over the
+                entire dataset.
+                The shape is shape=(T_spec, n_mels), with T_spec being the number of frames in
+                the spectrogram.
+
+            linear_mag_db (np.ndarray):
+                Linear scale magnitude spectrogram of the loaded audio file.
+                The spectrogram's dB values are normalized to the range [0.0, 1.0] over the
+                entire dataset.
+                The shape is shape=(T_spec, 1 + n_fft // 2), with T_spec being the number of
+                frames in the spectrogram.
+    """
+    # Window length in audio samples.
     win_len = ms_to_samples(hparams.win_len, hparams.sampling_rate)
+    # Window hop in audio samples.
     hop_len = ms_to_samples(hparams.win_hop, hparams.sampling_rate)
 
+    # Load the actual audio file.
     wav, sr = load_wav(file_path.decode())
 
-    # TODO: resample from 22050 Hz to 16000 Hz?
-
-    # TODO: Determine a better silence reference level for the lj dataset.
+    # TODO: Determine a better silence reference level for the LJSpeech dataset (See: #9).
     # Remove silence at the beginning and end of the wav so the network does not have to learn
     # some random initial silence delay after which it is allowed to speak.
     # wav, _ = trim_silence(wav)
 
+    # Calculate the linear scale spectrogram.
+    # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers for
+    # example are applied to each frame automatically.
     linear_spec = linear_scale_spectrogram(wav, hparams.n_fft, hop_len, win_len).T
 
+    # Calculate the Mel. scale spectrogram.
+    # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for example
+    # are applied to each frame automatically.
     mel_spec = mel_scale_spectrogram(wav, hparams.n_fft, sr, hparams.n_mels,
                                      hparams.mel_fmin, hparams.mel_fmax, hop_len, win_len, 1).T
 
     # Convert the linear spectrogram into decibel representation.
     linear_mag = np.abs(linear_spec)
     linear_mag_db = magnitude_to_decibel(linear_mag)
-    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)  # TODO: Refactor numbers.
-    # => linear_mag_db.shape = (n_frames, 1 + n_fft // 2)
+    linear_mag_db = normalize_decibel(linear_mag_db, 35.7, 100)  # TODO: Refactor numbers. (See: #9)
+    # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
 
     # Convert the mel spectrogram into decibel representation.
     mel_mag = np.abs(mel_spec)
     mel_mag_db = magnitude_to_decibel(mel_mag)
-    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)  # TODO: Refactor numbers.
-    # => mel_mag_db.shape = (n_frames, n_mels)
-
-    # print("[ORIGINAL] load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
+    mel_mag_db = normalize_decibel(mel_mag_db, 6.0, 100)  # TODO: Refactor numbers. (See: #9)
+    # => mel_mag_db.shape = (T_spec, n_mels)
 
     # Tacotron reduction factor.
     if hparams.reduction > 1:
-        # mel_mag_db.shape => (T // r, n_mels * r)
-        # linear_mag_db. shape => (T // r, (1 + n_fft // 2) * r)
-        mel_mag_db, linear_mag_db = apply_reduction(mel_mag_db, linear_mag_db, hparams.reduction)
+        mel_mag_db, linear_mag_db = apply_reduction_padding(mel_mag_db, linear_mag_db,
+                                                            hparams.reduction)
 
     # print("[REDUCED] load_audio.mel_spec.shape", np.array(mel_mag_db).astype(np.float32).shape)
 
@@ -126,23 +151,41 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
             target size of the batches to create.
 
     Returns:
-        ((ph_sentences, ph_sentence_length, ph_mel_specs, ph_lin_specs, ph_time_frames), n_samples):
-            ph_sentences (tf.Tensor):
-                TODO
-            ph_sentence_length (tf.Tensor):
-                TODO
-            ph_mel_specs (tf.Tensor):
-                TODO
-            ph_lin_specs (tf.Tensor):
-                TODO
-            ph_time_frames (tf.Tensor):
-                TODO
+        (placeholder_dictionary, n_samples):
+            placeholder_dictionary:
+                The placeholder dictionary contains the following fields with keys of the same name:
+                    - ph_sentences (tf.Tensor):
+                        Batched integer sentence sequence with appended <EOS> token padded to same
+                        length using the <PAD> token. The characters were converted
+                        converted to their vocabulary id's. The shape is shape=(B, T_sent, ?),
+                        with B being the batch size and T_sent being the sentence length
+                        including the <EOS> token.
+                    - ph_sentence_length (tf.Tensor):
+                        Batched sequence lengths including the <EOS> token, excluding the padding.
+                        The shape is shape=(B), with B being the batch size.
+                    - ph_mel_specs (tf.Tensor):
+                        Batched Mel. spectrogram's that were padded to the same length in the
+                        time axis using zero frames. The shape is shape=(B, T_spec, n_mels),
+                        with B being the batch size and T_spec being the number of frames in the
+                        spectrogram.
+                    - ph_lin_specs (tf.Tensor):
+                        Batched linear spectrogram's that were padded to the same length in the
+                        time axis using zero frames. The shape is shape=(B, T_spec, 1 + n_fft // 2),
+                        with B being the batch size and T_spec being the number of frames in the
+                        spectrogram.
+                    - ph_time_frames (tf.Tensor):
+                        Batched number of frames in the spectrogram's excluding the padding
+                        frames. The shape is shape=(B), with B being the batch size.
+
             n_samples (int):
-                TODO
+                Number of samples loaded from the database. Each epoch will contain `n_samples`.
     """
     n_threads = hparams.train.n_threads
 
+    # Load alĺ sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
+
+    # Determine the minimal and maximal sentence lengths for calculating the bucket boundaries.
     max_len, min_len = max(sentence_lengths), min(sentence_lengths)
 
     # Get the total number of samples in the dataset.
@@ -158,7 +201,7 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
         [sentences, sentence_lengths, wav_paths],
         capacity=n_threads * batch_size,
         num_epochs=n_epochs,
-        shuffle=False)
+        shuffle=hparams.train.shuffle_smaples)
 
     # The sentence is a integer sequence (char2idx), we need to interpret it as such since it is
     # stored in a tensor that hold objects in order to manage sequences of different lengths in a
@@ -175,6 +218,7 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     # Get the number spectrogram time-steps (used as the number of time frames when generating).
     n_time_frames = tf.shape(mel_spec)[0]
 
+    # TODO: Calculate better bucket boundaries. (See: #8)
     buckets = [i for i in range(min_len + 1, max_len + 1, 8)]
     print('n_buckets: {} + 2'.format(len(buckets)))
 
@@ -186,18 +230,27 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
             batch_size=batch_size,
             bucket_boundaries=buckets,
             num_threads=n_threads,
-            capacity=n_threads * 2,  # Number of batches to prepare.
-            bucket_capacities=[batch_size * 4] * (len(buckets) + 1),  # Samples per bucket.
+            capacity=hparams.train.n_pre_calc_batches,
+            bucket_capacities=[hparams.train.n_samples_per_bucket] * (len(buckets) + 1),
             dynamic_pad=True,
-            allow_smaller_final_batch=True)
+            allow_smaller_final_batch=hparams.train.allow_smaller_batches)
 
-    print('batched.ph_sentence_length', ph_sentence_length.shape, ph_sentence_length)
-    print('batched.ph_sentences.shape', ph_sentences.shape, ph_sentences)
-    print('batched.ph_mel_specs.shape', ph_mel_specs.shape, ph_mel_specs)
-    print('batched.ph_lin_specs.shape', ph_lin_specs.shape, ph_lin_specs)
-    print('batched.ph_time_frames', ph_time_frames.shape, ph_time_frames)
+    # print('batched.ph_sentence_length', ph_sentence_length.shape, ph_sentence_length)
+    # print('batched.ph_sentences.shape', ph_sentences.shape, ph_sentences)
+    # print('batched.ph_mel_specs.shape', ph_mel_specs.shape, ph_mel_specs)
+    # print('batched.ph_lin_specs.shape', ph_lin_specs.shape, ph_lin_specs)
+    # print('batched.ph_time_frames', ph_time_frames.shape, ph_time_frames)
 
-    return (ph_sentences, ph_sentence_length, ph_mel_specs, ph_lin_specs, ph_time_frames), n_samples
+    # Collect all created placeholder in a dictionary.
+    placeholder_dict = {
+        'ph_sentences': ph_sentences,
+        'ph_sentence_length': ph_sentence_length,
+        'ph_mel_specs': ph_mel_specs,
+        'ph_lin_specs': ph_lin_specs,
+        'ph_time_frames': ph_time_frames
+    }
+
+    return placeholder_dict, n_samples
 
 
 def train(model):

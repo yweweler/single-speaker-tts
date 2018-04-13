@@ -93,6 +93,19 @@ hparams = tf.contrib.training.HParams(
         # Maximal number of samples to load from the train dataset.
         max_samples=250,
 
+        # Flag that enables/disables sample shuffle at the beginning of each epoch.
+        shuffle_smaples=False,
+
+        # Number of batches to pre-calculate for feeding to the GPU.
+        n_pre_calc_batches=8,
+
+        # Number of samples each bucket can pre-fetch.
+        n_samples_per_bucket=16,
+
+        # Flag enabling the bucketing mechanism to output batches of smaller size than
+        # `batch_size` if not enough samples are available.
+        allow_smaller_batches=True,
+
         # Checkpoint folder used for training.
         checkpoint_dir='/tmp/tacotron/ljspeech_250_samples',
 
@@ -110,7 +123,7 @@ hparams = tf.contrib.training.HParams(
     ),
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=True,
+    apply_post_processing=False,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(

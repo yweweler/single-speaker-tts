@@ -184,13 +184,22 @@ def train_data_buckets(file_list_path, n_epochs, batch_size):
 
 
 def model_placeholders(max_len):
-    inp_sentences = tf.placeholder(dtype=tf.int32, shape=(1, max_len), name='ph_inp_sentences')
-    inp_mel_spec = tf.placeholder(dtype=tf.float32, shape=(1, 1000, 80))
-    inp_linear_spec = tf.placeholder(dtype=tf.float32)
-    seq_lengths = tf.placeholder(dtype=tf.int32)
-    inp_time_steps = tf.placeholder(dtype=tf.int32)
+    ph_sentences = tf.placeholder(dtype=tf.int32, shape=(1, max_len), name='ph_inp_sentences')
+    ph_mel_specs = tf.placeholder(dtype=tf.float32, shape=(1, 1000, 80))
+    ph_lin_specs = tf.placeholder(dtype=tf.float32)
+    ph_sentence_length = tf.placeholder(dtype=tf.int32)
+    ph_time_frames = tf.placeholder(dtype=tf.int32)
 
-    return inp_sentences, seq_lengths, inp_mel_spec, inp_linear_spec, inp_time_steps
+    # Collect all created placeholder in a dictionary.
+    placeholder_dict = {
+        'ph_sentences': ph_sentences,
+        'ph_sentence_length': ph_sentence_length,
+        'ph_mel_specs': ph_mel_specs,
+        'ph_lin_specs': ph_lin_specs,
+        'ph_time_frames': ph_time_frames
+    }
+
+    return placeholder_dict
 
 
 def evaluate(checkpoint_dir):
