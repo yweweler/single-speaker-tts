@@ -361,8 +361,9 @@ class Tacotron:
                 tf.reshape(self.inp_mel_spec[0],
                            (1, -1, self.hparams.n_mels)), -1)
 
-            # => shape=(n_mels, T_spec, 1)
+            # => shape=(1, n_mels, T_spec, 1)
             mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
+            mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
             tf.summary.image('mel_spec', mel_spec_img, max_outputs=1)
 
             # Convert thew linear spectrogram into an image that can be displayed.
@@ -371,8 +372,9 @@ class Tacotron:
                 tf.reshape(self.inp_linear_spec[0],
                            (1, -1, (1 + self.hparams.n_fft // 2))), -1)
 
-            # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+            # => shape=(1, (1 + n_fft // 2), T_spec, 1)
             linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+            linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
             tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         with tf.name_scope('normalized_outputs'):
@@ -382,8 +384,9 @@ class Tacotron:
                 tf.reshape(self.output_mel_spec[0],
                            (1, -1, self.hparams.n_mels)), -1)
 
-            # => shape=(n_mels, T_spec, 1)
+            # => shape=(1, n_mels, T_spec, 1)
             mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
+            mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
             tf.summary.image('decoder_mel_spec', mel_spec_img, max_outputs=1)
 
             # Convert thew linear spectrogram into an image that can be displayed.
@@ -392,8 +395,9 @@ class Tacotron:
                 tf.reshape(self.output_linear_spec[0],
                            (1, -1, (1 + self.hparams.n_fft // 2))), -1)
 
-            # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+            # => shape=(1, (1 + n_fft // 2), T_spec, 1)
             linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+            linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
             tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # TODO: Turned off since it is only of used for debugging.
