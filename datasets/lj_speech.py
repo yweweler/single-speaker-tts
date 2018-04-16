@@ -81,7 +81,7 @@ class DatasetHelper:
         return id_sequences, sequence_lengths
 
     @abc.abstractmethod
-    def load(self, max_samples):
+    def load(self, max_samples, min_len, max_len):
         raise NotImplementedError
 
     @staticmethod
@@ -189,7 +189,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
             '?': '',
         }
 
-    def load(self, max_samples=None):
+    def load(self, max_samples=None, min_len=30, max_len=90):
         data_file = os.path.join(self._dataset_folder, 'metadata.csv')
         wav_folder = os.path.join(self._dataset_folder, 'wavs')
 
@@ -200,13 +200,19 @@ class LJSpeechDatasetHelper(DatasetHelper):
 
             # Iterate the metadata file.
             for i, (file_id, _, normalized_sentence) in enumerate(csv_file_iter):
+                # Extract the transcription.
+                ascii_sentence = self.utf8_to_ascii(normalized_sentence)
+
+                # Skip sentences in case they do not meet the length requirements.
+                sentence_len = len(ascii_sentence)
+                if sentence_len < min_len or sentence_len > max_len:
+                    continue
+
+                sentences.append(ascii_sentence)
+
                 # Get the audio file path.
                 file_path = '{}.wav'.format(os.path.join(wav_folder, file_id))
                 file_paths.append(file_path)
-
-                # Extract the transcription.
-                ascii_sentence = self.utf8_to_ascii(normalized_sentence)
-                sentences.append(ascii_sentence)
 
                 if max_samples is not None:
                     if (i + 1) == max_samples:
