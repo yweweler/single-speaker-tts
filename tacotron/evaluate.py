@@ -5,10 +5,11 @@ import tensorflow as tf
 from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
 from tacotron.params.evaluation import evaluation_params
+from tacotron.params.model import model_params
+
 # Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
-from tacotron.params.model import model_params
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -26,9 +27,6 @@ def batched_placeholders(dataset, max_samples, batch_size):
         max_samples (int):
             Maximal number of samples to load from the train dataset. If None, all samples from
             the dataset will be used.
-
-        n_epochs (int):
-            Number of epochs to train the dataset.
 
         batch_size (int):
             target size of the batches to create.
@@ -130,13 +128,16 @@ def batched_placeholders(dataset, max_samples, batch_size):
     return placeholder_dict, n_samples
 
 
-def evaluate(model):
+def evaluate(model, n_samples):
     """
     Evaluates a Tacotron model.
 
     Arguments:
         model (Tacotron):
             The Tacotron model instance to be evaluated.
+
+        n_samples (int):
+            Number of samples used for evaluation.
     """
     # Get the models loss function.
     loss_op = model.get_loss_op()
@@ -149,53 +150,57 @@ def evaluate(model):
 
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
 
-    saver = tf.train.Saver()
-
-    # Create the evaluation session.
-    session = start_session(summary_op=model.summary())
-
-    print('Restoring model...')
-    saver.restore(session, checkpoint_file)
-    print('Restoring finished')
-
-    # Start training.
-    while not session.should_stop():
-        try:
-            session.run([loss_op])
-        except tf.errors.OutOfRangeError:
-            break
-
-    session.close()
-
-
-def start_session(summary_op):
-    """
-    Creates a session that can be used for training.
-
-    Arguments:
-        summary_op (tf.Tensor):
-            A tensor of type `string` containing the serialized `Summary` protocol
-            buffer containing all merged model summaries.
-
-    Returns:
-        tf.train.SingularMonitoredSession
-    """
     # Checkpoint folder to save the evaluation summaries into.
     checkpoint_save_dir = os.path.join(
         evaluation_params.checkpoint_dir,
         evaluation_params.checkpoint_save_run
     )
 
-    summary_hook = tf.train.SummarySaverHook(
-        output_dir=checkpoint_save_dir,
-        save_steps=evaluation_params.summary_save_steps,
-        summary_op=summary_op
-    )
+    saver = tf.train.Saver()
 
-    counter_hook = tf.train.StepCounterHook(
-        output_dir=checkpoint_save_dir,
-        every_n_steps=evaluation_params.performance_log_steps
-    )
+    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
+    summary_op = tf.summary.merge_all()
+
+    # Create the evaluation session.
+    session = start_session()
+
+    print('Restoring model...')
+    saver.restore(session, checkpoint_file)
+    print('Restoring finished')
+
+    loss_sum = 0
+
+    # Start evaluation.
+    while True:
+        try:
+            loss = session.run([loss_op])
+            # Accumulate the batch losses.
+            loss_sum += loss[0]
+            print(loss[0])
+        except tf.errors.OutOfRangeError:
+            break
+
+    # Calculate the average batch loss.
+    avg_loss = loss_sum / n_samples
+    print(avg_loss)
+
+    # Collect the models summaries and add the evaluation loss.
+    eval_summary = tf.Summary()
+    eval_summary.ParseFromString(session.run(summary_op))
+    eval_summary.value.add(tag='loss/loss', simple_value=avg_loss)
+
+    summary_writer.add_summary(eval_summary, 1)
+
+    session.close()
+
+
+def start_session():
+    """
+    Creates a session that can be used for training.
+
+    Returns:
+        tf.Session
+    """
 
     session_config = tf.ConfigProto(
         gpu_options=tf.GPUOptions(
@@ -203,13 +208,10 @@ def start_session(summary_op):
         )
     )
 
-    session = tf.train.SingularMonitoredSession(
-        hooks=[
-            summary_hook,
-            counter_hook
-        ],
-        config=session_config,
-        checkpoint_dir=checkpoint_save_dir)
+    session = tf.Session(config=session_config)
+
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+    session.run(init_op)
 
     tf.train.start_queue_runners(sess=session)
 
@@ -228,7 +230,7 @@ if __name__ == '__main__':
                                                    batch_size=evaluation_params.batch_size)
 
     # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, training=True)
+    tacotron_model = Tacotron(inputs=placeholders, training=False)
 
     # Train the model.
-    evaluate(tacotron_model)
+    evaluate(tacotron_model, n_samples)

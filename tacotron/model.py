@@ -259,7 +259,7 @@ class Tacotron:
                 # During inference we stop decoding after `maximum_iterations`. Note that when
                 # using the reduction factor the RNN actually outputs
                 # `maximum_iterations` * `reduction_factor` frames.
-                maximum_iterations = self.hparams.decoder.maximum_iterations
+                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
 
             # Start decoding.
             decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
@@ -341,7 +341,8 @@ class Tacotron:
         # shape => (B, T_spec, (1 + n_fft // 2))
         self.output_linear_spec = outputs
 
-        if self.training:
+        # TODO: For debug purposes only. (Remove once I im implemented train/eval/test)
+        if self.training or True:
             # Calculate decoder Mel. spectrogram loss.
             self.loss_op_decoder = tf.reduce_mean(
                 tf.abs(self.inp_mel_spec - self.output_mel_spec))
@@ -487,7 +488,7 @@ class Tacotron:
 
         ph_mel_specs = tf.placeholder(dtype=tf.float32,
                                       shape=(1,
-                                             model_params.decoder.maximum_iterations,
+                                             model_params.decoder.maximum_iterations // model_params.reduction,
                                              model_params.n_mels)
                                       , name='ph_mel_specs')
 

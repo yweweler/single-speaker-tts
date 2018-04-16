@@ -11,7 +11,7 @@ evaluation_params = tf.contrib.training.HParams(
     n_threads=4,
 
     # Maximal number of samples to load from the evaluation dataset.
-    max_samples=None,
+    max_samples=16,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
