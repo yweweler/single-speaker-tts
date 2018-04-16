@@ -199,7 +199,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
             csv_file_iter = csv.reader(csv_file, delimiter='|', quotechar='|')
 
             # Iterate the metadata file.
-            for i, (file_id, _, normalized_sentence) in enumerate(csv_file_iter):
+            for file_id, _, normalized_sentence in csv_file_iter:
                 # Extract the transcription.
                 ascii_sentence = self.utf8_to_ascii(normalized_sentence)
 
@@ -215,7 +215,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
                 file_paths.append(file_path)
 
                 if max_samples is not None:
-                    if (i + 1) == max_samples:
+                    if len(sentences) == max_samples:
                         break
 
         # Normalize sentences, convert the characters to dictionary ids and determine their lengths.
