@@ -225,6 +225,9 @@ class ConcatOutputAndAttentionWrapper(tfc.rnn.RNNCell):
                     Either a single `2-D` tensor, or a tuple of tensors matching the arity and
                     shapes of `state`.
         """
+        # TODO: As from the Luong Attention paper "Effective Approaches to Attention-based
+        # NeuralMachine Translation", I think I should rather concatenate the inputs with
+        # attention before feeding it to the cell.
         output, new_state = self._cell(inputs, state)
         concat_output = tf.concat([output, new_state.attention], axis=-1)
 
