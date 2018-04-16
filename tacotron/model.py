@@ -5,8 +5,8 @@ from tensorflow.contrib import seq2seq
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
-from tacotron.params.model import model_params
 from tacotron.layers import cbhg, pre_net
+from tacotron.params.model import model_params
 from tacotron.wrappers import PrenetWrapper, ConcatOutputAndAttentionWrapper
 
 
@@ -450,6 +450,66 @@ class Tacotron:
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         return tf.summary.merge_all()
+
+    @staticmethod
+    def model_placeholders(max_sent_len):
+        """
+        Create placeholders for feeding data into the Tacotron model.
+
+        Arguments:
+            max_sent_len (int):
+                Maximal sentence length.
+
+        Returns:
+            inputs (:obj:`dict`):
+                Input data placeholders. All data that is used for training or inference is
+                consumed from this placeholders.
+                The placeholder dictionary contains the following fields with keys of the same name:
+                    - ph_sentences (tf.Tensor):
+                        Batched integer sentence sequence with appended <EOS> token padded to same
+                        length using the <PAD> token.
+                        including the <EOS> token.
+                    - ph_sentence_length (tf.Tensor):
+                        Batched sequence lengths including the <EOS> token, excluding the padding.
+                    - ph_mel_specs (tf.Tensor):
+                        Batched Mel. spectrogram's that were padded to the same length in the
+                        time axis using zero frames.
+                    - ph_lin_specs (tf.Tensor):
+                        Batched linear spectrogram's that were padded to the same length in the
+                        time axis using zero frames.
+                    - ph_time_frames (tf.Tensor):
+                        Batched number of frames in the spectrogram's excluding the padding
+                        frames.
+        """
+        # TODO: Make the batch size dimension, shape = None.
+        ph_sentences = tf.placeholder(dtype=tf.int32, shape=(1, max_sent_len),
+                                      name='ph_inp_sentences')
+
+        ph_mel_specs = tf.placeholder(dtype=tf.float32,
+                                      shape=(1,
+                                             model_params.decoder.maximum_iterations,
+                                             model_params.n_mels)
+                                      , name='ph_mel_specs')
+
+        ph_lin_specs = tf.placeholder(dtype=tf.float32,
+                                      name='ph_lin_specs')
+
+        ph_sentence_length = tf.placeholder(dtype=tf.int32,
+                                            name='ph_sentence_length')
+
+        ph_time_frames = tf.placeholder(dtype=tf.int32,
+                                        name='ph_time_frames')
+
+        # Collect all created placeholder in a dictionary.
+        placeholder_dict = {
+            'ph_sentences': ph_sentences,
+            'ph_sentence_length': ph_sentence_length,
+            'ph_mel_specs': ph_mel_specs,
+            'ph_lin_specs': ph_lin_specs,
+            'ph_time_frames': ph_time_frames
+        }
+
+        return placeholder_dict
 
     @staticmethod
     def _create_attention_summary(final_context_state):

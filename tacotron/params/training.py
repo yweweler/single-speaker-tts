@@ -13,12 +13,6 @@ training_params = tf.contrib.training.HParams(
     # Number of threads used to load data during training.
     n_threads=4,
 
-    # Folder containing the dataset.
-    dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
-
-    # Dataset load helper.
-    dataset_loader=LJSpeechDatasetHelper,
-
     # Maximal number of samples to load from the train dataset.
     max_samples=None,
 
@@ -37,6 +31,9 @@ training_params = tf.contrib.training.HParams(
 
     # Checkpoint folder used for training.
     checkpoint_dir='/tmp/tacotron/ljspeech_all',
+
+    # Run folder to load data from and save data in to the checkpoint folder.
+    checkpoint_run='train',
 
     # Duration in seconds after which to save a checkpoint.
     checkpoint_save_secs=60 * 60,

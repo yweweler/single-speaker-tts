@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 
 from tacotron.model import Tacotron
@@ -201,7 +202,7 @@ def start_session(loss_op, summary_op):
     Returns:
         tf.train.SingularMonitoredSession
     """
-    checkpoint_dir = training_params.checkpoint_dir
+    checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)
 
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
