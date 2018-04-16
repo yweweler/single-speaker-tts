@@ -150,8 +150,19 @@ def train(model):
     loss_op = model.get_loss_op()
 
     with tf.name_scope('optimizer'):
+        # Let the learning rate decay exponentially.
+        learning_rate = tf.train.exponential_decay(
+            learning_rate=training_params.lr,
+            global_step=global_step,
+            decay_steps=training_params.lr_decay_steps,
+            decay_rate=training_params.lr_decay_rate,
+            staircase=training_params.lr_staircase)
+
+        # Add a learning rate summary.
+        tf.summary.scalar('lr', learning_rate)
+
         # Create a optimizer.
-        optimizer = tf.train.AdamOptimizer()
+        optimizer = tf.train.AdamOptimizer(learning_rate)
 
         # Apply gradient clipping by global norm.
         gradients, variables = zip(*optimizer.compute_gradients(loss_op))
