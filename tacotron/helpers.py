@@ -228,7 +228,10 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             # Copy every r'th frame from the ground truth spectrogram.
             # => shape=(B, T_spec // reduction_factor, n_mels)
-            self._outputs = outputs[:, self._reduction_factor - 1::self._reduction_factor, :]
+            # self._outputs = outputs[:, self._reduction_factor - 1::self._reduction_factor, :]
+
+            # outputs = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')
+            self._outputs = outputs[:, :, -self._input_size:]
 
             # Get the number of time frames the decoder has to produce.
             # Note that we will produce sequences over the entire length of the batch. Maybe this
@@ -390,7 +393,11 @@ class TacotronTrainingHelper(seq2seq.Helper):
             # During training we do not use the last steps outputs as the next steps inputs.
             # We will feed the r'th ground truth frame from the Mel. spectrogram we prepared
             # earlier.
+
             next_inputs = self._outputs[:, time, :]
+            print('pre_fetch_next_inputs', next_inputs)
+            next_inputs.set_shape(shape=(self._batch_size, self._input_size))
+            print('pre_fetch_next_inputs.set_shape', next_inputs)
 
             # Use the resulting state from the last step as the next state.
             next_state = state

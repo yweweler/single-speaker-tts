@@ -2,6 +2,7 @@ import abc
 import csv
 import os
 
+import librosa
 import numpy as np
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
@@ -129,21 +130,21 @@ class DatasetHelper:
             linear_mag_db = np.pad(linear_mag_db, [[0, n_padding_frames], [0, 0]], mode="constant")
 
         # Reduce `reduction_factor` consecutive frames into a single frame.
-        # mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
-        # linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
+        mel_mag_db = mel_mag_db.reshape((-1, mel_mag_db.shape[1] * reduction_factor))
+        linear_mag_db = linear_mag_db.reshape((-1, linear_mag_db.shape[1] * reduction_factor))
 
         return mel_mag_db, linear_mag_db
 
 
 class LJSpeechDatasetHelper(DatasetHelper):
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = 6.0
+    mel_mag_ref_db = 20
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
     mel_mag_max_db = 100.0
 
     # Linear scale spectrogram reference dB over the entire dataset.
-    linear_ref_db = 35.7
+    linear_ref_db = 20
 
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
@@ -239,7 +240,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
         # TODO: Determine a better silence reference level for the LJSpeech dataset (See: #9).
         # Remove silence at the beginning and end of the wav so the network does not have to learn
         # some random initial silence delay after which it is allowed to speak.
-        # wav, _ = trim_silence(wav)
+        wav, _ = librosa.effects.trim(wav)
 
         # Calculate the linear scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers

@@ -9,11 +9,11 @@ model_params = tf.contrib.training.HParams(
     sampling_rate=22050,
 
     # FFT window size.
-    n_fft=1024,
+    n_fft=2048,
 
     # Windows length in ms.
     # win_len=25.0,
-    win_len=45.0,
+    win_len=50.0,
 
     # Window stride in ms.
     # win_hop=8.0,
@@ -32,10 +32,10 @@ model_params = tf.contrib.training.HParams(
     n_mfcc=13,
 
     # Tacotron reduction factor r.
-    reduction=3,
+    reduction=5,
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=False,
+    apply_post_processing=True,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(

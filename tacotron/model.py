@@ -73,6 +73,21 @@ class Tacotron:
         # Linear spectrogram loss measured at the and of the network.
         self.loss_op_post_processing = None
 
+        self.batch_counter = None
+        self.sum_loss = None
+        self.sum_loss_decoder = None
+        self.sum_loss_post_processing = None
+
+        self.update_sum_loss = None
+        self.update_sum_loss_decoder = None
+        self.update_sum_loss_post_processing = None
+
+        self.avg_loss = None
+        self.avg_loss_decoder = None
+        self.avg_loss_post_processing = None
+
+        self.update_batch_counter = None
+
         # Decoded Mel. spectrogram, shape=(B, T_spec, n_mels).
         self.output_mel_spec = None
 
@@ -171,8 +186,8 @@ class Tacotron:
             attention_mechanism = tfc.seq2seq.BahdanauAttention(
                 num_units=n_attention_units,
                 memory=encoder_outputs,
-                memory_sequence_length=None,
-                dtype=tf.float32
+                # memory_sequence_length=None,
+                # dtype=tf.float32
             )
 
             # Create the attention RNN cell.
@@ -198,15 +213,15 @@ class Tacotron:
             # NOTE: This is actually derived from the Tacotron 2 paper and only an experiment.
             # ======================================================================================
             # => (B, T_sent, n_attention_units * 2) = (B, T_sent, 512)
-            concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
+            # concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
 
             # => (B, T_sent, n_decoder_units) = (B, T_sent, 256)
-            concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, n_decoder_units)
+            # concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, n_decoder_units)
             # ======================================================================================
 
             # Stack several GRU cells and apply a residual connection after each cell.
             # Before the input reaches the decoder RNN it passes through the attention cell.
-            cells = [concat_cell]
+            cells = [wrapped_attention_cell]
             for i in range(n_decoder_layers):
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
                 cell = tf.nn.rnn_cell.GRUCell(num_units=n_decoder_units, name='gru_cell')
@@ -222,7 +237,7 @@ class Tacotron:
             output_cell = tfc.rnn.OutputProjectionWrapper(
                 cell=decoder_cell,
                 output_size=self.hparams.decoder.target_size * self.hparams.reduction,
-                activation=tf.nn.sigmoid
+                # activation=tf.nn.sigmoid
             )
 
             # TODO: Experiment with initialising using the encoder state:
@@ -320,6 +335,8 @@ class Tacotron:
         # shape => (B, T_spec // r, n_mels * r)
         decoder_outputs = self.decoder(encoder_outputs, encoder_state)
 
+        tf.summary.image("reduced_decoder_outputs", tf.expand_dims(decoder_outputs, -1))
+
         # shape => (B, T_spec, n_mels)
         decoder_outputs = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
 
@@ -334,7 +351,7 @@ class Tacotron:
         # shape => (B, T_spec, (1 + n_fft // 2))
         outputs = tf.layers.dense(inputs=outputs,
                                   units=(1 + self.hparams.n_fft // 2),
-                                  activation=tf.nn.sigmoid,
+                                  # activation=tf.nn.sigmoid,
                                   kernel_initializer=tf.glorot_normal_initializer(),
                                   bias_initializer=tf.glorot_normal_initializer())
 
@@ -343,13 +360,48 @@ class Tacotron:
 
         # TODO: For debug purposes only. (Remove once I im implemented train/eval/test)
         if self.training or True:
+            inp_mel_spec = self.inp_mel_spec
+            inp_linear_spec = self.inp_linear_spec
+
+            inp_mel_spec = tf.reshape(inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
+            inp_linear_spec = tf.reshape(inp_linear_spec, [batch_size, -1, (1 + self.hparams.n_fft // 2)])
+
+            # ======================================================================================
+            mel_spec_img = tf.expand_dims(
+                tf.reshape(inp_mel_spec[0], (1, -1, self.hparams.n_mels)), -1)
+
+            mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
+            mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
+            tf.summary.image('mel_spec_gt_loss', mel_spec_img, max_outputs=1)
+
+            # Convert thew linear spectrogram into an image that can be displayed.
+            # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+            linear_spec_image = tf.expand_dims(
+                tf.reshape(inp_linear_spec[0], (1, -1, (1 + self.hparams.n_fft // 2))), -1)
+
+            # => shape=(1, (1 + n_fft // 2), T_spec, 1)
+            linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+            linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+            tf.summary.image('linear_spec_gt_loss', linear_spec_image, max_outputs=1)
+            # ======================================================================================
+
+            output_mel_spec = self.output_mel_spec
+            output_linear_spec = self.output_linear_spec
+
+            # if self.training is False:
+            #     n_frames = tf.shape(self.inp_mel_spec)[1]
+            #
+            #     # Limit the number of produced slices to that in the input data.
+            #     output_mel_spec = output_mel_spec[:, :n_frames, :]
+            #     output_linear_spec = output_linear_spec[:, :n_frames, :]
+
             # Calculate decoder Mel. spectrogram loss.
             self.loss_op_decoder = tf.reduce_mean(
-                tf.abs(self.inp_mel_spec - self.output_mel_spec))
+                tf.abs(inp_mel_spec - output_mel_spec))
 
             # Calculate post-processing linear spectrogram loss.
             self.loss_op_post_processing = tf.reduce_mean(
-                tf.abs(self.inp_linear_spec - self.output_linear_spec))
+                tf.abs(inp_linear_spec - output_linear_spec))
 
             # Combine the decoder and the post-processing losses.
             self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
@@ -372,10 +424,27 @@ class Tacotron:
                 A tensor of type `string` containing the serialized `Summary` protocol
                 buffer containing all merged model summaries.
         """
-        with tf.name_scope('loss'):
-            tf.summary.scalar('loss', self.loss_op)
-            tf.summary.scalar('loss_decoder', self.loss_op_decoder)
-            tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
+        # Accumulate loss over batches for evaluation purposes.
+        if self.training is False:
+            self.batch_counter = tf.Variable(initial_value=-1.0, trainable=False, dtype=tf.float32)
+            self.sum_loss = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
+            self.sum_loss_decoder = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
+            self.sum_loss_post_processing = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
+
+            self.update_batch_counter = tf.assign_add(self.batch_counter, 1)
+            self.update_sum_loss = tf.assign_add(self.sum_loss, self.loss_op)
+            self.update_sum_loss_decoder = tf.assign_add(self.sum_loss_decoder, self.loss_op_decoder)
+            self.update_sum_loss_post_processing = tf.assign_add(self.sum_loss_post_processing, self.loss_op_post_processing)
+
+            self.avg_loss = self.sum_loss / self.batch_counter
+            self.avg_loss_decoder = self.sum_loss_decoder / self.batch_counter
+            self.avg_loss_post_processing = self.sum_loss_post_processing / self.batch_counter
+
+        if self.training is True:
+            with tf.name_scope('loss'):
+                tf.summary.scalar('loss', self.loss_op)
+                tf.summary.scalar('loss_decoder', self.loss_op_decoder)
+                tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
         with tf.name_scope('normalized_inputs'):
             # Convert the mel spectrogram into an image that can be displayed.

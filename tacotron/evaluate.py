@@ -156,10 +156,14 @@ def evaluate(model, n_samples):
         evaluation_params.checkpoint_save_run
     )
 
+    # Get the checkpoints global step from the checkpoints file name.
+    global_step = int(checkpoint_file.split('-')[-1])
     saver = tf.train.Saver()
 
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
-    summary_op = tf.summary.merge_all()
+    summary_op = tf.summary.merge_all()  # tacotron_model.summary()
+
+    tacotron_model.summary()
 
     # Create the evaluation session.
     session = start_session()
@@ -168,28 +172,45 @@ def evaluate(model, n_samples):
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
-    loss_sum = 0
+    avg_loss = None
+    avg_loss_decoder = None
+    avg_loss_post_processing = None
+
+    batch_count = 0
 
     # Start evaluation.
+    summary = None
     while True:
         try:
-            loss = session.run([loss_op])
-            # Accumulate the batch losses.
-            loss_sum += loss[0]
-            print(loss[0])
+            summary, _, _, _, _ = session.run([
+                # loss_op,
+                summary_op,
+                tacotron_model.update_batch_counter,
+                tacotron_model.update_sum_loss,
+                tacotron_model.update_sum_loss_decoder,
+                tacotron_model.update_sum_loss_post_processing
+            ])
         except tf.errors.OutOfRangeError:
             break
 
-    # Calculate the average batch loss.
-    avg_loss = loss_sum / n_samples
-    print(avg_loss)
+    print('batch_counter', )
 
+    n_batches = tacotron_model.batch_counter.eval(session)
+    avg_loss = tacotron_model.sum_loss.eval(session) / n_batches
+    avg_loss_decoder = tacotron_model.sum_loss_decoder.eval(session) / n_batches
+    avg_loss_post_processing = tacotron_model.sum_loss_post_processing.eval(session) / n_batches
+    print('=' * 32)
+
+    # TODO: Fix all other summaries since I want to see them too. (decoder / post_proc / audio /
+    # spectrograms)
     # Collect the models summaries and add the evaluation loss.
     eval_summary = tf.Summary()
-    eval_summary.ParseFromString(session.run(summary_op))
+    eval_summary.ParseFromString(summary)
     eval_summary.value.add(tag='loss/loss', simple_value=avg_loss)
+    eval_summary.value.add(tag='loss/loss_decoder', simple_value=avg_loss_decoder)
+    eval_summary.value.add(tag='loss/loss_post_processing', simple_value=avg_loss_post_processing)
 
-    summary_writer.add_summary(eval_summary, 1)
+    summary_writer.add_summary(eval_summary, global_step=global_step)
 
     session.close()
 

@@ -95,8 +95,8 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     mel_spec, lin_spec = tf.py_func(dataset.load_audio, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel_spec.set_shape((None, model_params.n_mels))
-    lin_spec.set_shape((None, (1 + model_params.n_fft // 2)))
+    mel_spec.set_shape((None, model_params.n_mels * model_params.reduction))
+    lin_spec.set_shape((None, (1 + model_params.n_fft // 2) * model_params.reduction))
 
     # Get the number spectrogram time-steps (used as the number of time frames when generating).
     n_time_frames = tf.shape(mel_spec)[0]

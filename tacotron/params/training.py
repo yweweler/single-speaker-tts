@@ -8,7 +8,7 @@ training_params = tf.contrib.training.HParams(
     n_epochs=5000,
 
     # Batch size used for training.
-    batch_size=4,
+    batch_size=32,
 
     # Number of threads used to load data during training.
     n_threads=4,
@@ -27,7 +27,7 @@ training_params = tf.contrib.training.HParams(
 
     # Flag enabling the bucketing mechanism to output batches of smaller size than
     # `batch_size` if not enough samples are available.
-    allow_smaller_batches=True,
+    allow_smaller_batches=False,
 
     # Checkpoint folder used for training.
     checkpoint_dir='/tmp/tacotron/ljspeech_all',
@@ -45,7 +45,7 @@ training_params = tf.contrib.training.HParams(
     performance_log_steps=50,
 
     # The clipping ratio used for gradient clipping by global norm.
-    gradient_clip_norm=1.0,
+    gradient_clip_norm=5.0,
 
     # Initial learning rate.
     lr=0.001,
