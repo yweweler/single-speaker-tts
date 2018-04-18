@@ -160,3 +160,24 @@ def test_load_id_conversion(dataset):
     # Test reconstruction.
     restored_sentence = dataset.idx2sent(sentence)
     assert folded_sentence == restored_sentence
+
+
+def test_trailing_eos(dataset):
+    """
+    Test if sentences in id representation always have an trailing EOS token.
+
+    Args:
+        dataset (LJSpeechDatasetHelper):
+            Dataset loading helper instance.
+    """
+
+    # Load all samples from the dataset.
+    n_samples = None
+
+    id_sentences, sentence_lengths, file_paths = dataset.load(max_samples=n_samples,
+                                                              min_len=None,
+                                                              max_len=None)
+
+    # Check for each token if it ends with an EOS token.
+    for sentence in id_sentences:
+        assert np.fromstring(sentence, dtype=np.int32)[-1] == INIT_CHAR_DICT['eos']
