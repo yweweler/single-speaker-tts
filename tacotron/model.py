@@ -7,7 +7,7 @@ from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
 from tacotron.params.model import model_params
-from tacotron.wrappers import PrenetWrapper, ConcatOutputAndAttentionWrapper
+from tacotron.wrappers import PrenetWrapper
 
 
 class Tacotron:
@@ -147,6 +147,106 @@ class Tacotron:
                                   training=self.training)
 
         return network, state
+
+    def attention_decoder(self, inputs, memory, num_units=None, scope="attention_decoder",
+                          reuse=None):
+        '''Applies a GRU to `inputs`, while attending `memory`.
+        Args:
+          inputs: A 3d tensor with shape of [N, T', C']. Decoder inputs.
+          memory: A 3d tensor with shape of [N, T, C]. Outputs of encoder network.
+          num_units: An int. Attention size.
+          scope: Optional scope for `variable_scope`.
+          reuse: Boolean, whether to reuse the weights of a previous layer
+            by the same name.
+
+        Returns:
+          A 3d tensor with shape of [N, T, num_units].
+        '''
+        with tf.variable_scope(scope, reuse=reuse):
+            if num_units is None:
+                num_units = inputs.get_shape().as_list[-1]
+
+            attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units,
+                                                                       memory)
+            decoder_cell = tf.contrib.rnn.GRUCell(num_units)
+            cell_with_attention = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,
+                                                                      attention_mechanism,
+                                                                      num_units,
+                                                                      alignment_history=True)
+            outputs, state = tf.nn.dynamic_rnn(cell_with_attention, inputs,
+                                               dtype=tf.float32)  # ( N, T', 16)
+
+        return outputs, state
+
+    def gru(self, inputs, num_units=None, bidirection=False, scope="gru", reuse=None):
+        '''Applies a GRU.
+
+        Args:
+          inputs: A 3d tensor with shape of [N, T, C].
+          num_units: An int. The number of hidden units.
+          bidirection: A boolean. If True, bidirectional results
+            are concatenated.
+          scope: Optional scope for `variable_scope`.
+          reuse: Boolean, whether to reuse the weights of a previous layer
+            by the same name.
+
+        Returns:
+          If bidirection is True, a 3d tensor with shape of [N, T, 2*num_units],
+            otherwise [N, T, num_units].
+        '''
+        with tf.variable_scope(scope, reuse=reuse):
+            if num_units is None:
+                num_units = inputs.get_shape().as_list[-1]
+
+            cell = tf.contrib.rnn.GRUCell(num_units)
+            if bidirection:
+                cell_bw = tf.contrib.rnn.GRUCell(num_units)
+                outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell, cell_bw, inputs,
+                                                             dtype=tf.float32)
+                return tf.concat(outputs, 2)
+            else:
+                outputs, _ = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)
+                return outputs
+
+    def decoder1(self, _inputs, memory, is_training=True, scope="decoder1", reuse=None):
+        '''
+        Args:
+          _inputs: A 3d tensor with shape of [N, T_y/r, n_mels(*r)]. Shifted log melspectrogram of sound files.
+          memory: A 3d tensor with shape of [N, T_x, E].
+          is_training: Whether or not the layer is in training mode.
+          scope: Optional scope for `variable_scope`
+          reuse: Boolean, whether to reuse the weights of a previous layer
+            by the same name.
+
+        Returns
+          Predicted log melspectrogram tensor with shape of [N, T_y/r, n_mels*r].
+        '''
+        with tf.variable_scope(scope, reuse=reuse):
+            # Decoder pre-net
+            _inputs = pre_net(inputs=_inputs,
+                              layers=(
+                                  # (units, dropout, activation).
+                                  (256, 0.5, tf.nn.relu),
+                                  (128, 0.5, tf.nn.relu)
+                              ),
+                              training=is_training)  # (N, T_y/r, E/2)
+
+            # Attention RNN
+            dec, state = self.attention_decoder(_inputs, memory, num_units=256)  # (N, T_y/r, E)
+
+            ## for attention monitoring
+            alignments = tf.transpose(state.alignment_history.stack(), [1, 2, 0])
+
+            tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
+
+            # Decoder RNNs
+            dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru1")  # (N, T_y/r, E)
+            dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru2")  # (N, T_y/r, E)
+
+            # Outputs => (N, T_y/r, n_mels*r)
+            mel_hats = tf.layers.dense(dec, 80 * self.hparams.reduction)
+
+        return mel_hats, alignments
 
     def decoder(self, encoder_outputs, encoder_state):
         """
@@ -332,8 +432,18 @@ class Tacotron:
         # encoder_state.shape => (B, 2, 256)
         encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
 
-        # shape => (B, T_spec // r, n_mels * r)
-        decoder_outputs = self.decoder(encoder_outputs, encoder_state)
+        decoder_inputs = tf.concat((
+                tf.zeros_like(self.inp_mel_spec[:, :1, :]),
+                self.inp_mel_spec[:, :-1, :]
+        ), 1)  # (N, Ty/r, n_mels*r)
+
+        decoder_inputs = decoder_inputs[:, :, -self.hparams.n_mels:]  # (N, Ty/r, n_mels)
+
+        # # shape => (B, T_spec // r, n_mels * r)
+        # decoder_outputs = self.decoder(encoder_outputs, encoder_state)
+        decoder_outputs, _ = self.decoder1(_inputs=decoder_inputs,
+                                           memory=encoder_outputs,
+                                           is_training=self.training)
 
         tf.summary.image("reduced_decoder_outputs", tf.expand_dims(decoder_outputs, -1))
 
@@ -364,7 +474,8 @@ class Tacotron:
             inp_linear_spec = self.inp_linear_spec
 
             inp_mel_spec = tf.reshape(inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
-            inp_linear_spec = tf.reshape(inp_linear_spec, [batch_size, -1, (1 + self.hparams.n_fft // 2)])
+            inp_linear_spec = tf.reshape(inp_linear_spec,
+                                         [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
             # ======================================================================================
             mel_spec_img = tf.expand_dims(
@@ -428,13 +539,17 @@ class Tacotron:
         if self.training is False:
             self.batch_counter = tf.Variable(initial_value=-1.0, trainable=False, dtype=tf.float32)
             self.sum_loss = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
-            self.sum_loss_decoder = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
-            self.sum_loss_post_processing = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
+            self.sum_loss_decoder = tf.Variable(initial_value=0.0, trainable=False,
+                                                dtype=tf.float32)
+            self.sum_loss_post_processing = tf.Variable(initial_value=0.0, trainable=False,
+                                                        dtype=tf.float32)
 
             self.update_batch_counter = tf.assign_add(self.batch_counter, 1)
             self.update_sum_loss = tf.assign_add(self.sum_loss, self.loss_op)
-            self.update_sum_loss_decoder = tf.assign_add(self.sum_loss_decoder, self.loss_op_decoder)
-            self.update_sum_loss_post_processing = tf.assign_add(self.sum_loss_post_processing, self.loss_op_post_processing)
+            self.update_sum_loss_decoder = tf.assign_add(self.sum_loss_decoder,
+                                                         self.loss_op_decoder)
+            self.update_sum_loss_post_processing = tf.assign_add(self.sum_loss_post_processing,
+                                                                 self.loss_op_post_processing)
 
             self.avg_loss = self.sum_loss / self.batch_counter
             self.avg_loss_decoder = self.sum_loss_decoder / self.batch_counter
