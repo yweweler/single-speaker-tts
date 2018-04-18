@@ -28,7 +28,7 @@ class DatasetHelper:
         return idx
 
     def idx2sent(self, idx):
-        sentence = ''.join([self._idx2char_dict[char] for char in idx])
+        sentence = ''.join([self._idx2char_dict[_id] for _id in idx])
         return sentence
 
     def utf8_to_ascii(self, sentence):
@@ -206,8 +206,9 @@ class LJSpeechDatasetHelper(DatasetHelper):
 
                 # Skip sentences in case they do not meet the length requirements.
                 sentence_len = len(ascii_sentence)
-                if sentence_len < min_len or sentence_len > max_len:
-                    continue
+                if min_len is not None and max_len is not None:
+                    if sentence_len < min_len or sentence_len > max_len:
+                        continue
 
                 sentences.append(ascii_sentence)
 
