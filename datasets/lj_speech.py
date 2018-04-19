@@ -12,7 +12,25 @@ from tacotron.params.model import model_params
 
 
 class DatasetHelper:
+    """
+    Dataset loading helper base class.
+    """
+
     def __init__(self, dataset_folder, char_dict, fill_dict):
+        """
+        DatasetHelper constructor.
+
+        Arguments:
+            dataset_folder (str):
+                Path to the dataset folder.
+
+            char_dict (dict):
+                TODO
+
+            fill_dict (boolean):
+                TODO
+        """
+        # TODO: Add documentation.
         self._dataset_folder = dataset_folder
         self._char2idx_dict = char_dict
         self._fill_dict = fill_dict
@@ -24,19 +42,73 @@ class DatasetHelper:
             self._idx2char_dict[_id] = char
 
     def sent2idx(self, sentence):
-        idx = [self._char2idx_dict[char] for char in sentence]
-        return idx
+        """
+        Convert each character of a string into its corresponding dictionary id.
+
+        Arguments:
+            sentence (str):
+                Sentence to be converted.
+
+        Returns:
+            ids (:obj:`list` of int):
+                List containing the id's corresponding to each character in the input sentence.
+                With a length of: `len(ids) == len(sentence)`.
+
+        Raises:
+            KeyError:
+                If a character was encountered that is not contained in the translation dictionary.
+        """
+        return [self._char2idx_dict[char] for char in sentence]
 
     def idx2sent(self, idx):
-        sentence = ''.join([self._idx2char_dict[_id] for _id in idx])
-        return sentence
+        """
+        Convert a list of dictionary id's into the corresponding characters.
+
+        Arguments:
+            idx (:obj:`list` of int):
+                List of dictionary id's to be converted.
+
+        Returns:
+            sentence (str):
+                Converted sentence.
+                With a length of: `len(sentence) == len(idx)`.
+
+        Raises:
+            KeyError:
+                If a id was encountered that is not contained in the translation dictionary.
+        """
+        return ''.join([self._idx2char_dict[_id] for _id in idx])
 
     def utf8_to_ascii(self, sentence):
+        """
+        Convert a UTF-8 encoded string into ASCII representation.
+
+        UTF-8 symbols that can not be converted into ASCII representation are dropped.
+
+        Arguments:
+            sentence (str):
+                UTF-8 encoded string to be converted.
+
+        Returns:
+            ascii_sentence (str):
+                ASCII encoded string.
+        """
+        # Convert the UTF-8 sentence into bytes representation for decoding.
         utf_sentence = bytes(sentence, 'utf-8')
+
+        # Decode the byte representation into ASCII representation.
         ascii_sentence = utf_sentence.decode('ascii', errors='ignore')
+
         return ascii_sentence
 
     def update_char_dict(self, sentence):
+        """
+        Populate the char2idx and idx2char translation dictionaries with characters from a sentence.
+
+        Arguments:
+            sentence (str):
+                String whose characters are used to update the translation dictionaries.
+        """
         # Update character dictionary with the chars contained in the sentence.
         for char in sentence:
             if char not in self._char2idx_dict.keys():
@@ -46,12 +118,49 @@ class DatasetHelper:
                 self._idx2char_dict[_id] = char
 
     def replace_abbreviations(self, sentence):
+        """
+        Expand / replace abbreviations inside a string.
+
+        Arguments:
+            sentence (str):
+                String in which to expand abbreviations.
+
+        Returns:
+            sentence (str):
+                String in which abbreviations with their expanded forms.
+        """
         for abbreviation, expansion in self._abbreviations.items():
+            # Replace abbreviation if it exists in the string.
             sentence = sentence.replace(abbreviation, expansion)
 
         return sentence
 
     def process_sentences(self, sentences):
+        """
+        Processes a list of sentences.
+
+        The processing steps applied to each sentence are:
+            - Convert sentence to lowercase.
+            - Expand / replace abbreviations.
+            - If requested (`_fill_dict == True`) update the char2idx and idx2char dictionaries.
+            - Convert sentence into a sequence of dictionary id's.
+            - Append the EOS token.
+
+        Arguments:
+            sentences (:obj:`list` of str):
+                List of sentences to be processed.
+
+        Returns:
+            id_sequences (:obj:`list` of bytes):
+                List of Python bytes exhibiting a copy of a numpy array containing the integer id's.
+                Each entry resembles `np.array(sentence_xy_ids, dtype=np.int32).tostring()`.
+                Note that is is done for better feeding into tensorflow tensors.
+                Its length fulfills `len(sequence_lengths) == len(sentences)`.
+            sequence_lengths (:obj:`list` of int):
+                List containing the produced sequence length for each sentence. This sequence
+                lengths include the EOS tokens. Its length fulfills
+                `len(sequence_lengths) == len(sentences)`.
+        """
         id_sequences = list()
         sequence_lengths = list()
 
@@ -77,21 +186,70 @@ class DatasetHelper:
             # Append str. representation so that tf.Tensor handles this as an collection of objects.
             # This allows us to store sequences of different length in a single tensor.
             id_sequences.append(np.array(idx, dtype=np.int32).tostring())
-            sequence_lengths.append(len(sentence) + 1)
+            sequence_lengths.append(len(idx))
 
         return id_sequences, sequence_lengths
 
     @abc.abstractmethod
     def load(self, max_samples, min_len, max_len):
+        """
+        Load samples from the dataset.
+
+        Arguments:
+            max_samples (int):
+                The maximal number of samples to load.
+
+            min_len (int):
+                Minimal length a sentence has to have to be loaded. If `len(sentence) < min_len`
+                loading the sentence is skipped.
+                If None the minimal sentence length is not checked.
+
+            max_len (int):
+                Maximal length a sentence is allowed to to be loaded. If `len(sentence) > max_len`
+                loading the sentence is skipped.
+                If None the maximal sentence length is not checked.
+
+        Returns:
+            (id_sentences, sentence_lengths, file_paths):
+                id_sequences (:obj:`list` of bytes):
+                    List of Python bytes exhibiting a copy of a numpy array containing the integer id's.
+                    Each entry resembles `np.array(sentence_xy_ids, dtype=np.int32).tostring()`.
+                    Note that is is done for better feeding into tensorflow tensors.
+                    Its length fulfills `len(sequence_lengths) == len(sentences)`.
+                sequence_lengths (:obj:`list` of int):
+                    List containing the produced sequence length for each sentence. This sequence
+                    lengths include the EOS tokens. Its length fulfills
+                    `len(sequence_lengths) == len(sentences)`.
+                file_paths (:obj:`list` of str):
+                    List of paths to the audio recordings of each sentence.
+                    Its length fulfills `len(sequence_lengths) == len(sentences)`.
+        """
         raise NotImplementedError
 
     @staticmethod
     @abc.abstractstaticmethod
     def load_audio(file_path):
+        """
+        Load a audio recording from file and calculate features.
+
+        Arguments:
+            file_path (str):
+                Path to the audio file to be loaded.
+
+        Returns:
+            (mel_mag_db, linear_mag_db):
+                mel_mag_db (np.ndarray):
+                    Mel. scale magnitude spectrogram. The arrays dtype is np.float32 and the
+                    shape is shape=(T_spec, n_mels).
+                linear_mag_db (np.ndarray):
+                    linear. scale magnitude spectrogram. The arrays dtype is np.float32 and the
+                    shape is shape=(T_spec, 1 + n_fft // 2).
+        """
         raise NotImplementedError
 
     @staticmethod
     def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
+        # TODO: Refactor function, since it does also reshape the data to the reduced shape.
         """
         Adds zero padding frames in the time axis to the Mel. scale and linear scale spectrogram's
         such that the number of frames is a multiple of the `reduction_factor`.
@@ -206,8 +364,13 @@ class LJSpeechDatasetHelper(DatasetHelper):
 
                 # Skip sentences in case they do not meet the length requirements.
                 sentence_len = len(ascii_sentence)
-                if min_len is not None and max_len is not None:
-                    if sentence_len < min_len or sentence_len > max_len:
+                if min_len is not None:
+                    if sentence_len < min_len:
+                        continue
+
+                # Skip sentences in case they do not meet the length requirements.
+                if max_len is not None:
+                    if sentence_len > max_len:
                         continue
 
                 sentences.append(ascii_sentence)
@@ -252,7 +415,8 @@ class LJSpeechDatasetHelper(DatasetHelper):
         # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for
         # example are applied to each frame automatically.
         mel_spec = mel_scale_spectrogram(wav, model_params.n_fft, sr, model_params.n_mels,
-                                         model_params.mel_fmin, model_params.mel_fmax, hop_len, win_len, 1).T
+                                         model_params.mel_fmin, model_params.mel_fmax, hop_len,
+                                         win_len, 1).T
 
         # Convert the linear spectrogram into decibel representation.
         linear_mag = np.abs(linear_spec)

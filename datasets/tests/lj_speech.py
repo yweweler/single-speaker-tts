@@ -181,3 +181,7 @@ def test_trailing_eos(dataset):
     # Check for each token if it ends with an EOS token.
     for sentence in id_sentences:
         assert np.fromstring(sentence, dtype=np.int32)[-1] == INIT_CHAR_DICT['eos']
+
+
+# TODO: Test if the expansion of abbreviations works as expected.
+# TODO: Test the `process_sentences` function.
