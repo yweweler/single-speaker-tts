@@ -96,3 +96,6 @@ ENV/
 
 # Pycharm project folder
 .idea/*
+
+# pytest
+.pytest_cache
