@@ -43,7 +43,7 @@ def decibel_to_magnitude(mag_db):
 
             Calculation: power(10, mag_db / 20)
     """
-    if any(mag_db < -100.0):
+    if (mag_db < -100.0).any():
         raise AssertionError('"conversion.decibel_to_magnitude" was asked to convert a dB value '
                              'smaller -100 dB.')
 
