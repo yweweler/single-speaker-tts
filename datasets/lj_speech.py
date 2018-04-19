@@ -25,12 +25,23 @@ class DatasetHelper:
                 Path to the dataset folder.
 
             char_dict (dict):
-                TODO
+                char2idx translation dictionary.
+                It is required that the passed dictionary always contains two predefined tokens.
+                These tokens are the padding token <PAD> with key="pad" and the end of sequence
+                token <EOS> with key="eos".
+
+                In case `fill_dict` is True the dictionary is automatically populated with
+                symbols encountered while loading the dataset. Other wise the passed dictionary
+                is expected to contain all symbols that are known to be in the dataset.
+
+                The reverse (idx2char) dictionary is generated automatically.
 
             fill_dict (boolean):
-                TODO
+                Flag controlling whether the cha2idx and idx2char translation dictionaries should
+                be updated using the loaded data.
+                If True the dictionaries are augmented with characters from the dataset.
+                If False the dictionary is expected to be complete and will not be updated.
         """
-        # TODO: Add documentation.
         self._dataset_folder = dataset_folder
         self._char2idx_dict = char_dict
         self._fill_dict = fill_dict
@@ -124,6 +135,7 @@ class DatasetHelper:
         Arguments:
             sentence (str):
                 String in which to expand abbreviations.
+                The string is expected to only contain lowercase characters.
 
         Returns:
             sentence (str):
@@ -295,6 +307,9 @@ class DatasetHelper:
 
 
 class LJSpeechDatasetHelper(DatasetHelper):
+    """
+    Dataset loading helper for the LJSpeech v1.1 dataset.
+    """
     # Mel. scale spectrogram reference dB over the entire dataset.
     mel_mag_ref_db = 20
 

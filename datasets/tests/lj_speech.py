@@ -30,11 +30,10 @@ def test_load_all(dataset):
     """
     Test loading all samples from the dataset.
 
-    Args:
+    Arguments:
         dataset (LJSpeechDatasetHelper):
             Dataset loading helper instance.
     """
-
     # The total number of samples in the dataset.
     n_samples = 13100
 
@@ -51,11 +50,10 @@ def test_load_n(dataset):
     """
     Test loading only N samples from the dataset.
 
-    Args:
+    Arguments:
         dataset (LJSpeechDatasetHelper):
             Dataset loading helper instance.
     """
-
     # The total number of samples to load.
     n_samples = 3438
 
@@ -72,11 +70,10 @@ def test_load_n_in_range(dataset):
     """
     Test loading only N samples from the dataset with a sentence length in a certain range.
 
-    Args:
+    Arguments:
         dataset (LJSpeechDatasetHelper):
             Dataset loading helper instance.
     """
-
     # The total number of samples to load.
     n_samples = 456
     min_len = 13
@@ -99,7 +96,7 @@ def test_load_sentence_folding(dataset):
     """
     Test folding (replace unwanted characters / lowercase conversion) of sentences.
 
-    Args:
+    Arguments:
         dataset (LJSpeechDatasetHelper):
             Dataset loading helper instance.
     """
@@ -119,11 +116,10 @@ def test_load_id_conversion(dataset):
     """
     Test conversion of sentences to ids and back.
 
-    Args:
+    Arguments:
         dataset (LJSpeechDatasetHelper):
             Dataset loading helper instance.
     """
-
     # Load all samples from the dataset.
     n_samples = None
 
@@ -166,11 +162,10 @@ def test_trailing_eos(dataset):
     """
     Test if sentences in id representation always have an trailing EOS token.
 
-    Args:
+    Arguments:
         dataset (LJSpeechDatasetHelper):
             Dataset loading helper instance.
     """
-
     # Load all samples from the dataset.
     n_samples = None
 
@@ -183,5 +178,24 @@ def test_trailing_eos(dataset):
         assert np.fromstring(sentence, dtype=np.int32)[-1] == INIT_CHAR_DICT['eos']
 
 
-# TODO: Test if the expansion of abbreviations works as expected.
-# TODO: Test the `process_sentences` function.
+def test_abbreviation_expansion(dataset):
+    """
+    Test if the expansion / replacement of abbreviations works as expected.
+    Arguments:
+        dataset (LJSpeechDatasetHelper):
+            Dataset loading helper instance.
+    """
+    # ==============================================================================================
+    # (Manually folded) 302. sentence from metadata.csv.
+    # ==============================================================================================
+    pos = 302 - 1
+    sentence = 'Neild gives, on the authority of Mr. Burchell, the under sheriff of Middlesex,'
+    sentence = sentence.lower()
+
+    target_sentence = 'Neild gives on the authority of Mister Burchell the under sheriff of ' \
+                      'Middlesex'
+    target_sentence = target_sentence.lower()
+
+    # Test expansion and replacement of abbreviations.
+    processed_sentence = dataset.replace_abbreviations(sentence)
+    assert target_sentence == processed_sentence
