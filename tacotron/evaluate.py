@@ -93,8 +93,8 @@ def batched_placeholders(dataset, max_samples, batch_size):
     mel_spec, lin_spec = tf.py_func(dataset.load_audio, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
-    mel_spec.set_shape((None, model_params.n_mels))
-    lin_spec.set_shape([None, (1 + model_params.n_fft // 2)])
+    mel_spec.set_shape((None, model_params.n_mels * model_params.reduction))
+    lin_spec.set_shape((None, (1 + model_params.n_fft // 2) * model_params.reduction))
 
     # Get the number spectrogram time-steps (used as the number of time frames when generating).
     n_time_frames = tf.shape(mel_spec)[0]
@@ -161,9 +161,7 @@ def evaluate(model, n_samples):
     saver = tf.train.Saver()
 
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
-    summary_op = tf.summary.merge_all()  # tacotron_model.summary()
-
-    tacotron_model.summary()
+    summary_op = tacotron_model.summary()
 
     # Create the evaluation session.
     session = start_session()
@@ -172,39 +170,42 @@ def evaluate(model, n_samples):
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
-    avg_loss = None
-    avg_loss_decoder = None
-    avg_loss_post_processing = None
+    sum_loss = 0
+    sum_loss_decoder = 0
+    sum_loss_post_processing = 0
 
     batch_count = 0
+    summary = None
 
     # Start evaluation.
-    summary = None
     while True:
         try:
-            summary, _, _, _, _ = session.run([
-                # loss_op,
+            # Evaluate loss functions for the current batch.
+            summary, loss, loss_decoder, loss_post_processing = session.run([
                 summary_op,
-                tacotron_model.update_batch_counter,
-                tacotron_model.update_sum_loss,
-                tacotron_model.update_sum_loss_decoder,
-                tacotron_model.update_sum_loss_post_processing
+                tacotron_model.loss_op,
+                tacotron_model.loss_op_decoder,
+                tacotron_model.loss_op_post_processing,
             ])
+
+            # Accumulate loss values.
+            sum_loss += loss
+            sum_loss_decoder += loss_decoder
+            sum_loss_post_processing += loss_post_processing
+
+            # Increment batch counter.
+            batch_count += 1
+
         except tf.errors.OutOfRangeError:
             break
 
-    print('batch_counter', )
+    avg_loss = sum_loss / batch_count
+    avg_loss_decoder = sum_loss_decoder / batch_count
+    avg_loss_post_processing = sum_loss_post_processing / batch_count
 
-    n_batches = tacotron_model.batch_counter.eval(session)
-    avg_loss = tacotron_model.sum_loss.eval(session) / n_batches
-    avg_loss_decoder = tacotron_model.sum_loss_decoder.eval(session) / n_batches
-    avg_loss_post_processing = tacotron_model.sum_loss_post_processing.eval(session) / n_batches
-    print('=' * 32)
-
-    # TODO: Fix all other summaries since I want to see them too. (decoder / post_proc / audio /
-    # spectrograms)
-    # Collect the models summaries and add the evaluation loss.
+    # Create evaluation summaries.
     eval_summary = tf.Summary()
+
     eval_summary.ParseFromString(summary)
     eval_summary.value.add(tag='loss/loss', simple_value=avg_loss)
     eval_summary.value.add(tag='loss/loss_decoder', simple_value=avg_loss_decoder)

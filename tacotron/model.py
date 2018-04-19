@@ -3,6 +3,7 @@ import tensorflow.contrib as tfc
 from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
+from audio.io import save_wav
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
@@ -78,21 +79,6 @@ class Tacotron:
         self.loss_op_decoder = None
         # Linear spectrogram loss measured at the and of the network.
         self.loss_op_post_processing = None
-
-        self.batch_counter = None
-        self.sum_loss = None
-        self.sum_loss_decoder = None
-        self.sum_loss_post_processing = None
-
-        self.update_sum_loss = None
-        self.update_sum_loss_decoder = None
-        self.update_sum_loss_post_processing = None
-
-        self.avg_loss = None
-        self.avg_loss_decoder = None
-        self.avg_loss_post_processing = None
-
-        self.update_batch_counter = None
 
         # Decoded Mel. spectrogram, shape=(B, T_spec, n_mels).
         self.output_mel_spec = None
@@ -516,15 +502,17 @@ class Tacotron:
         # shape => (B, T_spec, (1 + n_fft // 2))
         self.output_linear_spec = outputs
 
-        # TODO: For debug purposes only. (Remove once I im implemented train/eval/test)
-        if self.is_training() or True:
-            inp_mel_spec = self.inp_mel_spec
-            inp_linear_spec = self.inp_linear_spec
+        inp_mel_spec = self.inp_mel_spec
+        inp_linear_spec = self.inp_linear_spec
 
-            inp_mel_spec = tf.reshape(inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
-            inp_linear_spec = tf.reshape(inp_linear_spec,
-                                         [batch_size, -1, (1 + self.hparams.n_fft // 2)])
+        inp_mel_spec = tf.reshape(inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
+        inp_linear_spec = tf.reshape(inp_linear_spec,
+                                     [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
+        output_mel_spec = self.output_mel_spec
+        output_linear_spec = self.output_linear_spec
+
+        if self.is_training():
             # ======================================================================================
             mel_spec_img = tf.expand_dims(
                 tf.reshape(inp_mel_spec[0], (1, -1, self.hparams.n_mels)), -1)
@@ -544,26 +532,25 @@ class Tacotron:
             tf.summary.image('linear_spec_gt_loss', linear_spec_image, max_outputs=1)
             # ======================================================================================
 
-            output_mel_spec = self.output_mel_spec
-            output_linear_spec = self.output_linear_spec
+        # TODO: This should be part of an Inference / Evaluation helper.
+        if self._mode == Mode.EVAL:
+            # Get the number of ground truth frames in the spectrogram's.
+            n_frames = tf.shape(inp_mel_spec)[1]
 
-            # if self.training is False:
-            #     n_frames = tf.shape(self.inp_mel_spec)[1]
-            #
-            #     # Limit the number of produced slices to that in the input data.
-            #     output_mel_spec = output_mel_spec[:, :n_frames, :]
-            #     output_linear_spec = output_linear_spec[:, :n_frames, :]
+            # Limit the number of produced frames to that in the input data.
+            output_mel_spec = output_mel_spec[:, : n_frames, :]
+            output_linear_spec = output_linear_spec[:, : n_frames, :]
 
-            # Calculate decoder Mel. spectrogram loss.
-            self.loss_op_decoder = tf.reduce_mean(
-                tf.abs(inp_mel_spec - output_mel_spec))
+        # Calculate decoder Mel. spectrogram loss.
+        self.loss_op_decoder = tf.reduce_mean(
+            tf.abs(inp_mel_spec - output_mel_spec))
 
-            # Calculate post-processing linear spectrogram loss.
-            self.loss_op_post_processing = tf.reduce_mean(
-                tf.abs(inp_linear_spec - output_linear_spec))
+        # Calculate post-processing linear spectrogram loss.
+        self.loss_op_post_processing = tf.reduce_mean(
+            tf.abs(inp_linear_spec - output_linear_spec))
 
-            # Combine the decoder and the post-processing losses.
-            self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
+        # Combine the decoder and the post-processing losses.
+        self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
     def get_loss_op(self):
         """
@@ -583,54 +570,34 @@ class Tacotron:
                 A tensor of type `string` containing the serialized `Summary` protocol
                 buffer containing all merged model summaries.
         """
-        # Accumulate loss over batches for evaluation purposes.
-        if self.is_training() is False:
-            self.batch_counter = tf.Variable(initial_value=-1.0, trainable=False, dtype=tf.float32)
-            self.sum_loss = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
-            self.sum_loss_decoder = tf.Variable(initial_value=0.0, trainable=False,
-                                                dtype=tf.float32)
-            self.sum_loss_post_processing = tf.Variable(initial_value=0.0, trainable=False,
-                                                        dtype=tf.float32)
-
-            self.update_batch_counter = tf.assign_add(self.batch_counter, 1)
-            self.update_sum_loss = tf.assign_add(self.sum_loss, self.loss_op)
-            self.update_sum_loss_decoder = tf.assign_add(self.sum_loss_decoder,
-                                                         self.loss_op_decoder)
-            self.update_sum_loss_post_processing = tf.assign_add(self.sum_loss_post_processing,
-                                                                 self.loss_op_post_processing)
-
-            self.avg_loss = self.sum_loss / self.batch_counter
-            self.avg_loss_decoder = self.sum_loss_decoder / self.batch_counter
-            self.avg_loss_post_processing = self.sum_loss_post_processing / self.batch_counter
-
-        if self.is_training() is True:
+        if self._mode == Mode.TRAIN:
             with tf.name_scope('loss'):
                 tf.summary.scalar('loss', self.loss_op)
                 tf.summary.scalar('loss_decoder', self.loss_op_decoder)
                 tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
-        with tf.name_scope('normalized_inputs'):
-            # Convert the mel spectrogram into an image that can be displayed.
-            # => shape=(1, T_spec, n_mels, 1)
-            mel_spec_img = tf.expand_dims(
-                tf.reshape(self.inp_mel_spec[0],
-                           (1, -1, self.hparams.n_mels)), -1)
+            with tf.name_scope('normalized_inputs'):
+                # Convert the mel spectrogram into an image that can be displayed.
+                # => shape=(1, T_spec, n_mels, 1)
+                mel_spec_img = tf.expand_dims(
+                    tf.reshape(self.inp_mel_spec[0],
+                               (1, -1, self.hparams.n_mels)), -1)
 
-            # => shape=(1, n_mels, T_spec, 1)
-            mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
-            mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
-            tf.summary.image('mel_spec', mel_spec_img, max_outputs=1)
+                # => shape=(1, n_mels, T_spec, 1)
+                mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
+                mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
+                tf.summary.image('mel_spec', mel_spec_img, max_outputs=1)
 
-            # Convert thew linear spectrogram into an image that can be displayed.
-            # => shape=(1, T_spec, (1 + n_fft // 2), 1)
-            linear_spec_image = tf.expand_dims(
-                tf.reshape(self.inp_linear_spec[0],
-                           (1, -1, (1 + self.hparams.n_fft // 2))), -1)
+                # Convert thew linear spectrogram into an image that can be displayed.
+                # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+                linear_spec_image = tf.expand_dims(
+                    tf.reshape(self.inp_linear_spec[0],
+                               (1, -1, (1 + self.hparams.n_fft // 2))), -1)
 
-            # => shape=(1, (1 + n_fft // 2), T_spec, 1)
-            linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
-            linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
-            tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
+                # => shape=(1, (1 + n_fft // 2), T_spec, 1)
+                linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+                linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+                tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         with tf.name_scope('normalized_outputs'):
             # Convert the mel spectrogram into an image that can be displayed.
@@ -656,17 +623,15 @@ class Tacotron:
             tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # TODO: Turned off since it is only of used for debugging.
-        if self.is_training() is True and False:
+        if self._mode == Mode.EVAL:
             with tf.name_scope('inference_reconstruction'):
-                win_len = ms_to_samples(self.hparams.win_len,
-                                        sampling_rate=self.hparams.sampling_rate)
-                win_hop = ms_to_samples(self.hparams.win_hop,
-                                        sampling_rate=self.hparams.sampling_rate)
+                win_len = ms_to_samples(self.hparams.win_len, self.hparams.sampling_rate)
+                win_hop = ms_to_samples(self.hparams.win_hop, self.hparams.sampling_rate)
                 n_fft = self.hparams.n_fft
 
                 def __synthesis(spec):
                     print('synthesis ....', spec.shape)
-                    linear_mag_db = inv_normalize_decibel(spec.T, 35.7, 100)
+                    linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
                     _wav = spectrogram_to_wav(linear_mag,
@@ -721,7 +686,7 @@ class Tacotron:
         ph_mel_specs = tf.placeholder(dtype=tf.float32,
                                       shape=(1,
                                              model_params.decoder.maximum_iterations // model_params.reduction,
-                                             model_params.n_mels)
+                                             model_params.n_mels * model_params.reduction)
                                       , name='ph_mel_specs')
 
         ph_lin_specs = tf.placeholder(dtype=tf.float32,
