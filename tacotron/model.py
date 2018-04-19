@@ -10,6 +10,12 @@ from tacotron.params.model import model_params
 from tacotron.wrappers import PrenetWrapper
 
 
+class Mode:
+    TRAIN = 'train'
+    EVAL = 'eval'
+    PREDICT = 'predict'
+
+
 class Tacotron:
     """
     Implementation of the Tacotron architecture as described in
@@ -19,7 +25,7 @@ class Tacotron:
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, inputs, training=True):
+    def __init__(self, inputs, mode):
         """
         Creates an instance of the Tacotron model.
 
@@ -52,10 +58,10 @@ class Tacotron:
                         frames. The shape is shape=(B), with B being the batch size.
 
 
-            training (boolean):
+            mode (Mode):
                 Flag that controls the application of special architecture behaviour that only
-                has to be applied during training. For example, this flags controls the
-                application of dropout.
+                has to be applied during training or evaluation.
+                Permitted modes are `TRAIN`, `EVAL` and `PREDICT`.
         """
         self.hparams = model_params
 
@@ -94,10 +100,23 @@ class Tacotron:
         # Decoded linear spectrogram, shape => (B, T_spec, (1 + n_fft // 2)).
         self.output_linear_spec = None
 
-        self.training = training
+        self._mode = mode
 
         # Construct the network.
         self.model()
+
+    def is_training(self):
+        """
+        Returns if the model is in training mode or not.
+
+        Returns:
+            boolean:
+                True if Mode == TRAIN, False otherwise.
+        """
+        if self._mode == Mode.TRAIN:
+            return True
+        else:
+            return False
 
     def encoder(self, inputs):
         """
@@ -120,10 +139,11 @@ class Tacotron:
                 Its shape is expected to be shape=(B, 2, n_gru_units) with B being the batch size.
         """
         with tf.variable_scope('encoder'):
-            char_embeddings = tf.get_variable("embedding", [
-                self.hparams.vocabulary_size,
-                self.hparams.encoder.embedding_size
-            ],
+            char_embeddings = tf.get_variable("embedding",
+                                              [
+                                                  self.hparams.vocabulary_size,
+                                                  self.hparams.encoder.embedding_size
+                                              ],
                                               dtype=tf.float32,
                                               initializer=tf.glorot_uniform_initializer())
 
@@ -133,7 +153,7 @@ class Tacotron:
             # shape => (B, T_sent, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
-                              training=self.training)
+                              training=self.is_training())
 
             # network.shape => (B, T_sent, 2 * n_gru_units)
             # state.shape   => (2, n_gru_units)
@@ -144,7 +164,7 @@ class Tacotron:
                                   n_highway_units=self.hparams.encoder.n_highway_units,
                                   projections=self.hparams.encoder.projections,
                                   n_gru_units=self.hparams.encoder.n_gru_units,
-                                  training=self.training)
+                                  training=self.is_training())
 
         return network, state
 
@@ -178,36 +198,6 @@ class Tacotron:
 
         return outputs, state
 
-    def gru(self, inputs, num_units=None, bidirection=False, scope="gru", reuse=None):
-        '''Applies a GRU.
-
-        Args:
-          inputs: A 3d tensor with shape of [N, T, C].
-          num_units: An int. The number of hidden units.
-          bidirection: A boolean. If True, bidirectional results
-            are concatenated.
-          scope: Optional scope for `variable_scope`.
-          reuse: Boolean, whether to reuse the weights of a previous layer
-            by the same name.
-
-        Returns:
-          If bidirection is True, a 3d tensor with shape of [N, T, 2*num_units],
-            otherwise [N, T, num_units].
-        '''
-        with tf.variable_scope(scope, reuse=reuse):
-            if num_units is None:
-                num_units = inputs.get_shape().as_list[-1]
-
-            cell = tf.contrib.rnn.GRUCell(num_units)
-            if bidirection:
-                cell_bw = tf.contrib.rnn.GRUCell(num_units)
-                outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell, cell_bw, inputs,
-                                                             dtype=tf.float32)
-                return tf.concat(outputs, 2)
-            else:
-                outputs, _ = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)
-                return outputs
-
     def decoder1(self, _inputs, memory, is_training=True, scope="decoder1", reuse=None):
         '''
         Args:
@@ -229,7 +219,7 @@ class Tacotron:
                                   (256, 0.5, tf.nn.relu),
                                   (128, 0.5, tf.nn.relu)
                               ),
-                              training=is_training)  # (N, T_y/r, E/2)
+                              training=self.is_training())  # (N, T_y/r, E/2)
 
             # Attention RNN
             dec, state = self.attention_decoder(_inputs, memory, num_units=256)  # (N, T_y/r, E)
@@ -260,7 +250,7 @@ class Tacotron:
                 dtype=tf.float32
             )
 
-            if self.training:
+            if self.is_training():
                 # Create a custom training helper for feeding ground truth frames during training.
                 helper = TacotronTrainingHelper(
                     batch_size=batch_size,
@@ -278,7 +268,7 @@ class Tacotron:
                                            helper=helper,
                                            initial_state=decoder_initial_state)
 
-            if self.training:
+            if self.is_training():
                 # During training we do not stop decoding manually. The decoder automatically
                 # decodes as many time steps as are contained in the ground truth data.
                 maximum_iterations = None
@@ -355,7 +345,7 @@ class Tacotron:
             # Apply the pre-net to each decoder input as show in [1], figure 1.
             attention_cell = PrenetWrapper(attention_cell,
                                            self.hparams.decoder.pre_net_layers,
-                                           self.training)
+                                           self.is_training())
 
             # Connect the attention cell with the attention mechanism.
             wrapped_attention_cell = tfc.seq2seq.AttentionWrapper(
@@ -406,7 +396,7 @@ class Tacotron:
                 dtype=tf.float32
             )
 
-            if self.training:
+            if self.is_training():
                 # Create a custom training helper for feeding ground truth frames during training.
                 helper = TacotronTrainingHelper(
                     batch_size=batch_size,
@@ -424,7 +414,7 @@ class Tacotron:
                                            helper=helper,
                                            initial_state=decoder_initial_state)
 
-            if self.training:
+            if self.is_training():
                 # During training we do not stop decoding manually. The decoder automatically
                 # decodes as many time steps as are contained in the ground truth data.
                 maximum_iterations = None
@@ -475,7 +465,7 @@ class Tacotron:
                                   n_highway_units=self.hparams.post.n_highway_units,
                                   projections=self.hparams.post.projections,
                                   n_gru_units=self.hparams.post.n_gru_units,
-                                  training=self.training)
+                                  training=self.is_training())
 
         return network
 
@@ -491,8 +481,8 @@ class Tacotron:
         encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
 
         decoder_inputs = tf.concat((
-                tf.zeros_like(self.inp_mel_spec[:, :1, :]),
-                self.inp_mel_spec[:, :-1, :]
+            tf.zeros_like(self.inp_mel_spec[:, :1, :]),
+            self.inp_mel_spec[:, :-1, :]
         ), 1)  # (N, Ty/r, n_mels*r)
 
         decoder_inputs = decoder_inputs[:, :, -self.hparams.n_mels:]  # (N, Ty/r, n_mels)
@@ -501,7 +491,7 @@ class Tacotron:
         # decoder_outputs = self.decoder(encoder_outputs, encoder_state)
         decoder_outputs, _ = self.decoder1(_inputs=decoder_inputs,
                                            memory=encoder_outputs,
-                                           is_training=self.training)
+                                           is_training=self.is_training())
 
         tf.summary.image("reduced_decoder_outputs", tf.expand_dims(decoder_outputs, -1))
 
@@ -527,7 +517,7 @@ class Tacotron:
         self.output_linear_spec = outputs
 
         # TODO: For debug purposes only. (Remove once I im implemented train/eval/test)
-        if self.training or True:
+        if self.is_training() or True:
             inp_mel_spec = self.inp_mel_spec
             inp_linear_spec = self.inp_linear_spec
 
@@ -594,7 +584,7 @@ class Tacotron:
                 buffer containing all merged model summaries.
         """
         # Accumulate loss over batches for evaluation purposes.
-        if self.training is False:
+        if self.is_training() is False:
             self.batch_counter = tf.Variable(initial_value=-1.0, trainable=False, dtype=tf.float32)
             self.sum_loss = tf.Variable(initial_value=0.0, trainable=False, dtype=tf.float32)
             self.sum_loss_decoder = tf.Variable(initial_value=0.0, trainable=False,
@@ -613,7 +603,7 @@ class Tacotron:
             self.avg_loss_decoder = self.sum_loss_decoder / self.batch_counter
             self.avg_loss_post_processing = self.sum_loss_post_processing / self.batch_counter
 
-        if self.training is True:
+        if self.is_training() is True:
             with tf.name_scope('loss'):
                 tf.summary.scalar('loss', self.loss_op)
                 tf.summary.scalar('loss_decoder', self.loss_op_decoder)
@@ -666,7 +656,7 @@ class Tacotron:
             tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # TODO: Turned off since it is only of used for debugging.
-        if self.training is True and False:
+        if self.is_training() is True and False:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len,
                                         sampling_rate=self.hparams.sampling_rate)

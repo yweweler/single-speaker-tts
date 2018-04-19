@@ -2,7 +2,7 @@ import os
 
 import tensorflow as tf
 
-from tacotron.model import Tacotron
+from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
 from tacotron.params.evaluation import evaluation_params
 from tacotron.params.model import model_params
@@ -251,7 +251,7 @@ if __name__ == '__main__':
                                                    batch_size=evaluation_params.batch_size)
 
     # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, training=False)
+    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.EVAL)
 
     # Train the model.
     evaluate(tacotron_model, n_samples)
