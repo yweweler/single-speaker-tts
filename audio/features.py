@@ -1,10 +1,5 @@
 import librosa
 import numpy as np
-import pysptk
-
-
-# https://github.com/keithito/tacotron/blob/master/util/audio.py
-# https://github.com/eYSIP-2017/eYSIP-2017_Speech_Spoofing_and_Verification
 
 
 def mel_scale_spectrogram(wav, n_fft, sampling_rate, n_mels, fmin, fmax, hop_length, win_length,
@@ -116,43 +111,6 @@ def calculate_mfccs(mel_spec, sampling_rate, n_mfcc):
     mfccs = librosa.feature.mfcc(S=mel_spec, sr=sampling_rate, n_mfcc=n_mfcc)
 
     return mfccs
-
-
-def calculate_mceps(wav, n_fft, hop_length, n_mceps, alpha):
-    """
-    Mel-cepstrum analysis.
-
-    Arguments:
-        wav (np.ndarray):
-            Audio time series.
-            The shape is expected to be shape=(n,).
-
-        n_fft (int):
-            FFT window size.
-
-        hop_length (int):
-            Number of audio samples to hop between frames.
-
-        n_mceps (int):
-            Order of mel-cepstrum.
-
-        alpha (float):
-            All pass constant.
-
-    Returns:
-        np.ndarray: Mel-cepstrum.
-    """
-    win_length = n_fft
-    frames = librosa.util.frame(y=wav,
-                                frame_length=win_length,
-                                hop_length=hop_length).astype(np.float64).T
-
-    frames *= pysptk.blackman(win_length)
-
-    mc = pysptk.mcep(frames, n_mceps, alpha)
-    log_h = pysptk.mgc2sp(mc, alpha, 0.0, win_length).real
-
-    return log_h.T, mc
 
 
 def linear_scale_spectrogram(wav, n_fft, hop_length=None, win_length=None):
