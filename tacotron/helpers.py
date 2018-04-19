@@ -231,7 +231,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
             # self._outputs = outputs[:, self._reduction_factor - 1::self._reduction_factor, :]
 
             # outputs = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')
-            self._outputs = outputs[:, :, -self._input_size:]
+            self._outputs = self._inputs[:, :, :]
 
             # Get the number of time frames the decoder has to produce.
             # Note that we will produce sequences over the entire length of the batch. Maybe this
@@ -396,7 +396,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             next_inputs = self._outputs[:, time, :]
             print('pre_fetch_next_inputs', next_inputs)
-            next_inputs.set_shape(shape=(self._batch_size, self._input_size))
+            next_inputs.set_shape(shape=(4, self._input_size))
             print('pre_fetch_next_inputs.set_shape', next_inputs)
 
             # Use the resulting state from the last step as the next state.

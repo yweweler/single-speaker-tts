@@ -239,12 +239,70 @@ class Tacotron:
 
             tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
 
+            # Stack several GRU cells and apply a residual connection after each cell.
+            # Before the input reaches the decoder RNN it passes through the attention cell.
+            cells = []
+            for i in range(2):
+                # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+                cell = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell_{}'.format(i))
+                # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+                cell = tf.nn.rnn_cell.ResidualWrapper(cell)
+                cells.append(cell)
+
+            # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+            decoder_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
+
+            # Determine the current batch size.
+            batch_size = tf.shape(_inputs)[0]
+
+            decoder_initial_state = decoder_cell.zero_state(
+                batch_size=batch_size,
+                dtype=tf.float32
+            )
+
+            if self.training:
+                # Create a custom training helper for feeding ground truth frames during training.
+                helper = TacotronTrainingHelper(
+                    batch_size=batch_size,
+                    inputs=dec,
+                    outputs=self.inp_mel_spec,
+                    input_size=256,
+                    reduction_factor=self.hparams.reduction
+                )
+            else:
+                # Create a custom inference helper that handles proper data feeding.
+                helper = TacotronInferenceHelper(batch_size=batch_size,
+                                                 input_size=256)
+
+            decoder = seq2seq.BasicDecoder(cell=decoder_cell,
+                                           helper=helper,
+                                           initial_state=decoder_initial_state)
+
+            if self.training:
+                # During training we do not stop decoding manually. The decoder automatically
+                # decodes as many time steps as are contained in the ground truth data.
+                maximum_iterations = None
+            else:
+                # During inference we stop decoding after `maximum_iterations`. Note that when
+                # using the reduction factor the RNN actually outputs
+                # `maximum_iterations` * `reduction_factor` frames.
+                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
+
+            # Start decoding.
+            decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
+                decoder=decoder,
+                output_time_major=False,
+                impute_finished=False,
+                maximum_iterations=maximum_iterations)
+
+            decoder_outputs = decoder_outputs.rnn_output
+
             # Decoder RNNs
-            dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru1")  # (N, T_y/r, E)
-            dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru2")  # (N, T_y/r, E)
+            # dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru1")  # (N, T_y/r, E)
+            # dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru2")  # (N, T_y/r, E)
 
             # Outputs => (N, T_y/r, n_mels*r)
-            mel_hats = tf.layers.dense(dec, 80 * self.hparams.reduction)
+            mel_hats = tf.layers.dense(decoder_outputs, 80 * self.hparams.reduction)
 
         return mel_hats, alignments
 

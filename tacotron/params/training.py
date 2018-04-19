@@ -8,7 +8,7 @@ training_params = tf.contrib.training.HParams(
     n_epochs=5000,
 
     # Batch size used for training.
-    batch_size=32,
+    batch_size=4,
 
     # Number of threads used to load data during training.
     n_threads=4,
