@@ -399,7 +399,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             next_inputs = self._targets[:, time, :]
             print('pre_fetch_next_inputs', next_inputs)
-            # next_inputs.set_shape(shape=(4, self._input_size))
+            # next_inputs.set_shape(shape=(32, self._input_size))
             print('pre_fetch_next_inputs.set_shape', next_inputs)
 
             # Use the resulting state from the last step as the next state.
