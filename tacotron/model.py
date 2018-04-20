@@ -528,6 +528,9 @@ class Tacotron:
                 seq2seq.BasicDecoder(output_cell, helper, decoder_init_state),
                 maximum_iterations=max_iters)  # [N, T_out/r, M*r]
 
+            alignments = tf.transpose(final_decoder_state.alignment_history.stack(), [1, 2, 0])
+            tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
+
         return decoder_outputs, final_decoder_state
 
     def post_process(self, inputs):
