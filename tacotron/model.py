@@ -3,7 +3,6 @@ import tensorflow.contrib as tfc
 from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
-from audio.io import save_wav
 from audio.synthesis import spectrogram_to_wav
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
@@ -154,7 +153,8 @@ class Tacotron:
 
         return network, state
 
-    def attention_decoder(self, inputs, memory, num_units=None, scope="attention_decoder", reuse=None):
+    def attention_decoder(self, inputs, memory, num_units=None, scope="attention_decoder",
+                          reuse=None):
 
         # with tf.variable_scope(scope, reuse=reuse):
         #     attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units,
@@ -240,19 +240,6 @@ class Tacotron:
             print('attention_decoder.decoder_state', final_state)
 
         return decoder_outputs, final_state
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def decoder1(self, _inputs, memory, is_training=True, scope="decoder1", reuse=None):
         '''
@@ -497,6 +484,52 @@ class Tacotron:
         # shape => (B, T_spec // r, n_mels * r)
         return decoder_outputs.rnn_output
 
+    def decoder2(self, inputs, memory):
+        with tf.variable_scope('decoder2'):
+            # Determine the current batch size.
+            batch_size = tf.shape(inputs)[0]
+
+            # Attention
+            attention_cell = seq2seq.AttentionWrapper(
+                PrenetWrapper(tf.nn.rnn_cell.GRUCell(256),
+                              self.hparams.decoder.pre_net_layers,
+                              self.is_training()),
+                seq2seq.BahdanauAttention(256, memory),
+                alignment_history=True,
+                output_attention=False)  # [N, T_in, attention_depth=256]
+
+            # Decoder (layers specified bottom to top):
+            decoder_cell = tf.nn.rnn_cell.MultiRNNCell([
+                attention_cell,
+                tf.nn.rnn_cell.ResidualWrapper(tf.nn.rnn_cell.GRUCell(256)),
+                tf.nn.rnn_cell.ResidualWrapper(tf.nn.rnn_cell.GRUCell(256))
+            ], state_is_tuple=True)  # [N, T_in, decoder_depth=256]
+
+            # Project onto r mel spectrograms (predict r outputs at each RNN step):
+            output_cell = tfc.rnn.OutputProjectionWrapper(decoder_cell,
+                                                          self.hparams.n_mels *
+                                                          self.hparams.reduction)
+
+            decoder_init_state = output_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
+
+            if self.is_training():
+                max_iters = None
+                mel_targets = tf.reshape(self.inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
+                helper = TacotronTrainingHelper(inputs,
+                                                mel_targets,
+                                                self.hparams.n_mels,
+                                                self.hparams.reduction)
+            else:
+                max_iters = 1000
+                helper = TacotronInferenceHelper(batch_size,
+                                                 self.hparams.n_mels)
+
+            (decoder_outputs, _), final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
+                seq2seq.BasicDecoder(output_cell, helper, decoder_init_state),
+                maximum_iterations=max_iters)  # [N, T_out/r, M*r]
+
+        return decoder_outputs, final_decoder_state
+
     def post_process(self, inputs):
         """
         Apply the CBHG based post-processing network to the spectrogram.
@@ -545,9 +578,14 @@ class Tacotron:
 
         # # shape => (B, T_spec // r, n_mels * r)
         # decoder_outputs = self.decoder(encoder_outputs, encoder_state)
-        decoder_outputs, _ = self.decoder1(_inputs=decoder_inputs,
-                                           memory=encoder_outputs,
-                                           is_training=self.is_training())
+        decoder_outputs, _ = self.decoder2(inputs=decoder_inputs,
+                                           memory=encoder_outputs)
+
+        print('decoder_outputs', decoder_outputs)
+        decoder_outputs = tf.Print(decoder_outputs, [tf.shape(decoder_outputs)],
+                                   'decoder_outputs.shape')
+
+        self.inp_mel_spec = tf.Print(self.inp_mel_spec, [tf.shape(self.inp_mel_spec)], 'inp_mel_spec.shape')
 
         tf.summary.image("reduced_decoder_outputs", tf.expand_dims(decoder_outputs, -1))
 

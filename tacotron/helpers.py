@@ -196,7 +196,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, batch_size, inputs, outputs, input_size, reduction_factor):
+    def __init__(self, inputs, targets, output_dim, reduction_factor):
         """
         Creates an TacotronTrainingHelper instance.
 
@@ -221,35 +221,38 @@ class TacotronTrainingHelper(seq2seq.Helper):
                 The Tacotron reduction factor to use. Used to feed every r'th ground truth frame.
         """
         with tf.name_scope("TacotronTrainingHelper"):
-            self._batch_size = batch_size
             self._inputs = inputs
-            self._input_size = input_size
+            self._targets = targets[:, reduction_factor - 1::reduction_factor, :]
+            self._output_dim = output_dim
             self._reduction_factor = reduction_factor
+
+            self._batch_size = tf.shape(inputs)[0]
 
             # Copy every r'th frame from the ground truth spectrogram.
             # => shape=(B, T_spec // reduction_factor, n_mels)
             # self._outputs = outputs[:, self._reduction_factor - 1::self._reduction_factor, :]
 
             # outputs = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')
-            self._outputs = self._inputs[:, :, :]
+            # self._outputs = self._inputs[:, :, :]
 
             # Get the number of time frames the decoder has to produce.
             # Note that we will produce sequences over the entire length of the batch. Maybe this
             # way the network will learn to generate silence after producing the actual sentence.
-            n_target_steps = tf.shape(self._outputs)[1]
+            n_target_steps = tf.shape(self._targets)[1]
             self._sequence_length = tf.tile([n_target_steps], [self._batch_size])
+            self._sequence_length = tf.Print(self._sequence_length, [self._sequence_length], '_sequence_length')
 
-    @property
-    def inputs(self):
-        """
-        Get the RNN inputs.
-
-        Returns (tf.Tensor):
-            The RNNs inputs. The shape is expected to be shape=(B, T_sent, embedding_size),
-            with B being the batch size and T_sent being the number of symbols in the input
-            sentence.
-        """
-        return self._inputs
+    # @property
+    # def inputs(self):
+    #     """
+    #     Get the RNN inputs.
+    #
+    #     Returns (tf.Tensor):
+    #         The RNNs inputs. The shape is expected to be shape=(B, T_sent, embedding_size),
+    #         with B being the batch size and T_sent being the number of symbols in the input
+    #         sentence.
+    #     """
+    #     return self._inputs
 
     @property
     def sequence_length(self):
@@ -330,7 +333,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             # The initial input for the decoder is considered to be a <GO> frame.
             # We will input an zero vector as the <GO> frame.
-            initial_inputs = tf.zeros([self._batch_size, self._input_size], dtype=tf.float32)
+            initial_inputs = tf.zeros([self._batch_size, self._output_dim], dtype=tf.float32)
 
         return initial_finished, initial_inputs
 
@@ -394,7 +397,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
             # We will feed the r'th ground truth frame from the Mel. spectrogram we prepared
             # earlier.
 
-            next_inputs = self._outputs[:, time, :]
+            next_inputs = self._targets[:, time, :]
             print('pre_fetch_next_inputs', next_inputs)
             # next_inputs.set_shape(shape=(4, self._input_size))
             print('pre_fetch_next_inputs.set_shape', next_inputs)
