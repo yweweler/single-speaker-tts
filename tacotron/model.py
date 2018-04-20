@@ -154,35 +154,105 @@ class Tacotron:
 
         return network, state
 
-    def attention_decoder(self, inputs, memory, num_units=None, scope="attention_decoder",
-                          reuse=None):
-        '''Applies a GRU to `inputs`, while attending `memory`.
-        Args:
-          inputs: A 3d tensor with shape of [N, T', C']. Decoder inputs.
-          memory: A 3d tensor with shape of [N, T, C]. Outputs of encoder network.
-          num_units: An int. Attention size.
-          scope: Optional scope for `variable_scope`.
-          reuse: Boolean, whether to reuse the weights of a previous layer
-            by the same name.
+    def attention_decoder(self, inputs, memory, num_units=None, scope="attention_decoder", reuse=None):
 
-        Returns:
-          A 3d tensor with shape of [N, T, num_units].
-        '''
+        # with tf.variable_scope(scope, reuse=reuse):
+        #     attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units,
+        #                                                                memory)
+        #     decoder_cell = tf.contrib.rnn.GRUCell(num_units)
+        #     cell_with_attention = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,
+        #                                                               attention_mechanism,
+        #                                                               num_units,
+        #                                                               alignment_history=True)
+        #     outputs, state = tf.nn.dynamic_rnn(cell_with_attention, inputs,
+        #                                        dtype=tf.float32)  # ( N, T', 16)
+        #
+        # return outputs, state
+
         with tf.variable_scope(scope, reuse=reuse):
-            if num_units is None:
-                num_units = inputs.get_shape().as_list[-1]
+            # Create the attention mechanism.
+            attention_mechanism = tfc.seq2seq.BahdanauAttention(
+                num_units=num_units,
+                memory=memory,
+            )
 
-            attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units,
-                                                                       memory)
-            decoder_cell = tf.contrib.rnn.GRUCell(num_units)
-            cell_with_attention = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,
-                                                                      attention_mechanism,
-                                                                      num_units,
-                                                                      alignment_history=True)
-            outputs, state = tf.nn.dynamic_rnn(cell_with_attention, inputs,
-                                               dtype=tf.float32)  # ( N, T', 16)
+            # Create the attention RNN cell.
+            decoder_cell = tf.nn.rnn_cell.GRUCell(num_units=num_units)
 
-        return outputs, state
+            # Connect the attention cell with the attention mechanism.
+            cell_with_attention = tfc.seq2seq.AttentionWrapper(
+                cell=decoder_cell,
+                attention_mechanism=attention_mechanism,
+                attention_layer_size=num_units,
+                alignment_history=True,
+                # TODO: Why does this even work with BahdanauAttention?
+                output_attention=True,  # True for Luong-style att., False for Bhadanau-style.
+            )  # => (B, T_sent, n_attention_units) = (B, T_sent, 256)
+
+            # ==========================================================================================
+
+            # Determine the current batch size.
+            batch_size = tf.shape(inputs)[0]
+
+            decoder_initial_state = cell_with_attention.zero_state(
+                batch_size=batch_size,
+                dtype=tf.float32
+            )
+
+            if self.is_training():
+                # Create a custom training helper for feeding ground truth frames during training.
+                helper = TacotronTrainingHelper(
+                    batch_size=batch_size,
+                    inputs=inputs,
+                    outputs=None,
+                    input_size=128,
+                    reduction_factor=self.hparams.reduction
+                )
+            # else:
+            #     # Create a custom inference helper that handles proper data feeding.
+            #     helper = TacotronInferenceHelper(batch_size=batch_size,
+            #                                      input_size=256)
+
+            decoder = seq2seq.BasicDecoder(cell=cell_with_attention,
+                                           helper=helper,
+                                           initial_state=decoder_initial_state)
+
+            if self.is_training():
+                # During training we do not stop decoding manually. The decoder automatically
+                # decodes as many time steps as are contained in the ground truth data.
+                maximum_iterations = None
+            else:
+                # During inference we stop decoding after `maximum_iterations`. Note that when
+                # using the reduction factor the RNN actually outputs
+                # `maximum_iterations` * `reduction_factor` frames.
+                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
+
+            # Start decoding.
+            decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
+                decoder=decoder,
+                output_time_major=False,
+                impute_finished=False,
+                maximum_iterations=maximum_iterations)
+
+            decoder_outputs = decoder_outputs.rnn_output
+
+            print('attention_decoder.decoder_outputs', decoder_outputs)
+            print('attention_decoder.decoder_state', final_state)
+
+        return decoder_outputs, final_state
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def decoder1(self, _inputs, memory, is_training=True, scope="decoder1", reuse=None):
         '''
