@@ -196,7 +196,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, inputs, targets, output_dim, reduction_factor):
+    def __init__(self, batch_size, outputs, input_size, reduction_factor):
         """
         Creates an TacotronTrainingHelper instance.
 
@@ -204,55 +204,38 @@ class TacotronTrainingHelper(seq2seq.Helper):
             batch_size (tf.Dimension):
                 Size of the current batch.
 
-            inputs (tf.Tensor):
-                Tensor containing the encoder outputs. The shape is expected to be shape=(B,
-                T_sent, embedding_size), with B being the batch size and T_sent being the number
-                of symbols in the input sentence.
-
             outputs (tf.Tensor):
                 Ground truth Mel. spectrogram data used for feeding ground truth frames during
                 training. The shape is expected to be shape=(B, T_spec, n_mels), with B being the
                 batch size and T_spec being the number of frames in the spectrogram.
-                
+
             input_size (int):
-                RNN input size.
+                The size of the features in the last dimension of `outputs`.
+                This has to be equal to n_mels.
 
             reduction_factor (int):
                 The Tacotron reduction factor to use. Used to feed every r'th ground truth frame.
         """
         with tf.name_scope("TacotronTrainingHelper"):
-            self._inputs = inputs
-            self._targets = targets[:, reduction_factor - 1::reduction_factor, :]
-            self._output_dim = output_dim
-            self._reduction_factor = reduction_factor
-
-            self._batch_size = tf.shape(inputs)[0]
-
             # Copy every r'th frame from the ground truth spectrogram.
             # => shape=(B, T_spec // reduction_factor, n_mels)
-            # self._outputs = outputs[:, self._reduction_factor - 1::self._reduction_factor, :]
+            self.outputs = outputs[:, reduction_factor - 1::reduction_factor, :]
 
-            # outputs = tf.Print(outputs, [tf.shape(outputs)], 'outputs.shape')
-            # self._outputs = self._inputs[:, :, :]
+            self._input_size = input_size
+            self._reduction_factor = reduction_factor
+            self._batch_size = batch_size
 
             # Get the number of time frames the decoder has to produce.
             # Note that we will produce sequences over the entire length of the batch. Maybe this
             # way the network will learn to generate silence after producing the actual sentence.
-            n_target_steps = tf.shape(self._targets)[1]
-            self._sequence_length = tf.tile([n_target_steps], [self._batch_size])
-            self._sequence_length = tf.Print(self._sequence_length, [self._sequence_length], '_sequence_length')
+            n_target_steps = tf.shape(self.outputs)[1]
 
-    # @property
-    # def inputs(self):
-    #     """
-    #     Get the RNN inputs.
-    #
-    #     Returns (tf.Tensor):
-    #         The RNNs inputs. The shape is expected to be shape=(B, T_sent, embedding_size),
-    #         with B being the batch size and T_sent being the number of symbols in the input
-    #         sentence.
-    #     """
-    #     return self._inputs
+            # Create a tensor of length batch_size with each field containing n_target_steps.
+            self._sequence_length = tf.tile([n_target_steps], [self._batch_size])
+
+            # TODO: Remove since it is for debugging purposes only.
+            self._sequence_length = tf.Print(self._sequence_length, [self._sequence_length],
+                                             '_sequence_length')
 
     @property
     def sequence_length(self):
@@ -333,7 +316,7 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             # The initial input for the decoder is considered to be a <GO> frame.
             # We will input an zero vector as the <GO> frame.
-            initial_inputs = tf.zeros([self._batch_size, self._output_dim], dtype=tf.float32)
+            initial_inputs = tf.zeros([self._batch_size, self._input_size], dtype=tf.float32)
 
         return initial_finished, initial_inputs
 
@@ -393,14 +376,10 @@ class TacotronTrainingHelper(seq2seq.Helper):
             # Query finished state for each sequence in the batch.
             finished = (next_time >= self._sequence_length)
 
-            # During training we do not use the last steps outputs as the next steps inputs.
-            # We will feed the r'th ground truth frame from the Mel. spectrogram we prepared
-            # earlier.
-
-            next_inputs = self._targets[:, time, :]
-            print('pre_fetch_next_inputs', next_inputs)
-            # next_inputs.set_shape(shape=(32, self._input_size))
-            print('pre_fetch_next_inputs.set_shape', next_inputs)
+            # During training we do not use the last steps outputs (step t) as the next steps
+            # inputs. We will feed the r'th ground truth frame from the Mel. spectrogram that
+            # equals the ground truth output at step t.
+            next_inputs = self.outputs[:, time, :]
 
             # Use the resulting state from the last step as the next state.
             next_state = state

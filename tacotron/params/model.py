@@ -37,6 +37,9 @@ model_params = tf.contrib.training.HParams(
     # Flag that controls application of the post-processing network.
     apply_post_processing=False,
 
+    # The number of Griffin-Lim reconstruction iterations.
+    reconstruction_iterations=75,
+
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
         # Embedding size for each sentence character.
@@ -90,7 +93,8 @@ model_params = tf.contrib.training.HParams(
         # Dimensionality of a single RNN target frame.
         target_size=80,
 
-        # Maximum number of decoder iterations for evaluation and inference.
+        # Maximum number of decoder iterations after which to stop for evaluation and inference.
+        # This is equal to the number of mel-scale spectrogram frames generated.
         maximum_iterations=1000,
     ),
 

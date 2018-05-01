@@ -85,6 +85,9 @@ class Tacotron:
         # Decoded linear spectrogram, shape => (B, T_spec, (1 + n_fft // 2)).
         self.output_linear_spec = None
 
+        # Stacked attention alignment history.
+        self.alignment_history = None
+
         self._mode = mode
 
         # Construct the network.
@@ -153,206 +156,15 @@ class Tacotron:
 
         return network, state
 
-    def attention_decoder(self, inputs, memory, num_units=None, scope="attention_decoder",
-                          reuse=None):
-
-        # with tf.variable_scope(scope, reuse=reuse):
-        #     attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units,
-        #                                                                memory)
-        #     decoder_cell = tf.contrib.rnn.GRUCell(num_units)
-        #     cell_with_attention = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,
-        #                                                               attention_mechanism,
-        #                                                               num_units,
-        #                                                               alignment_history=True)
-        #     outputs, state = tf.nn.dynamic_rnn(cell_with_attention, inputs,
-        #                                        dtype=tf.float32)  # ( N, T', 16)
-        #
-        # return outputs, state
-
-        with tf.variable_scope(scope, reuse=reuse):
-            # Create the attention mechanism.
-            attention_mechanism = tfc.seq2seq.BahdanauAttention(
-                num_units=num_units,
-                memory=memory,
-            )
-
-            # Create the attention RNN cell.
-            decoder_cell = tf.nn.rnn_cell.GRUCell(num_units=num_units)
-
-            # Connect the attention cell with the attention mechanism.
-            cell_with_attention = tfc.seq2seq.AttentionWrapper(
-                cell=decoder_cell,
-                attention_mechanism=attention_mechanism,
-                attention_layer_size=num_units,
-                alignment_history=True,
-                # TODO: Why does this even work with BahdanauAttention?
-                output_attention=True,  # True for Luong-style att., False for Bhadanau-style.
-            )  # => (B, T_sent, n_attention_units) = (B, T_sent, 256)
-
-            # ==========================================================================================
-
-            # Determine the current batch size.
-            batch_size = tf.shape(inputs)[0]
-
-            decoder_initial_state = cell_with_attention.zero_state(
-                batch_size=batch_size,
-                dtype=tf.float32
-            )
-
-            if self.is_training():
-                # Create a custom training helper for feeding ground truth frames during training.
-                helper = TacotronTrainingHelper(
-                    batch_size=batch_size,
-                    inputs=inputs,
-                    outputs=None,
-                    input_size=128,
-                    reduction_factor=self.hparams.reduction
-                )
-            # else:
-            #     # Create a custom inference helper that handles proper data feeding.
-            #     helper = TacotronInferenceHelper(batch_size=batch_size,
-            #                                      input_size=256)
-
-            decoder = seq2seq.BasicDecoder(cell=cell_with_attention,
-                                           helper=helper,
-                                           initial_state=decoder_initial_state)
-
-            if self.is_training():
-                # During training we do not stop decoding manually. The decoder automatically
-                # decodes as many time steps as are contained in the ground truth data.
-                maximum_iterations = None
-            else:
-                # During inference we stop decoding after `maximum_iterations`. Note that when
-                # using the reduction factor the RNN actually outputs
-                # `maximum_iterations` * `reduction_factor` frames.
-                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
-
-            # Start decoding.
-            decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
-                decoder=decoder,
-                output_time_major=False,
-                impute_finished=False,
-                maximum_iterations=maximum_iterations)
-
-            decoder_outputs = decoder_outputs.rnn_output
-
-            print('attention_decoder.decoder_outputs', decoder_outputs)
-            print('attention_decoder.decoder_state', final_state)
-
-        return decoder_outputs, final_state
-
-    def decoder1(self, _inputs, memory, is_training=True, scope="decoder1", reuse=None):
-        '''
-        Args:
-          _inputs: A 3d tensor with shape of [N, T_y/r, n_mels(*r)]. Shifted log melspectrogram of sound files.
-          memory: A 3d tensor with shape of [N, T_x, E].
-          is_training: Whether or not the layer is in training mode.
-          scope: Optional scope for `variable_scope`
-          reuse: Boolean, whether to reuse the weights of a previous layer
-            by the same name.
-
-        Returns
-          Predicted log melspectrogram tensor with shape of [N, T_y/r, n_mels*r].
-        '''
-        with tf.variable_scope(scope, reuse=reuse):
-            # Decoder pre-net
-            _inputs = pre_net(inputs=_inputs,
-                              layers=(
-                                  # (units, dropout, activation).
-                                  (256, 0.5, tf.nn.relu),
-                                  (128, 0.5, tf.nn.relu)
-                              ),
-                              training=self.is_training())  # (N, T_y/r, E/2)
-
-            # Attention RNN
-            dec, state = self.attention_decoder(_inputs, memory, num_units=256)  # (N, T_y/r, E)
-
-            ## for attention monitoring
-            alignments = tf.transpose(state.alignment_history.stack(), [1, 2, 0])
-
-            tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
-
-            # Stack several GRU cells and apply a residual connection after each cell.
-            # Before the input reaches the decoder RNN it passes through the attention cell.
-            cells = []
-            for i in range(2):
-                # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-                cell = tf.nn.rnn_cell.GRUCell(num_units=256, name='gru_cell_{}'.format(i))
-                # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-                cell = tf.nn.rnn_cell.ResidualWrapper(cell)
-                cells.append(cell)
-
-            # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-            decoder_cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
-
-            # Determine the current batch size.
-            batch_size = tf.shape(_inputs)[0]
-
-            decoder_initial_state = decoder_cell.zero_state(
-                batch_size=batch_size,
-                dtype=tf.float32
-            )
-
-            if self.is_training():
-                # Create a custom training helper for feeding ground truth frames during training.
-                helper = TacotronTrainingHelper(
-                    batch_size=batch_size,
-                    inputs=dec,
-                    outputs=self.inp_mel_spec,
-                    input_size=256,
-                    reduction_factor=self.hparams.reduction
-                )
-            else:
-                # Create a custom inference helper that handles proper data feeding.
-                helper = TacotronInferenceHelper(batch_size=batch_size,
-                                                 input_size=256)
-
-            decoder = seq2seq.BasicDecoder(cell=decoder_cell,
-                                           helper=helper,
-                                           initial_state=decoder_initial_state)
-
-            if self.is_training():
-                # During training we do not stop decoding manually. The decoder automatically
-                # decodes as many time steps as are contained in the ground truth data.
-                maximum_iterations = None
-            else:
-                # During inference we stop decoding after `maximum_iterations`. Note that when
-                # using the reduction factor the RNN actually outputs
-                # `maximum_iterations` * `reduction_factor` frames.
-                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
-
-            # Start decoding.
-            decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
-                decoder=decoder,
-                output_time_major=False,
-                impute_finished=False,
-                maximum_iterations=maximum_iterations)
-
-            decoder_outputs = decoder_outputs.rnn_output
-
-            # Decoder RNNs
-            # dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru1")  # (N, T_y/r, E)
-            # dec += self.gru(dec, 256, bidirection=False, scope="decoder_gru2")  # (N, T_y/r, E)
-
-            # Outputs => (N, T_y/r, n_mels*r)
-            mel_hats = tf.layers.dense(decoder_outputs, 80 * self.hparams.reduction)
-
-        return mel_hats, alignments
-
-    def decoder(self, encoder_outputs, encoder_state):
+    def decoder(self, memory):
         """
         Implementation of the Tacotron decoder network.
 
         Arguments:
-            encoder_outputs (tf.Tensor):
+            memory (tf.Tensor):
                 The output states of the encoder RNN concatenated over time. Its shape is
                 expected to be shape=(B, T_sent, 2 * encoder.n_gru_units) with B being the batch
                 size, T_sent being the number of tokens in the sentence including the EOS token.
-
-            encoder_state (tf.Tensor):
-                A tensor containing the forward and the backward final states
-                (output_state_fw, output_state_bw) of the bidirectional RNN. Its shape is
-                expected to be shape=(B, 2, encoder.n_gru_units) with B being the batch size.
 
         Returns:
             tf.tensor:
@@ -361,6 +173,9 @@ class Tacotron:
                 the number of frames in the spectrogram and r being the reduction factor.
         """
         with tf.variable_scope('decoder'):
+            # Query the current batch size.
+            batch_size = tf.shape(memory)[0]
+
             # Query the number of layers for the decoder RNN.
             n_decoder_layers = self.hparams.decoder.n_gru_layers
 
@@ -370,13 +185,10 @@ class Tacotron:
             # Query the number of units for the attention cell.
             n_attention_units = self.hparams.decoder.n_attention_units
 
-            # Determine the current batch size.
-            batch_size = tf.shape(encoder_outputs)[0]
-
             # Create the attention mechanism.
             attention_mechanism = tfc.seq2seq.BahdanauAttention(
                 num_units=n_attention_units,
-                memory=encoder_outputs,
+                memory=memory,
                 # memory_sequence_length=None,
                 # dtype=tf.float32
             )
@@ -394,28 +206,18 @@ class Tacotron:
             wrapped_attention_cell = tfc.seq2seq.AttentionWrapper(
                 cell=attention_cell,
                 attention_mechanism=attention_mechanism,
-                attention_layer_size=None,
+                attention_layer_size=n_attention_units,
                 alignment_history=True,
-                output_attention=False,  # True for Luong-style att., False for Bhadanau-style.
+                output_attention=True,
                 initial_cell_state=None
             )  # => (B, T_sent, n_attention_units) = (B, T_sent, 256)
-
-            # ======================================================================================
-            # NOTE: This is actually derived from the Tacotron 2 paper and only an experiment.
-            # ======================================================================================
-            # => (B, T_sent, n_attention_units * 2) = (B, T_sent, 512)
-            # concat_cell = ConcatOutputAndAttentionWrapper(wrapped_attention_cell)
-
-            # => (B, T_sent, n_decoder_units) = (B, T_sent, 256)
-            # concat_cell = tfc.rnn.OutputProjectionWrapper(concat_cell, n_decoder_units)
-            # ======================================================================================
 
             # Stack several GRU cells and apply a residual connection after each cell.
             # Before the input reaches the decoder RNN it passes through the attention cell.
             cells = [wrapped_attention_cell]
             for i in range(n_decoder_layers):
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-                cell = tf.nn.rnn_cell.GRUCell(num_units=n_decoder_units, name='gru_cell')
+                cell = tf.nn.rnn_cell.GRUCell(num_units=n_decoder_units)
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
                 cell = tf.nn.rnn_cell.ResidualWrapper(cell)
                 cells.append(cell)
@@ -431,7 +233,7 @@ class Tacotron:
                 # activation=tf.nn.sigmoid
             )
 
-            # TODO: Experiment with initialising using the encoder state:
+            # TODO: Experiment with the encoder state as the initial state:
             # ".clone(cell_state=encoder_state)"
             # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
             decoder_initial_state = output_cell.zero_state(
@@ -440,15 +242,24 @@ class Tacotron:
             )
 
             if self.is_training():
+                # During training we do not stop decoding manually. The decoder automatically
+                # decodes as many time steps as are contained in the ground truth data.
+                maximum_iterations = None
+
+                # Unfold the reduced spectrogram in order to grab the r'th ground truth frames.
+                mel_targets = tf.reshape(self.inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
+
                 # Create a custom training helper for feeding ground truth frames during training.
                 helper = TacotronTrainingHelper(
                     batch_size=batch_size,
-                    inputs=encoder_outputs,
-                    outputs=self.inp_mel_spec,
+                    outputs=mel_targets,
                     input_size=self.hparams.decoder.target_size,
-                    reduction_factor=self.hparams.reduction
+                    reduction_factor=self.hparams.reduction,
                 )
             else:
+                # During inference we stop decoding after `maximum_iterations` frames.
+                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
+
                 # Create a custom inference helper that handles proper data feeding.
                 helper = TacotronInferenceHelper(batch_size=batch_size,
                                                  input_size=self.hparams.decoder.target_size)
@@ -456,16 +267,6 @@ class Tacotron:
             decoder = seq2seq.BasicDecoder(cell=output_cell,
                                            helper=helper,
                                            initial_state=decoder_initial_state)
-
-            if self.is_training():
-                # During training we do not stop decoding manually. The decoder automatically
-                # decodes as many time steps as are contained in the ground truth data.
-                maximum_iterations = None
-            else:
-                # During inference we stop decoding after `maximum_iterations`. Note that when
-                # using the reduction factor the RNN actually outputs
-                # `maximum_iterations` * `reduction_factor` frames.
-                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
 
             # Start decoding.
             decoder_outputs, final_state, final_sequence_lengths = seq2seq.dynamic_decode(
@@ -479,59 +280,10 @@ class Tacotron:
             # final_sequence_lengths.shape = (B)
 
             # Create an attention alignment summary image.
-            Tacotron._create_attention_summary(final_state)
+            self.alignment_history = final_state[0].alignment_history.stack()
 
         # shape => (B, T_spec // r, n_mels * r)
         return decoder_outputs.rnn_output
-
-    def decoder2(self, inputs, memory):
-        with tf.variable_scope('decoder2'):
-            # Determine the current batch size.
-            batch_size = tf.shape(inputs)[0]
-
-            # Attention
-            attention_cell = seq2seq.AttentionWrapper(
-                PrenetWrapper(tf.nn.rnn_cell.GRUCell(256),
-                              self.hparams.decoder.pre_net_layers,
-                              self.is_training()),
-                seq2seq.BahdanauAttention(256, memory),
-                alignment_history=True,
-                output_attention=False)  # [N, T_in, attention_depth=256]
-
-            # Decoder (layers specified bottom to top):
-            decoder_cell = tf.nn.rnn_cell.MultiRNNCell([
-                attention_cell,
-                tf.nn.rnn_cell.ResidualWrapper(tf.nn.rnn_cell.GRUCell(256)),
-                tf.nn.rnn_cell.ResidualWrapper(tf.nn.rnn_cell.GRUCell(256))
-            ], state_is_tuple=True)  # [N, T_in, decoder_depth=256]
-
-            # Project onto r mel spectrograms (predict r outputs at each RNN step):
-            output_cell = tfc.rnn.OutputProjectionWrapper(decoder_cell,
-                                                          self.hparams.n_mels *
-                                                          self.hparams.reduction)
-
-            decoder_init_state = output_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
-
-            if self.is_training():
-                max_iters = None
-                mel_targets = tf.reshape(self.inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
-                helper = TacotronTrainingHelper(inputs,
-                                                mel_targets,
-                                                self.hparams.n_mels,
-                                                self.hparams.reduction)
-            else:
-                max_iters = 1000
-                helper = TacotronInferenceHelper(batch_size,
-                                                 self.hparams.n_mels)
-
-            (decoder_outputs, _), final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
-                seq2seq.BasicDecoder(output_cell, helper, decoder_init_state),
-                maximum_iterations=max_iters)  # [N, T_out/r, M*r]
-
-            alignments = tf.transpose(final_decoder_state[0].alignment_history.stack(), [1, 2, 0])
-            tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
-
-        return decoder_outputs, final_decoder_state
 
     def post_process(self, inputs):
         """
@@ -565,6 +317,8 @@ class Tacotron:
         """
         Builds the Tacotron model.
         """
+        # TODO: Remove debugging outputs from this function.
+
         # inp_sentences.shape = (B, T_sent, ?)
         batch_size = tf.shape(self.inp_sentences)[0]
 
@@ -572,17 +326,8 @@ class Tacotron:
         # encoder_state.shape => (B, 2, 256)
         encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
 
-        decoder_inputs = tf.concat((
-            tf.zeros_like(self.inp_mel_spec[:, :1, :]),
-            self.inp_mel_spec[:, :-1, :]
-        ), 1)  # (N, Ty/r, n_mels*r)
-
-        decoder_inputs = decoder_inputs[:, :, -self.hparams.n_mels:]  # (N, Ty/r, n_mels)
-
-        # # shape => (B, T_spec // r, n_mels * r)
-        # decoder_outputs = self.decoder(encoder_outputs, encoder_state)
-        decoder_outputs, _ = self.decoder2(inputs=decoder_inputs,
-                                           memory=encoder_outputs)
+        # shape => (B, T_spec // r, n_mels * r)
+        decoder_outputs = self.decoder(memory=encoder_outputs)
 
         print('decoder_outputs', decoder_outputs)
         decoder_outputs = tf.Print(decoder_outputs, [tf.shape(decoder_outputs)],
@@ -681,6 +426,11 @@ class Tacotron:
                 A tensor of type `string` containing the serialized `Summary` protocol
                 buffer containing all merged model summaries.
         """
+
+        # Attention alignment plot.
+        alignments = tf.transpose(self.alignment_history, [1, 2, 0])
+        tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
+
         if self._mode == Mode.TRAIN:
             with tf.name_scope('loss'):
                 tf.summary.scalar('loss', self.loss_op)
@@ -733,7 +483,6 @@ class Tacotron:
             linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
             tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
-        # TODO: Turned off since it is only of used for debugging.
         if self._mode == Mode.EVAL:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len, self.hparams.sampling_rate)
@@ -742,6 +491,7 @@ class Tacotron:
 
                 def __synthesis(spec):
                     print('synthesis ....', spec.shape)
+                    # TODO: refactor these magic number so they are taken from the loading helper.
                     linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
@@ -749,19 +499,19 @@ class Tacotron:
                                               win_len,
                                               win_hop,
                                               n_fft,
-                                              50)
+                                              self.hparams.reconstruction_iterations)
 
                     # save_wav('/tmp/reconstr.wav', _wav, model_params.sampling_rate, True)
                     return _wav
 
                 reconstruction = tf.py_func(__synthesis, [self.output_linear_spec[0]], [tf.float32])
-
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         return tf.summary.merge_all()
 
     @staticmethod
     def model_placeholders(max_sent_len):
+        # UNUSED: Check if this can be removed.
         """
         Create placeholders for feeding data into the Tacotron model.
 
@@ -822,6 +572,7 @@ class Tacotron:
 
     @staticmethod
     def _create_attention_summary(final_context_state):
+        # UNUSED: Remove unused code.
         """
         Add an attention alignment plot to the models summaries.
 
