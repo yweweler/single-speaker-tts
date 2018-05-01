@@ -569,22 +569,3 @@ class Tacotron:
         }
 
         return placeholder_dict
-
-    @staticmethod
-    def _create_attention_summary(final_context_state):
-        # UNUSED: Remove unused code.
-        """
-        Add an attention alignment plot to the models summaries.
-
-        Arguments:
-            final_context_state (tf.contrib.seq2seq.AttentionWrapperState):
-                Final state and attention information of the decoder network.
-        """
-        attention_wrapper_state, unkn1, unkn2 = final_context_state
-
-        cell_state, attention, _, alignments, alignment_history, attention_state = \
-            attention_wrapper_state
-
-        stacked_alignment_hist = alignment_history.stack()
-        stacked_alignments = tf.transpose(stacked_alignment_hist, [1, 2, 0])
-        tf.summary.image("stacked_alignments", tf.expand_dims(stacked_alignments, -1))
