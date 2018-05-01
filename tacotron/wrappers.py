@@ -100,8 +100,7 @@ class PrenetWrapper(tfc.rnn.RNNCell):
 
         Arguments:
             inputs (tf.Tensor):
-                TODO: (B, 336)
-                `2-D` tensor with shape `[batch_size, input_size]`.
+                `2-D` tensor with shape `[batch_size, attention_size + input_size]`.
 
             state:
                 If `self.state_size` is an integer, this should be a `2-D Tensor` with shape

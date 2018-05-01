@@ -133,7 +133,6 @@ class TacotronInferenceHelper(seq2seq.Helper):
                 finished. The shape is shape=(B), with B being the batch size.
 
         """
-        # TODO: Since I am not sure when to stop I will let the decoder run into max_steps.
         finished = tf.tile([False], [self._batch_size])
 
         return finished
@@ -232,10 +231,6 @@ class TacotronTrainingHelper(seq2seq.Helper):
 
             # Create a tensor of length batch_size with each field containing n_target_steps.
             self._sequence_length = tf.tile([n_target_steps], [self._batch_size])
-
-            # TODO: Remove since it is for debugging purposes only.
-            self._sequence_length = tf.Print(self._sequence_length, [self._sequence_length],
-                                             '_sequence_length')
 
     @property
     def sequence_length(self):
