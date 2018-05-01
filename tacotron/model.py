@@ -82,6 +82,9 @@ class Tacotron:
         # Decoded Mel. spectrogram, shape=(B, T_spec, n_mels).
         self.output_mel_spec = None
 
+        # Reduced Mel. spectrogram, shape=(B, T_spec // r, n_mels * r).
+        self.reduced_output_mel_spec = None
+
         # Decoded linear spectrogram, shape => (B, T_spec, (1 + n_fft // 2)).
         self.output_linear_spec = None
 
@@ -317,8 +320,6 @@ class Tacotron:
         """
         Builds the Tacotron model.
         """
-        # TODO: Remove debugging outputs from this function.
-
         # inp_sentences.shape = (B, T_sent, ?)
         batch_size = tf.shape(self.inp_sentences)[0]
 
@@ -329,13 +330,8 @@ class Tacotron:
         # shape => (B, T_spec // r, n_mels * r)
         decoder_outputs = self.decoder(memory=encoder_outputs)
 
-        print('decoder_outputs', decoder_outputs)
-        decoder_outputs = tf.Print(decoder_outputs, [tf.shape(decoder_outputs)],
-                                   'decoder_outputs.shape')
-
-        self.inp_mel_spec = tf.Print(self.inp_mel_spec, [tf.shape(self.inp_mel_spec)], 'inp_mel_spec.shape')
-
-        tf.summary.image("reduced_decoder_outputs", tf.expand_dims(decoder_outputs, -1))
+        # Remember the reduced decoder output for the summaries.
+        self.reduced_output_mel_spec = decoder_outputs
 
         # shape => (B, T_spec, n_mels)
         decoder_outputs = tf.reshape(decoder_outputs, [batch_size, -1, self.hparams.n_mels])
@@ -430,6 +426,10 @@ class Tacotron:
         # Attention alignment plot.
         alignments = tf.transpose(self.alignment_history, [1, 2, 0])
         tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
+
+        # Reduced decoder outputs.
+        tf.summary.image("reduced_decoder_outputs",
+                         tf.expand_dims(self.reduced_output_mel_spec, -1))
 
         if self._mode == Mode.TRAIN:
             with tf.name_scope('loss'):
