@@ -259,11 +259,19 @@ class Tacotron:
                     input_size=self.hparams.decoder.target_size,
                     reduction_factor=self.hparams.reduction,
                 )
+            elif self._mode == Mode.EVAL:
+                # During evaluation we stop decoding after the same number of frames the ground
+                # truth has.
+                maximum_iterations = tf.shape(self.inp_mel_spec)[1]
+
+                # Create a custom inference helper that handles proper evaluation data feeding.
+                helper = TacotronInferenceHelper(batch_size=batch_size,
+                                                 input_size=self.hparams.decoder.target_size)
             else:
                 # During inference we stop decoding after `maximum_iterations` frames.
                 maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
 
-                # Create a custom inference helper that handles proper data feeding.
+                # Create a custom inference helper that handles proper inference data feeding.
                 helper = TacotronInferenceHelper(batch_size=batch_size,
                                                  input_size=self.hparams.decoder.target_size)
 
@@ -383,15 +391,6 @@ class Tacotron:
             linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
             tf.summary.image('linear_spec_gt_loss', linear_spec_image, max_outputs=1)
             # ======================================================================================
-
-        # TODO: This should be part of an Inference / Evaluation helper.
-        if self._mode == Mode.EVAL:
-            # Get the number of ground truth frames in the spectrogram's.
-            n_frames = tf.shape(inp_mel_spec)[1]
-
-            # Limit the number of produced frames to that in the input data.
-            output_mel_spec = output_mel_spec[:, : n_frames, :]
-            output_linear_spec = output_linear_spec[:, : n_frames, :]
 
         # Calculate decoder Mel. spectrogram loss.
         self.loss_op_decoder = tf.reduce_mean(

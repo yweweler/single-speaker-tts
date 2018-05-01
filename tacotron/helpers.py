@@ -12,7 +12,7 @@ class TacotronInferenceHelper(seq2seq.Helper):
     See: https://github.com/tensorflow/tensorflow/issues/12065
     """
 
-    def __init__(self, batch_size, input_size):
+    def __init__(self, batch_size, input_size, max_iterations=None):
         """
         Creates an TacotronInferenceHelper instance.
 
@@ -22,9 +22,22 @@ class TacotronInferenceHelper(seq2seq.Helper):
 
             input_size (int):
                 RNN input size.
+
+            max_iterations (tf.Dimension):
+                The maximal number of frames to generate. Defaults to None.
+                If None generation will continue until the decoder reaches its own limit.
         """
         self._batch_size = batch_size
         self._input_size = input_size
+
+        # Set the sequence length to be generated according to max_iterations.
+        if max_iterations is None:
+            # Do not stop generating.
+            self._sequence_length = None
+        else:
+            # Create a tensor of length batch_size with each field containing max_iterations.
+            # Generates max_iterations frames for each batch entry.
+            self._sequence_length = tf.tile([max_iterations], [self._batch_size])
 
     @property
     def batch_size(self):
@@ -118,11 +131,14 @@ class TacotronInferenceHelper(seq2seq.Helper):
         # Returning some tensor of dtype=tf.int32 and random shape seems to be enough.
         return tf.zeros(1, dtype=tf.int32)
 
-    def __is_decoding_finished(self, outputs):
+    def __is_decoding_finished(self, next_time, outputs):
         """
         Determine for each sequence in a batch if decoding is finished or not.
 
         Arguments:
+            next_time:
+                The time count of the following decoding step.
+
             outputs (tf.Tensor):
                 Outputs of the last decoder step. The shape is expected to be shape=(B, O),
                 with B being the batch size and O being the RNNs output size.
@@ -133,7 +149,12 @@ class TacotronInferenceHelper(seq2seq.Helper):
                 finished. The shape is shape=(B), with B being the batch size.
 
         """
-        finished = tf.tile([False], [self._batch_size])
+        if self._sequence_length is None:
+            # Do not stop generating frames.
+            finished = tf.tile([False], [self._batch_size])
+        else:
+            # Stop if the desired sequence length was reached.
+            finished = (next_time >= self._sequence_length)
 
         return finished
 
@@ -142,7 +163,8 @@ class TacotronInferenceHelper(seq2seq.Helper):
         Query the next RNN inputs and RNN state as well as whether decoding is finished or not.
 
         Arguments:
-            time: Unused.
+            time:
+                The time count of the previous decoding step.
 
             outputs (tf.Tensor):
                 RNN outputs from the last decoding step. The shape is expected to be shape=(B, O),
@@ -165,10 +187,11 @@ class TacotronInferenceHelper(seq2seq.Helper):
                 next_state:
                     RNN state.
         """
-        del time, sample_ids  # unused by next_inputs
+        del sample_ids  # unused by next_inputs
 
         # Check if decoding is finished.
-        finished = self.__is_decoding_finished(outputs)
+        finished = self.__is_decoding_finished(next_time=time + 1,
+                                               outputs=outputs)
 
         # Use the last steps outputs as the next steps inputs.
         # When using the Tacotron reduction factor r the RNN produces an output of size
