@@ -1,7 +1,5 @@
 import tensorflow as tf
 
-from datasets.lj_speech import LJSpeechDatasetHelper
-
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
@@ -21,6 +19,10 @@ evaluation_params = tf.contrib.training.HParams(
 
     # Number of samples each bucket can pre-fetch.
     n_samples_per_bucket=16,
+
+    # The number of buckets to create. Note that this is the number of buckets that are actually
+    # created. If less buckets are needed for proper sorting of the data, less buckets are used.
+    n_buckets=20,
 
     # Flag enabling the bucketing mechanism to output batches of smaller size than
     # `batch_size` if not enough samples are available.
