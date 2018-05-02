@@ -4,6 +4,7 @@ from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
+from datasets.lj_speech import LJSpeechDatasetHelper
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
 from tacotron.params.model import model_params
@@ -490,8 +491,9 @@ class Tacotron:
 
                 def __synthesis(spec):
                     print('synthesis ....', spec.shape)
-                    # TODO: refactor these magic number so they are taken from the loading helper.
-                    linear_mag_db = inv_normalize_decibel(spec.T, 20, 100)
+                    linear_mag_db = inv_normalize_decibel(spec.T,
+                                                          LJSpeechDatasetHelper.mel_mag_ref_db,
+                                                          LJSpeechDatasetHelper.mel_mag_max_db)
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
                     _wav = spectrogram_to_wav(linear_mag,
