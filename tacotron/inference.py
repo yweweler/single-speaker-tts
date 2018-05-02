@@ -43,6 +43,7 @@ def inference(model, sentence):
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
+    # TODO: Plot the attention alignment.
     # Infer data.
     spectrograms = session.run(
         model.output_linear_spec,

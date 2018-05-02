@@ -491,8 +491,8 @@ class Tacotron:
                 def __synthesis(spec):
                     print('synthesis ...', spec.shape)
                     linear_mag_db = inv_normalize_decibel(spec.T,
-                                                          dataset_params.mel_mag_ref_db,
-                                                          dataset_params.mel_mag_max_db)
+                                                          dataset_params.dataset_loader.mel_mag_ref_db,
+                                                          dataset_params.dataset_loader.mel_mag_max_db)
 
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
