@@ -11,7 +11,7 @@ evaluation_params = tf.contrib.training.HParams(
     n_threads=4,
 
     # Maximal number of samples to load from the evaluation dataset.
-    max_samples=16,
+    max_samples=256,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
@@ -27,7 +27,7 @@ evaluation_params = tf.contrib.training.HParams(
     allow_smaller_batches=True,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/ljspeech_all',
+    checkpoint_dir='/tmp/tacotron/set_att_layer_size_and_set_output_att',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',

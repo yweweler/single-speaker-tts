@@ -5,7 +5,7 @@ from datasets.lj_speech import LJSpeechDatasetHelper
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
+    dataset_folder='/home/st/y/yw132854/workspace/ljspeech',
 
     # Dataset load helper.
     dataset_loader=LJSpeechDatasetHelper,

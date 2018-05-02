@@ -495,8 +495,9 @@ class Tacotron:
                               self.hparams.decoder.pre_net_layers,
                               self.is_training()),
                 seq2seq.BahdanauAttention(256, memory),
+                attention_layer_size=256,
                 alignment_history=True,
-                output_attention=False)  # [N, T_in, attention_depth=256]
+                output_attention=True)  # [N, T_in, attention_depth=256]
 
             # Decoder (layers specified bottom to top):
             decoder_cell = tf.nn.rnn_cell.MultiRNNCell([
@@ -520,7 +521,7 @@ class Tacotron:
                                                 self.hparams.n_mels,
                                                 self.hparams.reduction)
             else:
-                max_iters = 1000
+                max_iters = 1000 // 5
                 helper = TacotronInferenceHelper(batch_size,
                                                  self.hparams.n_mels)
 

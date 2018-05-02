@@ -149,6 +149,7 @@ def evaluate(model, n_samples):
     )
 
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+    print('checkpoint_file', checkpoint_file)
 
     # Checkpoint folder to save the evaluation summaries into.
     checkpoint_save_dir = os.path.join(
