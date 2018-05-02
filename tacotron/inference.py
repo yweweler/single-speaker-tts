@@ -43,6 +43,7 @@ def inference(model, sentence):
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
+    # TODO: Plot the attention alignment.
     # Infer data.
     spectrograms = session.run(
         model.output_linear_spec,
@@ -54,8 +55,8 @@ def inference(model, sentence):
 
     print('Reverse spectrogram normalization ...', spectrogram.shape)
     linear_mag_db = inv_normalize_decibel(spectrogram.T,
-                                          dataset_params.mel_mag_ref_db,
-                                          dataset_params.mel_mag_max_db)
+                                          dataset_params.dataset_loader.mel_mag_ref_db,
+                                          dataset_params.dataset_loader.mel_mag_max_db)
 
     linear_mag = decibel_to_magnitude(linear_mag_db)
 
