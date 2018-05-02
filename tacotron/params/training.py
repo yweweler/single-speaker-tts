@@ -8,7 +8,7 @@ training_params = tf.contrib.training.HParams(
     n_epochs=5000,
 
     # Batch size used for training.
-    batch_size=4,
+    batch_size=32,
 
     # Number of threads used to load data during training.
     n_threads=4,
@@ -34,13 +34,13 @@ training_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for training.
-    checkpoint_dir='/tmp/tacotron/ljspeech_all',
+    checkpoint_dir='/tmp/tacotron/set_att_layer_size_and_set_output_att',
 
     # Run folder to load data from and save data in to the checkpoint folder.
     checkpoint_run='train',
 
     # Duration in seconds after which to save a checkpoint.
-    checkpoint_save_secs=60 * 5,
+    checkpoint_save_secs=60 * 30,
 
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,
@@ -55,7 +55,7 @@ training_params = tf.contrib.training.HParams(
     lr=0.001,
 
     # Number of global steps after which the learning rate should be decayed.
-    lr_decay_steps=2500,
+    lr_decay_steps=25000,
 
     # Learning rate decay rate.
     lr_decay_rate=0.9,

@@ -35,7 +35,7 @@ model_params = tf.contrib.training.HParams(
     reduction=5,
 
     # Flag that controls application of the post-processing network.
-    apply_post_processing=False,
+    apply_post_processing=True,
 
     # The number of Griffin-Lim reconstruction iterations.
     reconstruction_iterations=75,

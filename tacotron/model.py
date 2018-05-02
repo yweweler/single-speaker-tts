@@ -176,7 +176,7 @@ class Tacotron:
                 shape=(B, T_spec // r, n_mels * r), with B being the batch size, T_spec being
                 the number of frames in the spectrogram and r being the reduction factor.
         """
-        with tf.variable_scope('decoder'):
+        with tf.variable_scope('decoder2'):
             # Query the current batch size.
             batch_size = tf.shape(memory)[0]
 
@@ -198,8 +198,7 @@ class Tacotron:
             )
 
             # Create the attention RNN cell.
-            attention_cell = tf.nn.rnn_cell.GRUCell(num_units=n_attention_units,
-                                                    name='attention_gru_cell')
+            attention_cell = tf.nn.rnn_cell.GRUCell(num_units=n_attention_units)
 
             # Apply the pre-net to each decoder input as show in [1], figure 1.
             attention_cell = PrenetWrapper(attention_cell,
