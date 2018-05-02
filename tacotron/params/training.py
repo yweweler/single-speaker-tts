@@ -25,6 +25,10 @@ training_params = tf.contrib.training.HParams(
     # Number of samples each bucket can pre-fetch.
     n_samples_per_bucket=16,
 
+    # The number of buckets to create. Note that this is the number of buckets that are actually
+    # created. If less buckets are needed for proper sorting of the data, less buckets are used.
+    n_buckets=20,
+
     # Flag enabling the bucketing mechanism to output batches of smaller size than
     # `batch_size` if not enough samples are available.
     allow_smaller_batches=False,
@@ -36,7 +40,7 @@ training_params = tf.contrib.training.HParams(
     checkpoint_run='train',
 
     # Duration in seconds after which to save a checkpoint.
-    checkpoint_save_secs=60 * 60,
+    checkpoint_save_secs=60 * 5,
 
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,

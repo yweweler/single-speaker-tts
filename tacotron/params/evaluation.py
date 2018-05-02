@@ -11,7 +11,7 @@ evaluation_params = tf.contrib.training.HParams(
     n_threads=4,
 
     # Maximal number of samples to load from the evaluation dataset.
-    max_samples=256,
+    max_samples=20,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
@@ -21,6 +21,10 @@ evaluation_params = tf.contrib.training.HParams(
 
     # Number of samples each bucket can pre-fetch.
     n_samples_per_bucket=16,
+
+    # The number of buckets to create. Note that this is the number of buckets that are actually
+    # created. If less buckets are needed for proper sorting of the data, less buckets are used.
+    n_buckets=20,
 
     # Flag enabling the bucketing mechanism to output batches of smaller size than
     # `batch_size` if not enough samples are available.

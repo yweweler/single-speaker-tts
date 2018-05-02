@@ -1,5 +1,6 @@
 import os
 import tensorflow as tf
+import numpy as np
 
 from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
@@ -68,11 +69,33 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     # Load alĺ sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
 
-    # Determine the minimal and maximal sentence lengths for calculating the bucket boundaries.
-    max_len, min_len = max(sentence_lengths), min(sentence_lengths)
-
     # Get the total number of samples in the dataset.
     n_samples = len(sentence_lengths)
+    print('Loaded {} dataset entries.'.format(n_samples))
+
+    # Sort sequence lengths in order to slice them into buckets that contain sequences of roughly
+    # equal length.
+    sorted_sentence_lengths = np.sort(sentence_lengths)
+
+    if n_samples < training_params.n_buckets:
+        raise AssertionError('The number of entries loaded is smaller than the number of '
+                             'buckets to be created. Automatic calculation of the bucket '
+                             'boundaries is not possible.')
+
+    # Slice the sorted lengths into equidistant sections and use the first element of a slice as
+    # the bucket boundary.
+    bucket_step = n_samples // training_params.n_buckets
+    bucket_boundaries = sorted_sentence_lengths[::bucket_step]
+
+    # Throw away the first and last bucket boundaries since the bucketing algorithm automatically
+    # adds two surrounding ones.
+    bucket_boundaries = bucket_boundaries[1:-1].tolist()
+
+    # Remove duplicate boundaries from the list.
+    bucket_boundaries = sorted(list(set(bucket_boundaries)))
+
+    print('bucket_boundaries', bucket_boundaries)
+    print('n_buckets: {} + 2'.format(len(bucket_boundaries)))
 
     # Convert everything into tf.Tensor objects for queue based processing.
     sentences = tf.convert_to_tensor(sentences)
@@ -101,9 +124,8 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     # Get the number spectrogram time-steps (used as the number of time frames when generating).
     n_time_frames = tf.shape(mel_spec)[0]
 
-    # TODO: Calculate better bucket boundaries. (See: #8)
-    buckets = [i for i in range(min_len + 1, max_len + 1, 8)]
-    print('n_buckets: {} + 2'.format(len(buckets)))
+    # Determine the bucket capacity for each bucket.
+    bucket_capacities = [training_params.n_samples_per_bucket] * (len(bucket_boundaries) + 1)
 
     # Batch data based on sequence lengths.
     ph_sentence_length, (ph_sentences, ph_mel_specs, ph_lin_specs, ph_time_frames) = \
@@ -111,10 +133,10 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
             input_length=sentence_length,
             tensors=[sentence, mel_spec, lin_spec, n_time_frames],
             batch_size=batch_size,
-            bucket_boundaries=buckets,
+            bucket_boundaries=bucket_boundaries,
             num_threads=n_threads,
             capacity=training_params.n_pre_calc_batches,
-            bucket_capacities=[training_params.n_samples_per_bucket] * (len(buckets) + 1),
+            bucket_capacities=bucket_capacities,
             dynamic_pad=True,
             allow_smaller_final_batch=training_params.allow_smaller_batches)
 
