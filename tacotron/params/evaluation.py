@@ -1,7 +1,5 @@
 import tensorflow as tf
 
-from datasets.lj_speech import LJSpeechDatasetHelper
-
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
