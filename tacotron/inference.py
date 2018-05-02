@@ -20,11 +20,12 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 def inference(model, sentence):
     """
-    TODO: Update docstring.
-
     Arguments:
         model (Tacotron):
             The Tacotron model instance to be evaluated.
+
+        sentence (string):
+            The sentence feed to the network.
     """
     # Checkpoint folder to load the evaluation checkpoint from.
     checkpoint_load_dir = os.path.join(
