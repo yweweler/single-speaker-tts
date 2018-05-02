@@ -264,12 +264,12 @@ def start_session():
 
 if __name__ == '__main__':
     # Create a dataset loader.
-    train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
-                                                  char_dict=dataset_params.vocabulary_dict,
-                                                  fill_dict=False)
+    eval_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
+                                                 char_dict=dataset_params.vocabulary_dict,
+                                                 fill_dict=False)
 
     # Create batched placeholders from the dataset.
-    placeholders, n_samples = batched_placeholders(dataset=train_dataset,
+    placeholders, n_samples = batched_placeholders(dataset=eval_dataset,
                                                    max_samples=evaluation_params.max_samples,
                                                    batch_size=evaluation_params.batch_size)
 
