@@ -7,4 +7,7 @@ inference_params = tf.contrib.training.HParams(
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',
+
+    # The path were to save the inference results.
+    synthesis_path='/tmp/inference'
 )
