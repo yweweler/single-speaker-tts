@@ -4,10 +4,10 @@ from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
-from datasets.lj_speech import LJSpeechDatasetHelper
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
 from tacotron.params.model import model_params
+from tacotron.params.dataset import dataset_params
 from tacotron.wrappers import PrenetWrapper
 
 
@@ -490,10 +490,11 @@ class Tacotron:
                 n_fft = self.hparams.n_fft
 
                 def __synthesis(spec):
-                    print('synthesis ....', spec.shape)
+                    print('synthesis ...', spec.shape)
                     linear_mag_db = inv_normalize_decibel(spec.T,
-                                                          LJSpeechDatasetHelper.mel_mag_ref_db,
-                                                          LJSpeechDatasetHelper.mel_mag_max_db)
+                                                          dataset_params.mel_mag_ref_db,
+                                                          dataset_params.mel_mag_max_db)
+
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
                     _wav = spectrogram_to_wav(linear_mag,
@@ -511,14 +512,9 @@ class Tacotron:
         return tf.summary.merge_all()
 
     @staticmethod
-    def model_placeholders(max_sent_len):
-        # UNUSED: Check if this can be removed.
+    def model_placeholders():
         """
         Create placeholders for feeding data into the Tacotron model.
-
-        Arguments:
-            max_sent_len (int):
-                Maximal sentence length.
 
         Returns:
             inputs (:obj:`dict`):
@@ -541,15 +537,11 @@ class Tacotron:
                         Batched number of frames in the spectrogram's excluding the padding
                         frames.
         """
-        # TODO: Make the batch size dimension, shape = None.
-        ph_sentences = tf.placeholder(dtype=tf.int32, shape=(1, max_sent_len),
+        ph_sentences = tf.placeholder(dtype=tf.int32, shape=(None, None),
                                       name='ph_inp_sentences')
 
         ph_mel_specs = tf.placeholder(dtype=tf.float32,
-                                      shape=(1,
-                                             model_params.decoder.maximum_iterations // model_params.reduction,
-                                             model_params.n_mels * model_params.reduction)
-                                      , name='ph_mel_specs')
+                                      name='ph_mel_specs')
 
         ph_lin_specs = tf.placeholder(dtype=tf.float32,
                                       name='ph_lin_specs')
