@@ -12,5 +12,5 @@ inference_params = tf.contrib.training.HParams(
     checkpoint_save_run='inference',
 
     # The path were to save the inference results.
-    synthesis_path='/tmp/inference'
+    synthesis_dir='/tmp/inference'
 )

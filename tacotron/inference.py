@@ -66,7 +66,6 @@ def inference(model, sentences):
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
-    # TODO: Check if the inference target wav folder actually exists before we start.
     # Infer data.
     summary, spectrograms = session.run(
         # TODO: implement automatic stopping after a certain amount of silence was generated.
@@ -136,6 +135,10 @@ def start_session():
 
 
 if __name__ == '__main__':
+    # Before we start doing anything we check if the required target folder actually exists.
+    if not os.path.isdir(inference_params.synthesis_dir):
+        raise NotADirectoryError('The specified synthesis target folder does not exist.')
+
     # Create a dataset loader.
     dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                             char_dict=dataset_params.vocabulary_dict,
@@ -181,7 +184,7 @@ if __name__ == '__main__':
         file_name = '{}.wav'.format(sentence)
 
         # Generate the full path under which to save the wav.
-        save_path = os.path.join(inference_params.synthesis_path, file_name)
+        save_path = os.path.join(inference_params.synthesis_dir, file_name)
 
         # Write the wav to disk.
         save_wav(save_path, wav, model_params.sampling_rate, True)
