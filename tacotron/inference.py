@@ -30,25 +30,26 @@ def inference(model, sentences):
     """
     Arguments:
         model (Tacotron):
-            The Tacotron model instance to be evaluated.
+            The Tacotron model instance to use for inference.
 
-        # TODO: Update docstring.
-        sentence (string):
-            The sentence feed to the network.
+        sentences (:obj:`list` of :obj:`np.ndarray`):
+            The padded sentences in id representation to feed to the network.
 
     Returns:
-        TODO: Update docstring.
+        wavs (:obj:`list` of :obj:`np.ndarray`):
+            The synthesised waveforms.
     """
-    # Checkpoint folder to load the evaluation checkpoint from.
+    # Checkpoint folder to load the inference checkpoint from.
     checkpoint_load_dir = os.path.join(
         inference_params.checkpoint_dir,
         inference_params.checkpoint_load_run
     )
 
+    # Get the path to the latest checkpoint file.
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
     saver = tf.train.Saver()
 
-    # Create the evaluation session.
+    # Create the inference session.
     session = start_session()
 
     print('Restoring model...')
@@ -70,6 +71,7 @@ def inference(model, sentences):
     win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
     n_fft = model_params.n_fft
 
+    # Apply Griffin-Lim to all spectrogram's to get the waveforms.
     wavs = list()
     for spectrogram in spectrograms:
         print('Reverse spectrogram normalization ...', spectrogram.shape)
