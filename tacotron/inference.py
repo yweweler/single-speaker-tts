@@ -49,6 +49,16 @@ def inference(model, sentences):
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
     saver = tf.train.Saver()
 
+    # Checkpoint folder to save the evaluation summaries into.
+    checkpoint_save_dir = os.path.join(
+        inference_params.checkpoint_dir,
+        inference_params.checkpoint_save_run
+    )
+
+    # Prepare the summary writer.
+    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
+    summary_op = tacotron_model.summary()
+
     # Create the inference session.
     session = start_session()
 
@@ -56,16 +66,24 @@ def inference(model, sentences):
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
-    # TODO: Plot the attention alignment.
+    # TODO: Check if the inference target wav folder actually exists before we start.
     # Infer data.
-    spectrograms = session.run(
+    summary, spectrograms = session.run(
         # TODO: implement automatic stopping after a certain amount of silence was generated.
         # The we could set max_iterations much higher and only use it as a worst case fallback
         # when the network does not stop by itself.
-        model.output_linear_spec,
+        [
+            summary_op,
+            model.output_linear_spec
+        ],
         feed_dict={
             model.inp_sentences: sentences
         })
+
+    # Write the summary statistics.
+    inference_summary = tf.Summary()
+    inference_summary.ParseFromString(summary)
+    summary_writer.add_summary(inference_summary)
 
     win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
     win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
