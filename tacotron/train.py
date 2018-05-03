@@ -229,6 +229,10 @@ def start_session(loss_op, summary_op):
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
         save_secs=training_params.checkpoint_save_secs,
+        saver=tf.train.Saver(
+            max_to_keep=training_params.checkpoints_to_keep,
+            save_relative_paths=True
+        )
     )
 
     summary_hook = tf.train.SummarySaverHook(
