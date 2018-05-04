@@ -39,6 +39,19 @@ class PAVOQUEDatasetHelper(DatasetHelper):
             '[': '',
             ']': '',
             '-': '',
+            'é': 'e',
+            'ô': 'o',
+            'ś': 's',
+            'ê': 'e',
+            'î': 'i',
+            'š': 's',
+            'í': 'i',
+            'è': 'e',
+            'à': 'a',
+            'ć': 'c',
+            'á': 'a',
+            'ó': 'o',
+            '´': ''
         }
 
     def load(self, max_samples=None, min_len=10, max_len=90, listing_file_name='neutral.txt'):
@@ -50,6 +63,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         with open(data_file, 'r') as listing_file:
             # Iterate the file listing file.
             for line in listing_file:
+                line = line.replace('\n', '')
                 wav_path, normalized_sentence = line.split(' | ')
 
                 # Extract the transcription.
@@ -142,17 +156,21 @@ if __name__ == '__main__':
     init_char_dict = {
         'pad': 0,  # padding
         'eos': 1,  # end of sequence
+        'i': 2, 'n': 3, ' ': 4, 's': 5, 'e': 6, 'r': 7, 'j': 8, 'u': 9, 'g': 10, 'd': 11, 'a': 12,
+        'b': 13, 't': 14, 'c': 15, 'h': 16, 'l': 17, 'ä': 18, '.': 19, 'ü': 20, 'm': 21, 'p': 22,
+        'w': 23, 'z': 24, ',': 25, 'ö': 26, 'o': 27, 'f': 28, 'k': 29, ';': 30, 'y': 31, 'v': 32,
+        'x': 33, 'ß': 34, ':': 35, 'q': 36, '"': 37, '?': 38, '!': 39, "'": 40, '/': 41
     }
 
     dataset = PAVOQUEDatasetHelper(dataset_folder='/home/yves-noel/downloads/PAVOQUE',
                                    char_dict=init_char_dict,
-                                   fill_dict=True)
+                                   fill_dict=False)
 
     ids, lens, paths = dataset.load()
 
     # Print a small sample from the dataset.
-    for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
-        print(p, np.fromstring(s, dtype=np.int32)[:10], l)
+    # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
+    #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
     # Collect and print the decibel statistics for all the files.
     # print("Collecting decibel statistics for {} files ...".format(len(paths)))
