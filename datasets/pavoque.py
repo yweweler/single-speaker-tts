@@ -7,6 +7,7 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
+from datasets.statistics import collect_decibel_statistics
 from tacotron.params.model import model_params
 
 
@@ -16,13 +17,13 @@ class PAVOQUEDatasetHelper(DatasetHelper):
     """
     # TODO: Update the decibel values.
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = 20
+    mel_mag_ref_db = 20  # -12.63
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
     mel_mag_max_db = 100.0
 
     # Linear scale spectrogram reference dB over the entire dataset.
-    linear_ref_db = 20
+    linear_ref_db = 20  # 24
 
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
@@ -54,7 +55,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
             '´': ''
         }
 
-    def load(self, max_samples=None, min_len=10, max_len=90, listing_file_name='neutral.txt'):
+    def load(self, max_samples=None, min_len=5, max_len=90, listing_file_name='neutral.txt'):
         data_file = os.path.join(self._dataset_folder, listing_file_name)
         # wav_folder = os.path.join(self._dataset_folder, 'wavs')
 
@@ -172,7 +173,7 @@ if __name__ == '__main__':
     # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
     #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
-    # Collect and print the decibel statistics for all the files.
+    # # Collect and print the decibel statistics for all the files.
     # print("Collecting decibel statistics for {} files ...".format(len(paths)))
     # min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
     # print("avg. min. linear magnitude (dB)", min_linear_db)
