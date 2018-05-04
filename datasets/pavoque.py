@@ -43,7 +43,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
 
     def load(self, max_samples=None, min_len=10, max_len=90, listing_file_name='neutral.txt'):
         data_file = os.path.join(self._dataset_folder, listing_file_name)
-        wav_folder = os.path.join(self._dataset_folder, 'wavs')
+        # wav_folder = os.path.join(self._dataset_folder, 'wavs')
 
         file_paths = []
         sentences = []
@@ -53,11 +53,10 @@ class PAVOQUEDatasetHelper(DatasetHelper):
                 wav_path, normalized_sentence = line.split(' | ')
 
                 # Extract the transcription.
-                ascii_sentence = self.utf8_to_ascii(normalized_sentence)
-                print(ascii_sentence)
+                sentence = normalized_sentence
 
                 # Skip sentences in case they do not meet the length requirements.
-                sentence_len = len(ascii_sentence)
+                sentence_len = len(sentence)
                 if min_len is not None:
                     if sentence_len < min_len:
                         continue
@@ -67,10 +66,11 @@ class PAVOQUEDatasetHelper(DatasetHelper):
                     if sentence_len > max_len:
                         continue
 
-                sentences.append(ascii_sentence)
+                sentences.append(sentence)
 
                 # Get the audio file path.
-                file_path = os.path.join(wav_folder, wav_path)
+                # TODO: '../' is a hack since the listing paths contain the base folder too.
+                file_path = os.path.join(self._dataset_folder, '../', wav_path)
                 file_paths.append(file_path)
 
                 if max_samples is not None:
@@ -151,8 +151,8 @@ if __name__ == '__main__':
     ids, lens, paths = dataset.load()
 
     # Print a small sample from the dataset.
-    # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
-    #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
+    for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
+        print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
     # Collect and print the decibel statistics for all the files.
     # print("Collecting decibel statistics for {} files ...".format(len(paths)))

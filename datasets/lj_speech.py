@@ -80,10 +80,11 @@ class LJSpeechDatasetHelper(DatasetHelper):
             # Iterate the metadata file.
             for file_id, _, normalized_sentence in csv_file_iter:
                 # Extract the transcription.
-                ascii_sentence = self.utf8_to_ascii(normalized_sentence)
+                # We do not want the sentence to contain any non ascii characters.
+                sentence = self.utf8_to_ascii(normalized_sentence)
 
                 # Skip sentences in case they do not meet the length requirements.
-                sentence_len = len(ascii_sentence)
+                sentence_len = len(sentence)
                 if min_len is not None:
                     if sentence_len < min_len:
                         continue
@@ -93,7 +94,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
                     if sentence_len > max_len:
                         continue
 
-                sentences.append(ascii_sentence)
+                sentences.append(sentence)
 
                 # Get the audio file path.
                 file_path = '{}.wav'.format(os.path.join(wav_folder, file_id))
