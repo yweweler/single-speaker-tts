@@ -24,8 +24,8 @@ recordings = {
     },
 }
 
-base_path = 'processed'
-wav_folder = os.path.join(base_path, 'wav')
+base_path = 'PAVOQUE'
+wav_folder = os.path.join(base_path, 'wavs')
 text_folder = os.path.join(base_path, 'text')
 
 wav_listing_file = os.path.join(base_path, 'wav.txt')
@@ -48,7 +48,7 @@ with open(wav_listing_file, 'r') as wav_files:
             text = text_file.readline()
             text = text.replace('\n', '')
 
-        wav_file_path = os.path.join('wav', wav_path)
+        wav_file_path = os.path.join('wavs', wav_path)
 
         recordings[_mode][_id] = (text, wav_file_path)
 
@@ -58,6 +58,8 @@ for style in recordings.keys():
     with open(os.path.join(base_path, file_name), 'w') as listing:
         for _id, (_sentence, _wav_path) in recordings[style].items():
             print(_id, _sentence, _wav_path)
+
+            _wav_path = os.path.join(base_path, _wav_path)
 
             # The id and the sentence are delimited by " | ".
             line = '{} | {}\n'.format(_wav_path, _sentence)
