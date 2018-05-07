@@ -17,7 +17,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
     """
     # TODO: Update the decibel values.
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = -12.63
+    mel_mag_ref_db = 12.63
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
     mel_mag_max_db = 100.0
@@ -29,7 +29,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
     linear_mag_max_db = 100.0
 
     # Raw waveform silence reference signal dB.
-    raw_silence_db = None
+    raw_silence_db = 20
 
     def __init__(self, dataset_folder, char_dict, fill_dict):
         super().__init__(dataset_folder, char_dict, fill_dict)
@@ -113,7 +113,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         # TODO: Determine a better silence reference level for the dataset (See: #9).
         # Remove silence at the beginning and end of the wav so the network does not have to learn
         # some random initial silence delay after which it is allowed to speak.
-        wav, _ = librosa.effects.trim(wav, top_db=24)
+        wav, _ = librosa.effects.trim(wav, top_db=PAVOQUEDatasetHelper.raw_silence_db)
 
         # Calculate the linear scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
