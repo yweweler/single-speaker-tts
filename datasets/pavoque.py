@@ -113,7 +113,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         # TODO: Determine a better silence reference level for the dataset (See: #9).
         # Remove silence at the beginning and end of the wav so the network does not have to learn
         # some random initial silence delay after which it is allowed to speak.
-        wav, _ = librosa.effects.trim(wav)
+        wav, _ = librosa.effects.trim(wav, top_db=24)
 
         # Calculate the linear scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
