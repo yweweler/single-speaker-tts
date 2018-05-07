@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
-from audio.effects import trim_silence_spectrogram
+from audio.effects import silence_interval_from_spectrogram
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
@@ -114,8 +114,6 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         # for example are applied to each frame automatically.
         linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
 
-        print('linear_spec.shape', linear_spec.shape)
-
         # TODO: Experimental noise removal <64Hz
         linear_spec[:, 0:8] = 0
 
@@ -123,18 +121,15 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         linear_mag = np.abs(linear_spec)
         linear_mag_db = magnitude_to_decibel(linear_mag)
 
-        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
-
-        # Remove silence at the beginning and end of the spectrogram so the network does not have
-        #  to learn some random initial silence delay after which it is allowed to speak.
-        linear_mag_db = trim_silence_spectrogram(linear_mag_db.T,
-                                                 PAVOQUEDatasetHelper.raw_silence_db,
-                                                 np.max).T
-
         linear_mag_db = normalize_decibel(linear_mag_db,
                                           PAVOQUEDatasetHelper.linear_ref_db,
                                           PAVOQUEDatasetHelper.linear_mag_max_db)
         # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
+
+        # Calculate how many frames we have to crop at the beginning and end to remove silence.
+        trim_start, trim_end = silence_interval_from_spectrogram(linear_mag_db,
+                                                                 PAVOQUEDatasetHelper.raw_silence_db,
+                                                                 np.max)
 
         # Calculate the Mel. scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for
@@ -150,6 +145,11 @@ class PAVOQUEDatasetHelper(DatasetHelper):
                                        PAVOQUEDatasetHelper.mel_mag_ref_db,
                                        PAVOQUEDatasetHelper.mel_mag_max_db)
         # => mel_mag_db.shape = (T_spec, n_mels)
+
+        # Remove silence at the beginning and end of the spectrogram's so the network does not have
+        # to learn some random initial silence delay after which it is allowed to speak.
+        linear_mag_db = linear_mag_db[trim_start:trim_end, :]
+        mel_mag_db = mel_mag_db[trim_start:trim_end, :]
 
         # Tacotron reduction factor.
         if model_params.reduction > 1:
