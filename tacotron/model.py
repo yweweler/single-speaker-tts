@@ -422,14 +422,7 @@ class Tacotron:
                 buffer containing all merged model summaries.
         """
 
-        # Attention alignment plot.
-        alignments = tf.transpose(self.alignment_history, [1, 2, 0])
-        tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
-
-        # Reduced decoder outputs.
-        tf.summary.image("reduced_decoder_outputs",
-                         tf.expand_dims(self.reduced_output_mel_spec, -1))
-
+        # Training only ============================================================================
         if self._mode == Mode.TRAIN:
             with tf.name_scope('loss'):
                 tf.summary.scalar('loss', self.loss_op)
@@ -459,29 +452,7 @@ class Tacotron:
                 linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
                 tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
-        with tf.name_scope('normalized_outputs'):
-            # Convert the mel spectrogram into an image that can be displayed.
-            # => shape=(1, T_spec, n_mels, 1)
-            mel_spec_img = tf.expand_dims(
-                tf.reshape(self.output_mel_spec[0],
-                           (1, -1, self.hparams.n_mels)), -1)
-
-            # => shape=(1, n_mels, T_spec, 1)
-            mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
-            mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
-            tf.summary.image('decoder_mel_spec', mel_spec_img, max_outputs=1)
-
-            # Convert thew linear spectrogram into an image that can be displayed.
-            # => shape=(1, T_spec, (1 + n_fft // 2), 1)
-            linear_spec_image = tf.expand_dims(
-                tf.reshape(self.output_linear_spec[0],
-                           (1, -1, (1 + self.hparams.n_fft // 2))), -1)
-
-            # => shape=(1, (1 + n_fft // 2), T_spec, 1)
-            linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
-            linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
-            tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
-
+        # Evaluation only ==========================================================================
         if self._mode == Mode.EVAL:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len, self.hparams.sampling_rate)
@@ -507,6 +478,39 @@ class Tacotron:
 
                 reconstruction = tf.py_func(__synthesis, [self.output_linear_spec[0]], [tf.float32])
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
+
+        # Training and evaluation ==================================================================
+        if self._mode == Mode.TRAIN or self._mode == Mode.EVAL:
+            with tf.name_scope('normalized_outputs'):
+                # Convert the mel spectrogram into an image that can be displayed.
+                # => shape=(1, T_spec, n_mels, 1)
+                mel_spec_img = tf.expand_dims(
+                    tf.reshape(self.output_mel_spec[0],
+                               (1, -1, self.hparams.n_mels)), -1)
+
+                # => shape=(1, n_mels, T_spec, 1)
+                mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
+                mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
+                tf.summary.image('decoder_mel_spec', mel_spec_img, max_outputs=1)
+
+                # Convert thew linear spectrogram into an image that can be displayed.
+                # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+                linear_spec_image = tf.expand_dims(
+                    tf.reshape(self.output_linear_spec[0],
+                               (1, -1, (1 + self.hparams.n_fft // 2))), -1)
+
+                # => shape=(1, (1 + n_fft // 2), T_spec, 1)
+                linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+                linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+                tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
+
+            # Reduced decoder outputs.
+            tf.summary.image("reduced_decoder_outputs",
+                             tf.expand_dims(self.reduced_output_mel_spec, -1))
+        # Always ===================================================================================
+        # Attention alignment plot.
+        alignments = tf.transpose(self.alignment_history, [1, 2, 0])
+        tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
 
         return tf.summary.merge_all()
 

@@ -45,6 +45,9 @@ training_params = tf.contrib.training.HParams(
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,
 
+    # Maximal number of checkpoints to keep.
+    checkpoints_to_keep=3000,
+
     # Number of global steps after which to log the global steps per second.
     performance_log_steps=50,
 

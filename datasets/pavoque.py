@@ -1,4 +1,3 @@
-import csv
 import os
 
 import librosa
@@ -8,21 +7,23 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
+from datasets.statistics import collect_decibel_statistics
 from tacotron.params.model import model_params
 
 
-class LJSpeechDatasetHelper(DatasetHelper):
+class PAVOQUEDatasetHelper(DatasetHelper):
     """
-    Dataset loading helper for the LJSpeech v1.1 dataset.
+    Dataset loading helper for the PAVOQUE v0.2 dataset.
     """
+    # TODO: Update the decibel values.
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = 20
+    mel_mag_ref_db = 20  # -12.63
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
     mel_mag_max_db = 100.0
 
     # Linear scale spectrogram reference dB over the entire dataset.
-    linear_ref_db = 20
+    linear_ref_db = 20  # 24
 
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
@@ -34,54 +35,40 @@ class LJSpeechDatasetHelper(DatasetHelper):
         super().__init__(dataset_folder, char_dict, fill_dict)
 
         self._abbreviations = {
-            'mr.': 'mister',
-            'mrs.': 'misses',
-            'dr.': 'doctor',
-            'no.': 'number',
-            'st.': 'saint',
-            'co.': 'company',
-            'jr.': 'junior',
-            'maj.': 'major',
-            'gen.': 'general',
-            'drs.': 'doctors',
-            'rev.': 'reverend',
-            'lt.': 'lieutenant',
-            'hon.': 'honorable',
-            'sgt.': 'sergeant',
-            'capt.': 'captain',
-            'esq.': 'esquire',
-            'ltd.': 'limited',
-            'col.': 'colonel',
-            'ft.': 'fort',
-            ':': '',
-            ';': '',
             '(': '',
             ')': '',
             '[': '',
             ']': '',
             '-': '',
-            ',': '',
-            '.': '',
-            '"': '',
-            '\'': '',
-            '!': '',
-            '?': '',
+            'é': 'e',
+            'ô': 'o',
+            'ś': 's',
+            'ê': 'e',
+            'î': 'i',
+            'š': 's',
+            'í': 'i',
+            'è': 'e',
+            'à': 'a',
+            'ć': 'c',
+            'á': 'a',
+            'ó': 'o',
+            '´': ''
         }
 
-    def load(self, max_samples=None, min_len=30, max_len=90, listing_file_name='metadata.csv'):
+    def load(self, max_samples=None, min_len=5, max_len=90, listing_file_name='neutral.txt'):
         data_file = os.path.join(self._dataset_folder, listing_file_name)
-        wav_folder = os.path.join(self._dataset_folder, 'wavs')
+        # wav_folder = os.path.join(self._dataset_folder, 'wavs')
 
         file_paths = []
         sentences = []
-        with open(data_file, 'r') as csv_file:
-            csv_file_iter = csv.reader(csv_file, delimiter='|', quotechar='|')
+        with open(data_file, 'r') as listing_file:
+            # Iterate the file listing file.
+            for line in listing_file:
+                line = line.replace('\n', '')
+                wav_path, normalized_sentence = line.split(' | ')
 
-            # Iterate the metadata file.
-            for file_id, _, normalized_sentence in csv_file_iter:
                 # Extract the transcription.
-                # We do not want the sentence to contain any non ascii characters.
-                sentence = self.utf8_to_ascii(normalized_sentence)
+                sentence = normalized_sentence
 
                 # Skip sentences in case they do not meet the length requirements.
                 sentence_len = len(sentence)
@@ -97,7 +84,8 @@ class LJSpeechDatasetHelper(DatasetHelper):
                 sentences.append(sentence)
 
                 # Get the audio file path.
-                file_path = '{}.wav'.format(os.path.join(wav_folder, file_id))
+                # TODO: '../' is a hack since the listing paths contain the base folder too.
+                file_path = os.path.join(self._dataset_folder, '../', wav_path)
                 file_paths.append(file_path)
 
                 if max_samples is not None:
@@ -122,7 +110,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
         # Load the actual audio file.
         wav, sr = load_wav(file_path.decode())
 
-        # TODO: Determine a better silence reference level for the LJSpeech dataset (See: #9).
+        # TODO: Determine a better silence reference level for the dataset (See: #9).
         # Remove silence at the beginning and end of the wav so the network does not have to learn
         # some random initial silence delay after which it is allowed to speak.
         wav, _ = librosa.effects.trim(wav)
@@ -143,16 +131,16 @@ class LJSpeechDatasetHelper(DatasetHelper):
         linear_mag = np.abs(linear_spec)
         linear_mag_db = magnitude_to_decibel(linear_mag)
         linear_mag_db = normalize_decibel(linear_mag_db,
-                                          LJSpeechDatasetHelper.linear_ref_db,
-                                          LJSpeechDatasetHelper.linear_mag_max_db)
+                                          PAVOQUEDatasetHelper.linear_ref_db,
+                                          PAVOQUEDatasetHelper.linear_mag_max_db)
         # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
 
         # Convert the mel spectrogram into decibel representation.
         mel_mag = np.abs(mel_spec)
         mel_mag_db = magnitude_to_decibel(mel_mag)
         mel_mag_db = normalize_decibel(mel_mag_db,
-                                       LJSpeechDatasetHelper.mel_mag_ref_db,
-                                       LJSpeechDatasetHelper.mel_mag_max_db)
+                                       PAVOQUEDatasetHelper.mel_mag_ref_db,
+                                       PAVOQUEDatasetHelper.mel_mag_max_db)
         # => mel_mag_db.shape = (T_spec, n_mels)
 
         # Tacotron reduction factor.
@@ -169,38 +157,15 @@ if __name__ == '__main__':
     init_char_dict = {
         'pad': 0,  # padding
         'eos': 1,  # end of sequence
-        'p': 2,
-        'r': 3,
-        'i': 4,
-        'n': 5,
-        't': 6,
-        'g': 7,
-        ' ': 8,
-        'h': 9,
-        'e': 10,
-        'o': 11,
-        'l': 12,
-        'y': 13,
-        's': 14,
-        'w': 15,
-        'c': 16,
-        'a': 17,
-        'd': 18,
-        'f': 19,
-        'm': 20,
-        'x': 21,
-        'b': 22,
-        'v': 23,
-        'u': 24,
-        'k': 25,
-        'j': 26,
-        'z': 27,
-        'q': 28,
+        'i': 2, 'n': 3, ' ': 4, 's': 5, 'e': 6, 'r': 7, 'j': 8, 'u': 9, 'g': 10, 'd': 11, 'a': 12,
+        'b': 13, 't': 14, 'c': 15, 'h': 16, 'l': 17, 'ä': 18, '.': 19, 'ü': 20, 'm': 21, 'p': 22,
+        'w': 23, 'z': 24, ',': 25, 'ö': 26, 'o': 27, 'f': 28, 'k': 29, ';': 30, 'y': 31, 'v': 32,
+        'x': 33, 'ß': 34, ':': 35, 'q': 36, '"': 37, '?': 38, '!': 39, "'": 40, '/': 41
     }
 
-    dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
-                                    char_dict=init_char_dict,
-                                    fill_dict=False)
+    dataset = PAVOQUEDatasetHelper(dataset_folder='/home/yves-noel/downloads/PAVOQUE',
+                                   char_dict=init_char_dict,
+                                   fill_dict=False)
 
     ids, lens, paths = dataset.load()
 
@@ -208,7 +173,7 @@ if __name__ == '__main__':
     # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
     #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
-    # Collect and print the decibel statistics for all the files.
+    # # Collect and print the decibel statistics for all the files.
     # print("Collecting decibel statistics for {} files ...".format(len(paths)))
     # min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
     # print("avg. min. linear magnitude (dB)", min_linear_db)

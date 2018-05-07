@@ -30,46 +30,65 @@ def inference(model, sentences):
     """
     Arguments:
         model (Tacotron):
-            The Tacotron model instance to be evaluated.
+            The Tacotron model instance to use for inference.
 
-        # TODO: Update docstring.
-        sentence (string):
-            The sentence feed to the network.
+        sentences (:obj:`list` of :obj:`np.ndarray`):
+            The padded sentences in id representation to feed to the network.
 
     Returns:
-        TODO: Update docstring.
+        wavs (:obj:`list` of :obj:`np.ndarray`):
+            The synthesised waveforms.
     """
-    # Checkpoint folder to load the evaluation checkpoint from.
+    # Checkpoint folder to load the inference checkpoint from.
     checkpoint_load_dir = os.path.join(
         inference_params.checkpoint_dir,
         inference_params.checkpoint_load_run
     )
 
+    # Get the path to the latest checkpoint file.
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
     saver = tf.train.Saver()
 
-    # Create the evaluation session.
+    # Checkpoint folder to save the evaluation summaries into.
+    checkpoint_save_dir = os.path.join(
+        inference_params.checkpoint_dir,
+        inference_params.checkpoint_save_run
+    )
+
+    # Prepare the summary writer.
+    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
+    summary_op = tacotron_model.summary()
+
+    # Create the inference session.
     session = start_session()
 
     print('Restoring model...')
     saver.restore(session, checkpoint_file)
     print('Restoring finished')
 
-    # TODO: Plot the attention alignment.
     # Infer data.
-    spectrograms = session.run(
+    summary, spectrograms = session.run(
         # TODO: implement automatic stopping after a certain amount of silence was generated.
         # The we could set max_iterations much higher and only use it as a worst case fallback
         # when the network does not stop by itself.
-        model.output_linear_spec,
+        [
+            summary_op,
+            model.output_linear_spec
+        ],
         feed_dict={
             model.inp_sentences: sentences
         })
+
+    # Write the summary statistics.
+    inference_summary = tf.Summary()
+    inference_summary.ParseFromString(summary)
+    summary_writer.add_summary(inference_summary)
 
     win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
     win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
     n_fft = model_params.n_fft
 
+    # Apply Griffin-Lim to all spectrogram's to get the waveforms.
     wavs = list()
     for spectrogram in spectrograms:
         print('Reverse spectrogram normalization ...', spectrogram.shape)
@@ -116,6 +135,10 @@ def start_session():
 
 
 if __name__ == '__main__':
+    # Before we start doing anything we check if the required target folder actually exists.
+    if not os.path.isdir(inference_params.synthesis_dir):
+        raise NotADirectoryError('The specified synthesis target folder does not exist.')
+
     # Create a dataset loader.
     dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                             char_dict=dataset_params.vocabulary_dict,
@@ -161,7 +184,7 @@ if __name__ == '__main__':
         file_name = '{}.wav'.format(sentence)
 
         # Generate the full path under which to save the wav.
-        save_path = os.path.join(inference_params.synthesis_path, file_name)
+        save_path = os.path.join(inference_params.synthesis_dir, file_name)
 
         # Write the wav to disk.
         save_wav(save_path, wav, model_params.sampling_rate, True)
