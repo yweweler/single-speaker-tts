@@ -29,7 +29,7 @@ evaluation_params = tf.contrib.training.HParams(
     allow_smaller_batches=True,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/set_att_layer_size_and_set_output_att',
+    checkpoint_dir='/tmp/tacotron/pavoque',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',
