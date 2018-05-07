@@ -6,7 +6,7 @@ from datasets.pavoque import PAVOQUEDatasetHelper
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/home/st/y/yw132854/workspace/pavoque',
+    dataset_folder='/home/st/y/yw132854/workspace/pavoque/PAVOQUE',
 
     # Dataset load helper.
     dataset_loader=PAVOQUEDatasetHelper,
