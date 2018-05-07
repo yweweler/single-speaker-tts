@@ -213,3 +213,27 @@ def trim_silence(wav, threshold_db=40, ref=np.max):
             The indices shape is shape=(2,).
     """
     return librosa.effects.trim(wav, threshold_db, ref)
+
+
+def trim_silence_spectrogram(mag_spec_db, threshold_db, ref=np.max):
+    ref_trim_spec_db = ref(mag_spec_db, axis=0)
+
+    print('ref_trim_spec_db', ref_trim_spec_db)
+
+    non_silent = (ref_trim_spec_db > threshold_db)
+    non_silent = np.array(non_silent, dtype=np.int32)
+    print('non_silent', non_silent)
+
+    nonzero = np.flatnonzero(non_silent)
+    print('nonzero', nonzero)
+
+    if len(nonzero) == 0:
+        return None
+
+    trim_start = np.min(nonzero)
+    trim_end = np.max(nonzero)
+
+    mag_spec_db = mag_spec_db[:, trim_start:trim_end]
+    print('mag_spec_db', mag_spec_db.shape)
+
+    return mag_spec_db

@@ -1,13 +1,12 @@
 import os
 
-import librosa
 import numpy as np
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
+from audio.effects import trim_silence_spectrogram
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
-from datasets.statistics import collect_decibel_statistics
 from tacotron.params.model import model_params
 
 
@@ -29,7 +28,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
     linear_mag_max_db = 100.0
 
     # Raw waveform silence reference signal dB.
-    raw_silence_db = 20
+    raw_silence_db = -15.0
 
     def __init__(self, dataset_folder, char_dict, fill_dict):
         super().__init__(dataset_folder, char_dict, fill_dict)
@@ -110,18 +109,30 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         # Load the actual audio file.
         wav, sr = load_wav(file_path.decode())
 
-        # TODO: Determine a better silence reference level for the dataset (See: #9).
-        # Remove silence at the beginning and end of the wav so the network does not have to learn
-        # some random initial silence delay after which it is allowed to speak.
-        wav, _ = librosa.effects.trim(wav, top_db=PAVOQUEDatasetHelper.raw_silence_db)
-
         # Calculate the linear scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
         # for example are applied to each frame automatically.
-        linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
+        linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len)
 
         # TODO: Experimental noise removal <64Hz
-        linear_spec[:, 0:8] = 0
+        linear_spec[:8, :] = 0
+
+        # Convert the linear spectrogram into decibel representation.
+        linear_mag = np.abs(linear_spec)
+        linear_mag_db = magnitude_to_decibel(linear_mag)
+
+        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
+
+        # Remove silence at the beginning and end of the spectrogram so the network does not have
+        #  to learn some random initial silence delay after which it is allowed to speak.
+        linear_mag_db = trim_silence_spectrogram(linear_mag_db,
+                                                 PAVOQUEDatasetHelper.raw_silence_db,
+                                                 np.max)
+
+        linear_mag_db = normalize_decibel(linear_mag_db,
+                                          PAVOQUEDatasetHelper.linear_ref_db,
+                                          PAVOQUEDatasetHelper.linear_mag_max_db)
+        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
 
         # Calculate the Mel. scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for
@@ -129,14 +140,6 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         mel_spec = mel_scale_spectrogram(wav, model_params.n_fft, sr, model_params.n_mels,
                                          model_params.mel_fmin, model_params.mel_fmax, hop_len,
                                          win_len, 1).T
-
-        # Convert the linear spectrogram into decibel representation.
-        linear_mag = np.abs(linear_spec)
-        linear_mag_db = magnitude_to_decibel(linear_mag)
-        linear_mag_db = normalize_decibel(linear_mag_db,
-                                          PAVOQUEDatasetHelper.linear_ref_db,
-                                          PAVOQUEDatasetHelper.linear_mag_max_db)
-        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
 
         # Convert the mel spectrogram into decibel representation.
         mel_mag = np.abs(mel_spec)
