@@ -110,8 +110,6 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         wav, sr = load_wav(file_path.decode())
 
         # Calculate the linear scale spectrogram.
-        # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
-        # for example are applied to each frame automatically.
         linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len)
 
         # TODO: Experimental noise removal <64Hz
@@ -128,6 +126,10 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         linear_mag_db = trim_silence_spectrogram(linear_mag_db,
                                                  PAVOQUEDatasetHelper.raw_silence_db,
                                                  np.max)
+
+        # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
+        # for example are applied to each frame automatically.
+        linear_mag_db = linear_mag_db.T
 
         linear_mag_db = normalize_decibel(linear_mag_db,
                                           PAVOQUEDatasetHelper.linear_ref_db,
