@@ -120,6 +120,9 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         # for example are applied to each frame automatically.
         linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
 
+        # TODO: Experimental noise removal <64Hz
+        linear_spec[:, 0:8] = 0
+
         # Calculate the Mel. scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for
         # example are applied to each frame automatically.
