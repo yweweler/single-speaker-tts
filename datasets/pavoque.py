@@ -17,13 +17,13 @@ class PAVOQUEDatasetHelper(DatasetHelper):
     """
     # TODO: Update the decibel values.
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = 20  # -12.63
+    mel_mag_ref_db = -12.63
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
     mel_mag_max_db = 100.0
 
     # Linear scale spectrogram reference dB over the entire dataset.
-    linear_ref_db = 20  # 24
+    linear_ref_db = 24
 
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
