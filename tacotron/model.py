@@ -4,6 +4,7 @@ from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
+from tacotron.attention import LocalLuongAttention
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
 from tacotron.params.model import model_params
@@ -190,7 +191,9 @@ class Tacotron:
             n_attention_units = self.hparams.decoder.n_attention_units
 
             # Create the attention mechanism.
-            attention_mechanism = tfc.seq2seq.BahdanauAttention(
+            attention_mechanism = LocalLuongAttention(
+            # attention_mechanism = tfc.seq2seq.LuongAttention(
+            # attention_mechanism = tfc.seq2seq.BahdanauAttention(
                 num_units=n_attention_units,
                 memory=memory,
                 # memory_sequence_length=None,
