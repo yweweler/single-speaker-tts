@@ -21,8 +21,6 @@ class LocalLuongAttention(LuongAttention):
                          dtype=dtype,
                          name=name)
 
-        self._intermediate_layer = tf.layers.Dense(num_units, use_bias=False)
-
     def __call__(self, query, state):
         with tf.variable_scope(None, "local_luong_attention", [query]) as test:
             # Get the memory dtype.
@@ -30,6 +28,9 @@ class LocalLuongAttention(LuongAttention):
 
             # Get the depth of the memory values.
             num_units = self._keys.get_shape()[-1]
+
+            # Get the current batch size.
+            batch_size = self._keys.get_shape()[0]
 
             # Get the source sequence length from memory.
             seq_length = tf.shape(self._keys)[1]
@@ -41,8 +42,7 @@ class LocalLuongAttention(LuongAttention):
             # shape => (B, num_units)
             _intermediate_result = tf.transpose(tf.tensordot(wp, query, [0, 1]))
 
-            # shape => (B, )
-            # _tmp = tf.transpose(vp) * tf.tanh(_intermediate_result)
+            # shape => (B, 1)
             _tmp = tf.transpose(tf.tensordot(vp, tf.tanh(_intermediate_result), [0, 1]))
 
             _intermediate_prob = tf.sigmoid(_tmp)
@@ -52,25 +52,51 @@ class LocalLuongAttention(LuongAttention):
 
             # TODO: Refactor this variables into separate hyper-parameters.
             # Window size is 0.5s backwards from p_t and 0.5s forward from p_t.
-            window_size = 2 * 40
+            window_size = 2 * 4
             d = window_size // 2
 
-            window_start = tf.maximum(0, tf.cast(p - d, dtype=tf.int32))
-            window_end = tf.minimum(seq_length, tf.cast(p + d, dtype=tf.int32))
+            start_index = tf.cast(p - d, dtype=tf.int32)
+            window_start = tf.maximum(0, start_index)
+
+            stop_index = tf.cast(p + d, dtype=tf.int32)
+            window_stop = tf.minimum(seq_length, stop_index)
+
+            # TODO: This is not correct.
+            pre_padding = start_index
+            post_padding = tf.abs(stop_index - seq_length)
+
+            print('window_start', window_start)
+            print('window_stop', window_stop)
 
             # TODO: Should we pad this so the window size is always consistent?
             # TODO: What changes have to be made in order for the alignment history to work?
-            # window = self._keys[:, window_start:window_end, :]
+            window = self._keys[:, window_start[0][0]:window_stop[0][0], :]
+
+            # window = tf.get_variable('attention_window', [batch_size, window_size, num_units])
+
+            # Clear the window.
+            # window = tf.assign(window, tf.zeros_like(window))
 
             # TODO: Slice a window [p_t - D, p_t + D] from self._keys.
             # NOTE: It would be less computationally expensive if this would be done in the
             # BaseAttentionMechnaism since we could slice values before applying the dense
             # memory_layer. Therefore the memory_layer would only have to be calculated on the
             # sliced window and not on all encoder outputs just to throw most of them away.
-            score = _local_luong_score(query, self._keys, self._scale)
+            # score = _local_luong_score(query, self._keys, self._scale)
+            score = _local_luong_score(query, window, self._scale)
 
-        score = tf.Print(score, [tf.shape(window_start)], 'LocalAttention window_start:')
-        score = tf.Print(score, [tf.shape(window_end)], 'LocalAttention window_end:')
+        # score = tf.Print(score, [tf.shape(window_start)], 'LocalAttention window_start:')
+        # score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
+        score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:')
+        score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
+        score = tf.Print(score, [start_index[0][0]], 'LocalAttention start_index:')
+        score = tf.Print(score, [window_start[0][0]], 'LocalAttention window_start:')
+        score = tf.Print(score, [pre_padding[0][0]], 'LocalAttention pre_padding:')
+        score = tf.Print(score, [post_padding[0][0]], 'LocalAttention post_padding:')
+
+        # Pad the scores to cover all encoder steps. (B, 2D+1) => (B, max_time).
+        score = tf.pad(score, [[0, 0], [pre_padding[0][0], post_padding[0][0]]], 'CONSTANT')
+        score = tf.Print(score, [tf.shape(score)], 'LocalAttention score:')
 
         alignments = self._probability_fn(score, state)
         next_state = alignments
@@ -140,3 +166,5 @@ def _local_luong_score(query, keys, scale):
         score = g * score
 
     return score
+
+# http://cnyah.com/2017/08/01/attention-variants/
