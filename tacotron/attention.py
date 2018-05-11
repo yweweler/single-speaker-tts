@@ -71,7 +71,7 @@ class LocalLuongAttention(LuongAttention):
             # TODO: What changes have to be made in order for the alignment history to work?
             windows = []
             # TODO: Super ugly hack, but it works for now.
-            for i in range(0, 4):
+            for i in range(0, 16):
                 self._keys = tf.Print(self._keys, [window_start[i][0]],
                                       '=========================================================\n'
                                       'LocalAttention window_start[i][0]:')
