@@ -58,11 +58,10 @@ class LocalLuongAttention(LuongAttention):
             start_index = tf.cast(p - d, dtype=tf.int32)
             window_start = tf.maximum(0, start_index)
 
-            stop_index = tf.cast(p + d, dtype=tf.int32)
+            stop_index = tf.cast(p + d + 1, dtype=tf.int32)
             window_stop = tf.minimum(seq_length, stop_index)
 
-            # TODO: This is not correct.
-            pre_padding = start_index
+            pre_padding = tf.abs(start_index)
             post_padding = tf.abs(stop_index - seq_length)
 
             print('window_start', window_start)
@@ -70,7 +69,36 @@ class LocalLuongAttention(LuongAttention):
 
             # TODO: Should we pad this so the window size is always consistent?
             # TODO: What changes have to be made in order for the alignment history to work?
-            window = self._keys[:, window_start[0][0]:window_stop[0][0], :]
+            windows = []
+            # TODO: Super ugly hack, but it works for now.
+            for i in range(0, 4):
+                self._keys = tf.Print(self._keys, [window_start[i][0]],
+                                      '=========================================================\n'
+                                      'LocalAttention window_start[i][0]:')
+                self._keys = tf.Print(self._keys, [window_stop[i][0]],
+                                      'LocalAttention window_stop[i][0]:')
+
+                tmp_window = self._keys[i, window_start[i][0]:window_stop[i][0], :]
+
+                self._keys = tf.Print(self._keys, [tf.shape(tmp_window)],
+                                      'LocalAttention pre_padding tmp_window[{}]:'.format(i))
+
+                paddings = [
+                    [pre_padding[i][0], post_padding[i][0]],
+                    [0, 0]
+                ]
+
+                tmp_window = tf.pad(tmp_window, paddings, 'CONSTANT')
+
+                self._keys = tf.Print(self._keys, [tf.shape(tmp_window)],
+                                      'LocalAttention post_padding tmp_window[{}]:'.format(i))
+
+                windows.append(tmp_window)
+
+            print('windows', windows)
+            window = tf.stack(windows)
+
+            # window = self._keys[:, window_start[0][0]:window_stop[0][0], :]
 
             # window = tf.get_variable('attention_window', [batch_size, window_size, num_units])
 
@@ -87,18 +115,19 @@ class LocalLuongAttention(LuongAttention):
 
         # score = tf.Print(score, [tf.shape(window_start)], 'LocalAttention window_start:')
         # score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
-        score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:')
+        score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:', summarize=99)
         score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
         score = tf.Print(score, [start_index[0][0]], 'LocalAttention start_index:')
         score = tf.Print(score, [window_start[0][0]], 'LocalAttention window_start:')
         score = tf.Print(score, [pre_padding[0][0]], 'LocalAttention pre_padding:')
         score = tf.Print(score, [post_padding[0][0]], 'LocalAttention post_padding:')
 
-        # Pad the scores to cover all encoder steps. (B, 2D+1) => (B, max_time).
-        score = tf.pad(score, [[0, 0], [pre_padding[0][0], post_padding[0][0]]], 'CONSTANT')
-        score = tf.Print(score, [tf.shape(score)], 'LocalAttention score:')
-
         alignments = self._probability_fn(score, state)
+
+        # # Pad the alignments to cover all encoder steps. (B, 2D+1) => (B, max_time).
+        # alignments = tf.pad(alignments, [[0, 0], [pre_padding[0][0], post_padding[0][0]]], 'CONSTANT')
+        # alignments = tf.Print(alignments, [tf.shape(alignments)], 'LocalAttention alignments:')
+
         next_state = alignments
 
         return alignments, next_state
