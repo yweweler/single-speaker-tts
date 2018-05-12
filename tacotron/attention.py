@@ -49,7 +49,9 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
 
         gaussian_weights = tf.exp(-(point_dist ** 2) / 2 * (attention_mechanism.d / 2) ** 2)
 
-        __alignments = tf.pad(alignments[i] * gaussian_weights, alignment_seq_paddings, 'CONSTANT')
+        # __alignments = tf.pad(alignments[i] * gaussian_weights, alignment_seq_paddings, 'CONSTANT')
+        __alignments = tf.pad(alignments[i], alignment_seq_paddings, 'CONSTANT')
+
         padded_alignment_windows.append(__alignments)
 
     context = tf.stack(context_windows)
@@ -113,8 +115,19 @@ class LocalLuongAttention(LuongAttention):
             _intermediate_prob = tf.sigmoid(_tmp)
 
             # p_t as described by Luong for the predictive local-p case.
-            self.p = tf.cast(source_seq_length, tf.float32) * _intermediate_prob
-            self.p = tf.Print(self.p, [self.p], 'LocalAttention self.p:', summarize=99)
+            # self.p = tf.cast(source_seq_length, tf.float32) * _intermediate_prob
+            # self.p = tf.Print(self.p, [self.p], 'LocalAttention self.p:', summarize=99)
+
+            # p_t as described by Luong for the predictive local-m case.
+            self.p = tf.tile(
+                [[self.time]],
+                tf.convert_to_tensor([4, 1])
+            )
+
+            self.p = tf.maximum(self.p, 10)
+            self.p = tf.minimum(self.p, source_seq_length - 11)
+
+            self.p = tf.cast(self.p, dtype=tf.float32)
             # ======================================================================================
 
             # TODO: Refactor this variables into separate hyper-parameters.
@@ -299,6 +312,7 @@ class AdvAttentionWrapper(AttentionWrapper):
         all_attention_states = []
         maybe_all_histories = []
         for i, attention_mechanism in enumerate(self._attention_mechanisms):
+            attention_mechanism.time = state.time
             attention, alignments, next_attention_state = _compute_attention(
                 attention_mechanism, cell_output, previous_attention_state[i],
                 self._attention_layers[i] if self._attention_layers else None)
