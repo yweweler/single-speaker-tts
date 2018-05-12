@@ -1,11 +1,11 @@
 import tensorflow as tf
-from tensorflow.contrib.seq2seq.python.ops.attention_wrapper import LuongAttention
 from tensorflow.contrib.seq2seq.python.ops import attention_wrapper
+from tensorflow.contrib.seq2seq.python.ops.attention_wrapper import LuongAttention, \
+    AttentionWrapper, AttentionWrapperState
 
 
 def _compute_attention(attention_mechanism, cell_output, attention_state,
                        attention_layer):
-
     print('THIS IS A SUUUUPER HACK FOR OVERRIDING SOMEONE OTHERS SHIT!')
 
     """Computes the attention and alignments for a given attention_mechanism."""
@@ -14,67 +14,60 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
 
     # Reshape from [batch_size, memory_time] to [batch_size, 1, memory_time]
     expanded_alignments = tf.expand_dims(alignments, 1)
-    # Context is the inner product of alignments and values along the
-    # memory time dimension.
-    # alignments shape is
-    #   [batch_size, 1, memory_time]
-    # attention_mechanism.values shape is
-    #   [batch_size, memory_time, memory_size]
-    # the batched matmul is over memory_time, so the output shape is
-    #   [batch_size, 1, memory_size].
-    # we then squeeze out the singleton dim.
 
-    value_windows = []
-    window_start = attention_mechanism.w_start
-    window_stop = attention_mechanism.w_stop
+    context_windows = []
+    padded_alignment_windows = []
 
-    pre_padding = attention_mechanism.pre_padding
-    post_padding = attention_mechanism.post_padding
+    window_start = attention_mechanism.window_start
+    window_stop = attention_mechanism.window_stop
+
+    pre_padding = attention_mechanism.window_pre_padding
+    post_padding = attention_mechanism.window_post_padding
 
     full_pre_padding = attention_mechanism.full_seq_pre_padding
     full_post_padding = attention_mechanism.full_seq_post_padding
 
-    # TODO: Super ugly hack, but it works for now.
     for i in range(0, 4):
-        tmp_window = attention_mechanism.values[i, window_start[i][0]:window_stop[i][0], :]
-        paddings = [
+        value_window = attention_mechanism.values[i, window_start[i][0]:window_stop[i][0], :]
+        value_window_paddings = [
             [pre_padding[i][0], post_padding[i][0]],
             [0, 0]
         ]
+        value_window = tf.pad(value_window, value_window_paddings, 'CONSTANT')
+        value_window.set_shape((attention_mechanism.window_size, 256))
 
-        tmp_window = tf.pad(tmp_window, paddings, 'CONSTANT')
-        value_windows.append(tmp_window)
+        context_window = tf.matmul(expanded_alignments[i], value_window)
+        context_windows.append(context_window)
 
-    values = tf.stack(value_windows)
-    print('values', values)
-    values = tf.Print(values, [tf.shape(values)], '_compute_attention values:')
+        alignment_seq_paddings = [
+            [full_pre_padding[i][0], full_post_padding[i][0]],
+        ]
 
-    # TODO: Calculate this inside the loop and add padding afterwards.
-    context = tf.matmul(expanded_alignments, values)
+        point_dist = tf.cast(tf.range(start=window_start[i][0],
+                                      limit=window_stop[i][0],
+                                      delta=1), dtype=tf.float32) - attention_mechanism.p[i][0]
+
+        gaussian_weights = tf.exp(-(point_dist ** 2) / 2 * (attention_mechanism.d / 2) ** 2)
+
+        __alignments = tf.pad(alignments[i] * gaussian_weights, alignment_seq_paddings, 'CONSTANT')
+        padded_alignment_windows.append(__alignments)
+
+    context = tf.stack(context_windows)
     context = tf.Print(context, [tf.shape(context)], '_compute_attention context.matmul:')
 
     context = tf.squeeze(context, [1])
     context = tf.Print(context, [tf.shape(context)], '_compute_attention context.squeeze:')
 
-    # TODO: Why does the context no longer know it's shape?
-    context.set_shape((4, 256))
+    padded_alignment = tf.stack(padded_alignment_windows)
+    padded_alignment = tf.Print(padded_alignment, [tf.shape(padded_alignment)],
+                                '_compute_attention padded_alignments:')
 
     if attention_layer is not None:
         attention = attention_layer(tf.concat([cell_output, context], 1))
     else:
         attention = context
 
-    # TODO: This dies not work outside the loop (get this inside the loop)!
-    paddings = [
-        [0, 0],
-        [full_pre_padding[i][0], full_post_padding[i][0]]
-    ]
-
-    alignments = tf.pad(alignments, paddings, 'CONSTANT')
-    alignments = tf.Print(alignments, [tf.shape(alignments)], '_compute_attention return '
-                                                              'alignments:')
-
-    return attention, alignments, next_attention_state
+    return attention, padded_alignment, padded_alignment
 
 
 attention_wrapper._compute_attention = _compute_attention
@@ -89,7 +82,6 @@ class LocalLuongAttention(LuongAttention):
                  score_mask_value=None,
                  dtype=None,
                  name="LocalLuongAttention"):
-
         # TODO: What about the query_layer in _BaseAttentionMechanism?
         super().__init__(num_units=num_units,
                          memory=memory,
@@ -102,19 +94,13 @@ class LocalLuongAttention(LuongAttention):
 
     def __call__(self, query, state):
         with tf.variable_scope(None, "local_luong_attention", [query]) as test:
-            # Get the memory dtype.
-            dtype = self._keys.dtype
-
             # Get the depth of the memory values.
             num_units = self._keys.get_shape()[-1]
 
-            # Get the current batch size.
-            batch_size = self._keys.get_shape()[0]
-
             # Get the source sequence length from memory.
-            seq_length = tf.shape(self._keys)[1]
-            f_seq_length = tf.cast(seq_length, tf.float32)
+            source_seq_length = tf.shape(self._keys)[1]
 
+            # Predict p_t ==========================================================================
             vp = tf.get_variable(name="local_v_p", shape=[num_units, 1], dtype=tf.float32)
             wp = tf.get_variable(name="local_w_p", shape=[num_units, num_units], dtype=tf.float32)
 
@@ -127,80 +113,43 @@ class LocalLuongAttention(LuongAttention):
             _intermediate_prob = tf.sigmoid(_tmp)
 
             # p_t as described by Luong for the predictive local-p case.
-            p = f_seq_length * _intermediate_prob
+            self.p = tf.cast(source_seq_length, tf.float32) * _intermediate_prob
+            self.p = tf.Print(self.p, [self.p], 'LocalAttention self.p:', summarize=99)
+            # ======================================================================================
 
             # TODO: Refactor this variables into separate hyper-parameters.
-            # Window size is 0.5s backwards from p_t and 0.5s forward from p_t.
-            window_size = 2 * 10
-            d = window_size // 2
+            self.d = 10
+            self.window_size = 2 * self.d + 1
 
-            start_index = tf.cast(p - d, dtype=tf.int32)
-            window_start = tf.maximum(0, start_index)
+            start_index = tf.cast(self.p - self.d, dtype=tf.int32)
+            self.window_start = tf.maximum(0, start_index)
 
-            self.w_start = window_start
-
-            stop_index = tf.cast(p + d + 1, dtype=tf.int32)
-            window_stop = tf.minimum(seq_length, stop_index)
-
-            self.w_stop = window_stop
+            stop_index = tf.cast(self.p + self.d + 1, dtype=tf.int32)
+            self.window_stop = tf.minimum(source_seq_length, stop_index)
 
             self.full_seq_pre_padding = tf.abs(start_index)
-            self.full_seq_post_padding = tf.abs(stop_index - seq_length)
+            self.full_seq_post_padding = tf.abs(stop_index - source_seq_length)
 
-            self.pre_padding = tf.abs(window_start - start_index)
-            self.post_padding = tf.abs(window_stop - stop_index)
+            self.window_pre_padding = tf.abs(self.window_start - start_index)
+            self.window_post_padding = tf.abs(self.window_stop - stop_index)
 
-            # TODO: Should we pad this so the window size is always consistent?
-            # TODO: What changes have to be made in order for the alignment history to work?
             windows = []
-            # TODO: Super ugly hack, but it works for now.
             for i in range(0, 4):
-                # self._keys = tf.Print(self._keys, [window_start[i][0]],
-                #                       '=========================================================\n'
-                #                       'LocalAttention window_start[i][0]:')
-                # self._keys = tf.Print(self._keys, [window_stop[i][0]],
-                #                       'LocalAttention window_stop[i][0]:')
-
-                tmp_window = self._keys[i, window_start[i][0]:window_stop[i][0], :]
-
-                # self._keys = tf.Print(self._keys, [tf.shape(tmp_window)],
-                #                       'LocalAttention pre_padding tmp_window[{}]:'.format(i))
+                __window = self._keys[i, self.window_start[i][0]:self.window_stop[i][0], :]
 
                 paddings = [
-                    [self.pre_padding[i][0], self.post_padding[i][0]],
+                    [self.window_pre_padding[i][0], self.window_post_padding[i][0]],
                     [0, 0]
                 ]
-                tmp_window = tf.pad(tmp_window, paddings, 'CONSTANT')
+                __window = tf.pad(__window, paddings, 'CONSTANT')
 
-                # self._keys = tf.Print(self._keys, [tf.shape(tmp_window)],
-                #                       'LocalAttention post_padding tmp_window[{}]:'.format(i))
-
-                windows.append(tmp_window)
+                windows.append(__window)
 
             window = tf.stack(windows)
-
-            # window = self._keys[:, window_start[0][0]:window_stop[0][0], :]
-
-            # window = tf.get_variable('attention_window', [batch_size, window_size, num_units])
-
-            # Clear the window.
-            # window = tf.assign(window, tf.zeros_like(window))
-
-            # NOTE: It would be less computationally expensive if this would be done in the
-            # BaseAttentionMechnaism since we could slice values before applying the dense
-            # memory_layer. Therefore the memory_layer would only have to be calculated on the
-            # sliced window and not on all encoder outputs just to throw most of them away.
-            # score = _local_luong_score(query, self._keys, self._scale)
             score = _local_luong_score(query, window, self._scale)
 
-        # score = tf.Print(score, [tf.shape(window_start)], 'LocalAttention window_start:')
-        # score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
         score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:', summarize=99)
         score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
-        # score = tf.Print(score, [start_index[0][0]], 'LocalAttention start_index:')
-        # score = tf.Print(score, [window_start[0][0]], 'LocalAttention window_start:')
-        # score = tf.Print(score, [self.pre_padding[0][0]], 'LocalAttention pre_padding:')
-        # score = tf.Print(score, [self.post_padding[0][0]], 'LocalAttention post_padding:')
 
         alignments = self._probability_fn(score, state)
         next_state = alignments
@@ -248,19 +197,7 @@ def _local_luong_score(query, keys, scale):
             % (query, depth, keys, key_units, key_units))
     dtype = query.dtype
 
-    # Reshape from [batch_size, depth] to [batch_size, 1, depth]
-    # for matmul.
     query = tf.expand_dims(query, 1)
-
-    # Inner product along the query units dimension.
-    # matmul shapes: query is [batch_size, 1, depth] and
-    #                keys is [batch_size, max_time, depth].
-    # the inner product is asked to **transpose keys' inner shape** to get a
-    # batched matmul on:
-    #   [batch_size, 1, depth] . [batch_size, depth, max_time]
-    # resulting in an output shape of:
-    #   [batch_size, 1, max_time].
-    # we then squeeze out the center singleton dimension.
     score = tf.matmul(query, keys, transpose_b=True)
     score = tf.squeeze(score, [1])
 
@@ -273,4 +210,116 @@ def _local_luong_score(query, keys, scale):
 
     return score
 
+
 # http://cnyah.com/2017/08/01/attention-variants/
+
+
+class AdvAttentionWrapper(AttentionWrapper):
+    def __init__(self,
+                 cell,
+                 attention_mechanism,
+                 attention_layer_size=None,
+                 alignment_history=False,
+                 cell_input_fn=None,
+                 output_attention=True,
+                 initial_cell_state=None,
+                 name=None):
+        super().__init__(cell=cell,
+                         attention_mechanism=attention_mechanism,
+                         attention_layer_size=attention_layer_size,
+                         alignment_history=alignment_history,
+                         cell_input_fn=cell_input_fn,
+                         output_attention=output_attention,
+                         initial_cell_state=initial_cell_state,
+                         name=name)
+
+    def call(self, inputs, state):
+        """Perform a step of attention-wrapped RNN.
+
+        - Step 1: Mix the `inputs` and previous step's `attention` output via
+          `cell_input_fn`.
+        - Step 2: Call the wrapped `cell` with this input and its previous state.
+        - Step 3: Score the cell's output with `attention_mechanism`.
+        - Step 4: Calculate the alignments by passing the score through the
+          `normalizer`.
+        - Step 5: Calculate the context vector as the inner product between the
+          alignments and the attention_mechanism's values (memory).
+        - Step 6: Calculate the attention output by concatenating the cell output
+          and context through the attention layer (a linear layer with
+          `attention_layer_size` outputs).
+
+        Args:
+          inputs: (Possibly nested tuple of) Tensor, the input at this time step.
+          state: An instance of `AttentionWrapperState` containing
+            tensors from the previous time step.
+
+        Returns:
+          A tuple `(attention_or_cell_output, next_state)`, where:
+
+          - `attention_or_cell_output` depending on `output_attention`.
+          - `next_state` is an instance of `AttentionWrapperState`
+             containing the state calculated at this time step.
+
+        Raises:
+          TypeError: If `state` is not an instance of `AttentionWrapperState`.
+        """
+        if not isinstance(state, AttentionWrapperState):
+            raise TypeError("Expected state to be instance of AttentionWrapperState. "
+                            "Received type %s instead." % type(state))
+
+        # Step 1: Calculate the true inputs to the cell based on the
+        # previous attention value.
+        cell_inputs = self._cell_input_fn(inputs, state.attention)
+        cell_state = state.cell_state
+        cell_output, next_cell_state = self._cell(cell_inputs, cell_state)
+
+        cell_batch_size = (
+                cell_output.shape[0].value or tf.shape(cell_output)[0])
+        error_message = (
+                "When applying AttentionWrapper %s: " % self.name +
+                "Non-matching batch sizes between the memory "
+                "(encoder output) and the query (decoder output).  Are you using "
+                "the BeamSearchDecoder?  You may need to tile your memory input via "
+                "the tf.contrib.seq2seq.tile_batch function with argument "
+                "multiple=beam_width.")
+        with tf.control_dependencies(
+                self._batch_size_checks(cell_batch_size, error_message)):
+            cell_output = tf.identity(
+                cell_output, name="checked_cell_output")
+
+        if self._is_multi:
+            previous_attention_state = state.attention_state
+            previous_alignment_history = state.alignment_history
+        else:
+            previous_attention_state = [state.attention_state]
+            previous_alignment_history = [state.alignment_history]
+
+        all_alignments = []
+        all_attentions = []
+        all_attention_states = []
+        maybe_all_histories = []
+        for i, attention_mechanism in enumerate(self._attention_mechanisms):
+            attention, alignments, next_attention_state = _compute_attention(
+                attention_mechanism, cell_output, previous_attention_state[i],
+                self._attention_layers[i] if self._attention_layers else None)
+            alignment_history = previous_alignment_history[i].write(
+                state.time, alignments) if self._alignment_history else ()
+
+            all_attention_states.append(next_attention_state)
+            all_alignments.append(alignments)
+            all_attentions.append(attention)
+            maybe_all_histories.append(alignment_history)
+
+        attention = tf.concat(all_attentions, 1)
+        next_state = AttentionWrapperState(
+            time=state.time + 1,
+            cell_state=next_cell_state,
+            attention=attention,
+            attention_state=self._item_or_tuple(all_attention_states),
+            alignments=self._item_or_tuple(all_alignments),
+            alignment_history=self._item_or_tuple(maybe_all_histories))
+
+        if self._output_attention:
+            return attention, next_state
+        else:
+            return cell_output, next_state
