@@ -124,6 +124,51 @@ class LocalLuongAttention(LuongAttention):
                  d=10,
                  attention_mode=AttentionMode.MONOTONIC,
                  score_mode=AttentionScore.DOT):
+        """
+        Arguments:
+            num_units (int):
+                The depth of the attention mechanism. This controls the number of units in the
+                memory layer that processes the encoder states into the `keys`.
+
+            memory (tf.Tensor):
+                The memory to query; usually the output of an RNN encoder.
+                The shape is expected to be shape=(batch_size, encoder_max_time, ...)
+
+            memory_sequence_length:
+                (optional) Sequence lengths for the batch entries
+                in memory.  If provided, the memory tensor rows are masked with zeros
+                for values past the respective sequence lengths.
+
+            scale (boolean):
+                Whether to scale the energy term.
+
+            probability_fn:
+                (optional) A `callable`.  Converts the score to
+                probabilities.  The default is @{tf.nn.softmax}. Other options include
+                @{tf.contrib.seq2seq.hardmax} and @{tf.contrib.sparsemax.sparsemax}.
+                Its signature should be: `probabilities = probability_fn(score)`.
+
+            score_mask_value:
+                (optional) The mask value for score before passing into
+                `probability_fn`. The default is -inf. Only used if
+                `memory_sequence_length` is not None.
+
+            dtype (tf.DType):
+                The data type for the memory layer of the attention mechanism.
+
+            name (string):
+                Name to use when creating ops.
+
+            d (int):
+                D parameter controlling the window size and gaussian distribution.
+                The window size is set to be `2D + 1`.
+
+            attention_mode (AttentionMode):
+                The attention mode to use. Can be either `MONOTONIC` or `PREDICTIVE`.
+
+            score_mode (AttentionScore):
+                The attention scoring function to use. Can either be `DOT`, `GENERAL` or `CONCAT`.
+        """
         super().__init__(num_units=num_units,
                          memory=memory,
                          memory_sequence_length=memory_sequence_length,
@@ -149,13 +194,24 @@ class LocalLuongAttention(LuongAttention):
 
     def __call__(self, query, state):
         """
-        TODO: Update docstring.
+        Calculate the alignments and next_state for the current decoder output.
+
         Arguments:
-            query:
-            state:
+            query (tf.Tensor):
+                Decoder cell outputs to compare to the keys (memory).
+                The shape is expected to be shape=(B, num_units) with B being the batch size
+                and `num_units` being the output size of the decoder_cell.
+
+            state (tf.Tensor):
+                In Luong attention the state is equal to the alignments. Therefore this will
+                contain the alignments from the previous decoding step.
 
         Returns:
-
+            (alignments, next_state):
+                alignments (tf.Tensor):
+                    TODO: Add documentation.
+                next_state (tf.Tensor):
+                    TODO: Add documentation.
         """
         with tf.variable_scope(None, "local_luong_attention", [query]) as test:
             # Get the depth of the memory values.
