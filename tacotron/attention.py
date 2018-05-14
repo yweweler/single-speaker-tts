@@ -27,7 +27,7 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
     full_pre_padding = attention_mechanism.full_seq_pre_padding
     full_post_padding = attention_mechanism.full_seq_post_padding
 
-    for i in range(0, 4):
+    def __process_entry(i):
         value_window = attention_mechanism.values[i, window_start[i][0]:window_stop[i][0], :]
         value_window_paddings = [
             [pre_padding[i][0], post_padding[i][0]],
@@ -37,30 +37,34 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
         value_window.set_shape((attention_mechanism.window_size, 256))
 
         context_window = tf.matmul(expanded_alignments[i], value_window)
-        context_windows.append(context_window)
 
         alignment_seq_paddings = [
             [full_pre_padding[i][0], full_post_padding[i][0]],
         ]
 
-        point_dist = tf.cast(tf.range(start=window_start[i][0],
-                                      limit=window_stop[i][0],
-                                      delta=1), dtype=tf.float32) - attention_mechanism.p[i][0]
+        # point_dist = tf.cast(tf.range(start=window_start[i][0],
+        #                               limit=window_stop[i][0],
+        #                               delta=1), dtype=tf.float32) - p[i][0]
 
-        gaussian_weights = tf.exp(-(point_dist ** 2) / 2 * (attention_mechanism.d / 2) ** 2)
+        # gaussian_weights = tf.exp(-(point_dist ** 2) / 2 * (d / 2) ** 2)
 
-        # __alignments = tf.pad(alignments[i] * gaussian_weights, alignment_seq_paddings, 'CONSTANT')
         __alignments = tf.pad(alignments[i], alignment_seq_paddings, 'CONSTANT')
 
-        padded_alignment_windows.append(__alignments)
+        return context_window, __alignments
 
-    context = tf.stack(context_windows)
+    tmp_data = tf.map_fn(
+        __process_entry,
+        tf.range(start=0, limit=4, delta=1, dtype=tf.int32),
+        dtype=(tf.float32, tf.float32),
+        parallel_iterations=32)
+
+    context = tmp_data[0]
     context = tf.Print(context, [tf.shape(context)], '_compute_attention context.matmul:')
 
     context = tf.squeeze(context, [1])
     context = tf.Print(context, [tf.shape(context)], '_compute_attention context.squeeze:')
 
-    padded_alignment = tf.stack(padded_alignment_windows)
+    padded_alignment = tmp_data[1]
     padded_alignment = tf.Print(padded_alignment, [tf.shape(padded_alignment)],
                                 '_compute_attention padded_alignments:')
 
@@ -146,19 +150,21 @@ class LocalLuongAttention(LuongAttention):
             self.window_pre_padding = tf.abs(self.window_start - start_index)
             self.window_post_padding = tf.abs(self.window_stop - stop_index)
 
-            windows = []
-            for i in range(0, 4):
+            def __process_entry(i):
                 __window = self._keys[i, self.window_start[i][0]:self.window_stop[i][0], :]
 
                 paddings = [
                     [self.window_pre_padding[i][0], self.window_post_padding[i][0]],
                     [0, 0]
                 ]
-                __window = tf.pad(__window, paddings, 'CONSTANT')
+                return tf.pad(__window, paddings, 'CONSTANT')
 
-                windows.append(__window)
+            window = tf.map_fn(
+                __process_entry,
+                tf.range(start=0, limit=4, delta=1, dtype=tf.int32),
+                dtype=(tf.float32),
+                parallel_iterations=32)
 
-            window = tf.stack(windows)
             score = _local_luong_score(query, window, self._scale)
 
         score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:', summarize=99)
