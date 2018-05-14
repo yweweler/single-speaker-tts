@@ -103,9 +103,15 @@ model_params = tf.contrib.training.HParams(
     # Attention parameters.
     attention=tf.contrib.training.HParams(
         # mechanism=LocalLuongAttention,
-        #
+
+        # Luong local style content based scoring function.
         luong_local_score=AttentionScore.DOT,
-        luong_local_mode=AttentionMode.MONOTONIC
+
+        # Luong local style attention mode.
+        luong_local_mode=AttentionMode.MONOTONIC,
+
+        # Luong local style window D parameter. (Window size will be `2D+1`).
+        luong_local_window_D=10
     ),
 
     # Post-processing network parameters.

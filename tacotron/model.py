@@ -198,8 +198,7 @@ class Tacotron:
                 memory=memory,
                 # memory_sequence_length=None,
                 # dtype=tf.float32
-                # TODO: Refactor this variable into separate hyper-parameters.
-                d=10
+                d=model_params.attention.luong_local_window_D
             )
 
             # Create the attention RNN cell.
