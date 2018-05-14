@@ -54,7 +54,7 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
 
     tmp_data = tf.map_fn(
         __process_entry,
-        tf.range(start=0, limit=4, delta=1, dtype=tf.int32),
+        tf.range(start=0, limit=attention_mechanism.batch_size, delta=1, dtype=tf.int32),
         dtype=(tf.float32, tf.float32),
         parallel_iterations=32)
 
@@ -98,6 +98,10 @@ class LocalLuongAttention(LuongAttention):
                          dtype=dtype,
                          name=name)
 
+        # TODO: Refactor this variables into separate hyper-parameters.
+        self.d = 10
+        self.window_size = 2 * self.d + 1
+
     def __call__(self, query, state):
         with tf.variable_scope(None, "local_luong_attention", [query]) as test:
             # Get the depth of the memory values.
@@ -125,18 +129,14 @@ class LocalLuongAttention(LuongAttention):
             # p_t as described by Luong for the predictive local-m case.
             self.p = tf.tile(
                 [[self.time]],
-                tf.convert_to_tensor([4, 1])
+                tf.convert_to_tensor([self.batch_size, 1])
             )
 
-            self.p = tf.maximum(self.p, 10)
-            self.p = tf.minimum(self.p, source_seq_length - 11)
+            self.p = tf.maximum(self.p, self.d)
+            self.p = tf.minimum(self.p, source_seq_length - (self.d + 1))
 
             self.p = tf.cast(self.p, dtype=tf.float32)
             # ======================================================================================
-
-            # TODO: Refactor this variables into separate hyper-parameters.
-            self.d = 10
-            self.window_size = 2 * self.d + 1
 
             start_index = tf.cast(self.p - self.d, dtype=tf.int32)
             self.window_start = tf.maximum(0, start_index)
@@ -161,7 +161,7 @@ class LocalLuongAttention(LuongAttention):
 
             window = tf.map_fn(
                 __process_entry,
-                tf.range(start=0, limit=4, delta=1, dtype=tf.int32),
+                tf.range(start=0, limit=self.batch_size, delta=1, dtype=tf.int32),
                 dtype=(tf.float32),
                 parallel_iterations=32)
 
