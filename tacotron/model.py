@@ -4,7 +4,7 @@ from tensorflow.contrib import seq2seq
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
-from tacotron.attention import LocalLuongAttention, AdvAttentionWrapper
+from tacotron.attention import LocalLuongAttention, AdvancedAttentionWrapper
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net
 from tacotron.params.dataset import dataset_params
@@ -198,6 +198,8 @@ class Tacotron:
                 memory=memory,
                 # memory_sequence_length=None,
                 # dtype=tf.float32
+                # TODO: Refactor this variable into separate hyper-parameters.
+                d=10
             )
 
             # Create the attention RNN cell.
@@ -210,7 +212,7 @@ class Tacotron:
 
             # Connect the attention cell with the attention mechanism.
             # wrapped_attention_cell = tfc.seq2seq.AttentionWrapper(
-            wrapped_attention_cell = AdvAttentionWrapper(
+            wrapped_attention_cell = AdvancedAttentionWrapper(
                 cell=attention_cell,
                 attention_mechanism=attention_mechanism,
                 attention_layer_size=n_attention_units,

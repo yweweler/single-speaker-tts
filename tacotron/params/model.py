@@ -1,6 +1,8 @@
 import tensorflow as tf
 
 # Default hyper-parameters:
+from tacotron.attention import AttentionMode, AttentionScore
+
 model_params = tf.contrib.training.HParams(
     # Number of unique characters in the vocabulary.
     vocabulary_size=42,
@@ -96,6 +98,14 @@ model_params = tf.contrib.training.HParams(
         # Maximum number of decoder iterations after which to stop for evaluation and inference.
         # This is equal to the number of mel-scale spectrogram frames generated.
         maximum_iterations=1000,
+    ),
+
+    # Attention parameters.
+    attention=tf.contrib.training.HParams(
+        # mechanism=LocalLuongAttention,
+        #
+        luong_local_score=AttentionScore.DOT,
+        luong_local_mode=AttentionMode.MONOTONIC
     ),
 
     # Post-processing network parameters.

@@ -4,9 +4,36 @@ from tensorflow.contrib.seq2seq.python.ops.attention_wrapper import LuongAttenti
     AttentionWrapper, AttentionWrapperState
 
 
+class AttentionMode:
+    """
+    Enumerator for the Luong style local attention modes.
+
+    - See [1]: Effective Approaches to Attention-based Neural Machine Translation,
+        http://arxiv.org/abs/1508.04025
+    """
+    # local-m mode.
+    MONOTONIC = 'monotonic'
+
+    # local-p mode.
+    PREDICTIVE = 'predictive'
+
+
+class AttentionScore:
+    """
+    Enumerator for the three different content-based scoring functions for Luong style attention.
+
+    - See [1]: Effective Approaches to Attention-based Neural Machine Translation,
+        http://arxiv.org/abs/1508.04025
+    """
+    DOT = 'dot'
+    GENERAL = 'general'
+    CONCAT = 'concat'
+
+
 def _compute_attention(attention_mechanism, cell_output, attention_state,
                        attention_layer):
-    print('THIS IS A SUUUUPER HACK FOR OVERRIDING SOMEONE OTHERS SHIT!')
+    print('Overwritten `tensorflow.contrib.seq2seq.python.ops.attention_wrapper'
+          '._compute_attention`')
 
     """Computes the attention and alignments for a given attention_mechanism."""
     alignments, next_attention_state = attention_mechanism(
@@ -14,9 +41,6 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
 
     # Reshape from [batch_size, memory_time] to [batch_size, 1, memory_time]
     expanded_alignments = tf.expand_dims(alignments, 1)
-
-    context_windows = []
-    padded_alignment_windows = []
 
     window_start = attention_mechanism.window_start
     window_stop = attention_mechanism.window_stop
@@ -76,10 +100,20 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
     return attention, padded_alignment, padded_alignment
 
 
+# TODO: Dirty hack to override tensorflow's internal _compute_attention implementation.
 attention_wrapper._compute_attention = _compute_attention
 
 
 class LocalLuongAttention(LuongAttention):
+    """
+     Implements a Luong-style local attention mechanism.
+
+     This implementation supports both monotonic attention as well as predictive attention.
+
+    - See [1]: Effective Approaches to Attention-based Neural Machine Translation,
+        http://arxiv.org/abs/1508.04025
+    """
+
     def __init__(self, num_units,
                  memory,
                  memory_sequence_length=None,
@@ -87,8 +121,10 @@ class LocalLuongAttention(LuongAttention):
                  probability_fn=None,
                  score_mask_value=None,
                  dtype=None,
-                 name="LocalLuongAttention"):
-        # TODO: What about the query_layer in _BaseAttentionMechanism?
+                 name="LocalLuongAttention",
+                 d=10,
+                 attention_mode=AttentionMode.MONOTONIC,
+                 score_mode=AttentionScore.DOT):
         super().__init__(num_units=num_units,
                          memory=memory,
                          memory_sequence_length=memory_sequence_length,
@@ -98,11 +134,30 @@ class LocalLuongAttention(LuongAttention):
                          dtype=dtype,
                          name=name)
 
-        # TODO: Refactor this variables into separate hyper-parameters.
-        self.d = 10
+        # Initialize the decoding time counter.
+        # This variable is updated by the `ÀdvancedAttentionWrapper`.
+        self.time = 0
+
+        # Calculate the attention window size.
+        self.d = d
         self.window_size = 2 * self.d + 1
 
+        # Store the attention mode.
+        self.attention_mode = attention_mode
+
+        # Store the scoring function style to be used.
+        self.score_mode = score_mode
+
     def __call__(self, query, state):
+        """
+        TODO: Update docstring.
+        Arguments:
+            query:
+            state:
+
+        Returns:
+
+        """
         with tf.variable_scope(None, "local_luong_attention", [query]) as test:
             # Get the depth of the memory values.
             num_units = self._keys.get_shape()[-1]
@@ -165,7 +220,7 @@ class LocalLuongAttention(LuongAttention):
                 dtype=(tf.float32),
                 parallel_iterations=32)
 
-            score = _local_luong_score(query, window, self._scale)
+            score = _luong_dot_score(query, window, self._scale)
 
         score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:', summarize=99)
         score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
@@ -178,13 +233,11 @@ class LocalLuongAttention(LuongAttention):
         return alignments, next_state
 
 
-def _local_luong_score(query, keys, scale):
-    # TODO: Implement the "location" version ("dot": current, "general" and "concat" are also possible).
-    # TODO: In the local version the tensor no longer contains max_time states but only 2D+1 ones.
-    """Implements Luong-style (multiplicative) scoring function.
+def _luong_dot_score(query, keys, scale):
+    """
+    Implements the Luong-style dot scoring function.
 
-    This attention has two forms.  The first is standard Luong attention,
-    as described in:
+    This attention has two forms. The first is standard Luong attention, as described in:
 
     Minh-Thang Luong, Hieu Pham, Christopher D. Manning.
     "Effective Approaches to Attention-based Neural Machine Translation."
@@ -195,25 +248,42 @@ def _local_luong_score(query, keys, scale):
 
     To enable the second form, call this function with `scale=True`.
 
-    Args:
-      query: Tensor, shape `[batch_size, num_units]` to compare to keys.
-      keys: Processed memory, shape `[batch_size, max_time, num_units]`.
-      scale: Whether to apply a scale to the score function.
+    This implementation is derived from: `tensorflow.contrib.seq2seq.python.ops.attention_wrapper`
+
+    Arguments:
+        query (tf.Tensor):
+            Decoder cell outputs to compare to the keys (memory).
+            The shape is expected to be shape=(B, num_units) with B being the batch size
+            and `num_units` being the output size of the decoder_cell.
+
+        keys (tf.Tensor):
+            Processed memory (usually the encoder states processed by the memory_layer).
+            The shape is expected to be shape=(B, X, num_units) with B being the batch size
+            and `num_units` being the output size of the memory_layer. X may be the
+            maximal length of the encoder time domain or in the case of local attention the
+            window size.
+
+        scale (boolean):
+            Whether to apply a scale to the score function.
 
     Returns:
-      A `[batch_size, max_time]` tensor of unnormalized score values.
+        score (tf.Tensor):
+            A tensor with shape=(B, X) containing the non-normalized score values.
 
     Raises:
       ValueError: If `key` and `query` depths do not match.
+
     """
     depth = query.get_shape()[-1]
     key_units = keys.get_shape()[-1]
+
     if depth != key_units:
         raise ValueError(
             "Incompatible or unknown inner dimensions between query and keys.  "
             "Query (%s) has units: %s.  Keys (%s) have units: %s.  "
             "Perhaps you need to set num_units to the keys' dimension (%s)?"
             % (query, depth, keys, key_units, key_units))
+
     dtype = query.dtype
 
     query = tf.expand_dims(query, 1)
@@ -230,10 +300,69 @@ def _local_luong_score(query, keys, scale):
     return score
 
 
-# http://cnyah.com/2017/08/01/attention-variants/
+def _luong_general_score(query, keys):
+    """
+    Implements the Luong-style general scoring function.
+
+    - See [1]: Effective Approaches to Attention-based Neural Machine Translation,
+        http://arxiv.org/abs/1508.04025
+
+    Arguments:
+        query (tf.Tensor):
+            Decoder cell outputs to compare to the keys (memory).
+            The shape is expected to be shape=(B, num_units) with B being the batch size
+            and `num_units` being the output size of the decoder_cell.
+
+        keys (tf.Tensor):
+            Processed memory (usually the encoder states processed by the memory_layer).
+            The shape is expected to be shape=(B, X, num_units) with B being the batch size
+            and `num_units` being the output size of the memory_layer. X may be the
+            maximal length of the encoder time domain or in the case of local attention the
+            window size.
+
+    Returns:
+        score (tf.Tensor):
+            A tensor with shape=(B, X) containing the non-normalized score values.
+    """
+    raise NotImplementedError('Luong style general mode attention scoring is not implemented yet!')
 
 
-class AdvAttentionWrapper(AttentionWrapper):
+def _luong_concat_score(query, keys):
+    """
+    Implements the Luong-style concat scoring function.
+
+    - See [1]: Effective Approaches to Attention-based Neural Machine Translation,
+        http://arxiv.org/abs/1508.04025
+
+    Arguments:
+        query (tf.Tensor):
+            Decoder cell outputs to compare to the keys (memory).
+            The shape is expected to be shape=(B, num_units) with B being the batch size
+            and `num_units` being the output size of the decoder_cell.
+
+        keys (tf.Tensor):
+            Processed memory (usually the encoder states processed by the memory_layer).
+            The shape is expected to be shape=(B, X, num_units) with B being the batch size
+            and `num_units` being the output size of the memory_layer. X may be the
+            maximal length of the encoder time domain or in the case of local attention the
+            window size.
+
+    Returns:
+        score (tf.Tensor):
+            A tensor with shape=(B, X) containing the non-normalized score values.
+
+    """
+    raise NotImplementedError('Luong style concat mode attention scoring is not implemented yet!')
+
+
+class AdvancedAttentionWrapper(AttentionWrapper):
+    """
+    Wraps the standard AttentionWrapper class so that during decoding steps the decoding time
+    index is updated in the attention mechanism.
+
+    This is a hack to enable us using Luong style monotonic attention.
+    """
+
     def __init__(self,
                  cell,
                  attention_mechanism,
@@ -243,6 +372,7 @@ class AdvAttentionWrapper(AttentionWrapper):
                  output_attention=True,
                  initial_cell_state=None,
                  name=None):
+
         super().__init__(cell=cell,
                          attention_mechanism=attention_mechanism,
                          attention_layer_size=attention_layer_size,
@@ -318,7 +448,10 @@ class AdvAttentionWrapper(AttentionWrapper):
         all_attention_states = []
         maybe_all_histories = []
         for i, attention_mechanism in enumerate(self._attention_mechanisms):
+            # Note: This is the only modification hacked into the attention wrapper to support
+            # monotonic Luong attention.
             attention_mechanism.time = state.time
+
             attention, alignments, next_attention_state = _compute_attention(
                 attention_mechanism, cell_output, previous_attention_state[i],
                 self._attention_layers[i] if self._attention_layers else None)
