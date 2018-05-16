@@ -196,6 +196,8 @@ class Tacotron:
                 # attention_mechanism = tfc.seq2seq.BahdanauAttention(
                 num_units=n_attention_units,
                 memory=memory,
+                attention_mode=model_params.attention.luong_local_mode,
+                score_mode=model_params.attention.luong_local_score,
                 d=model_params.attention.luong_local_window_D,
                 force_gaussian=model_params.attention.luong_force_gaussian,
                 const_batch_size=4
