@@ -30,12 +30,9 @@ class AttentionScore:
     CONCAT = 'concat'
 
 
-def _compute_attention(attention_mechanism, cell_output, attention_state,
-                       attention_layer):
-    print('Overwritten `tensorflow.contrib.seq2seq.python.ops.attention_wrapper'
-          '._compute_attention`')
-
-    """Computes the attention and alignments for a given attention_mechanism."""
+def _luong_local_compute_attention(attention_mechanism, cell_output, attention_state,
+                                   attention_layer):
+    """Computes the attention and alignments for the Luong style local attention mechanism."""
     alignments, next_attention_state = attention_mechanism(
         cell_output, state=attention_state)
 
@@ -54,42 +51,56 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
     full_pre_padding = attention_mechanism.full_seq_pre_padding
     full_post_padding = attention_mechanism.full_seq_post_padding
 
-    for i in range(0, 4):
+    for i in range(0, attention_mechanism.const_batch_size):
+        # Slice out the window from the memory.
         value_window = attention_mechanism.values[i, window_start[i][0]:window_stop[i][0], :]
+
+        # Add zero padding to the slice in order to ensure the window size is (2D+1).
         value_window_paddings = [
             [pre_padding[i][0], post_padding[i][0]],
             [0, 0]
         ]
         value_window = tf.pad(value_window, value_window_paddings, 'CONSTANT')
-        value_window.set_shape((attention_mechanism.window_size, 256))
 
+        # Shape information is lost after padding ;(.
+        value_window.set_shape((attention_mechanism.window_size,
+                                attention_mechanism._num_units))
+
+        # Calculate the context vector for the current batch entry using only information from
+        # teh window.
         context_window = tf.matmul(expanded_alignments[i], value_window)
         context_windows.append(context_window)
 
+        if attention_mechanism.force_gaussian is True:
+            # Apply gaussian weighting of the window contents.
+            point_dist = tf.cast(tf.range(start=window_start[i][0],
+                                          limit=window_stop[i][0],
+                                          delta=1), dtype=tf.float32) - attention_mechanism.p[i][0]
+
+            gaussian_weights = tf.exp(-(point_dist ** 2) / 2 * (attention_mechanism.d / 2) ** 2)
+
+            __alignments = alignments[i] * gaussian_weights
+        else:
+            # Use the raw window contents.
+            __alignments = alignments[i]
+
+        # Add padding to the alignments to get from the window size 2D+1 up to the original
+        # memory length.
         alignment_seq_paddings = [
             [full_pre_padding[i][0], full_post_padding[i][0]],
         ]
-
-        point_dist = tf.cast(tf.range(start=window_start[i][0],
-                                      limit=window_stop[i][0],
-                                      delta=1), dtype=tf.float32) - attention_mechanism.p[i][0]
-
-        gaussian_weights = tf.exp(-(point_dist ** 2) / 2 * (attention_mechanism.d / 2) ** 2)
-
-        # __alignments = tf.pad(alignments[i] * gaussian_weights, alignment_seq_paddings, 'CONSTANT')
-        __alignments = tf.pad(alignments[i], alignment_seq_paddings, 'CONSTANT')
+        __alignments = tf.pad(__alignments, alignment_seq_paddings, 'CONSTANT')
 
         padded_alignment_windows.append(__alignments)
 
+    # Stack all context vectors into one tensor.
     context = tf.stack(context_windows)
-    context = tf.Print(context, [tf.shape(context)], '_compute_attention context.matmul:')
-
+    # Squeeze out the helper dimension used for calculating the context.
     context = tf.squeeze(context, [1])
-    context = tf.Print(context, [tf.shape(context)], '_compute_attention context.squeeze:')
 
+    # Stack all alignment vectors into one tensor. This tensor gives alignments for each encoder
+    # step.
     padded_alignment = tf.stack(padded_alignment_windows)
-    padded_alignment = tf.Print(padded_alignment, [tf.shape(padded_alignment)],
-                                '_compute_attention padded_alignments:')
 
     if attention_layer is not None:
         attention = attention_layer(tf.concat([cell_output, context], 1))
@@ -97,10 +108,6 @@ def _compute_attention(attention_mechanism, cell_output, attention_state,
         attention = context
 
     return attention, padded_alignment, padded_alignment
-
-
-# TODO: Dirty hack to override tensorflow's internal _compute_attention implementation.
-attention_wrapper._compute_attention = _compute_attention
 
 
 class LocalLuongAttention(LuongAttention):
@@ -125,6 +132,7 @@ class LocalLuongAttention(LuongAttention):
                  d=10,
                  attention_mode=AttentionMode.MONOTONIC,
                  score_mode=AttentionScore.DOT,
+                 force_gaussian=False
                  ):
         """
         Arguments:
@@ -174,6 +182,10 @@ class LocalLuongAttention(LuongAttention):
 
             score_mode (AttentionScore):
                 The attention scoring function to use. Can either be `DOT`, `GENERAL` or `CONCAT`.
+
+            force_gaussian (boolean):
+                Force a gaussian distribution onto the scores in the attention window.
+                Defaults to False.
         """
         super().__init__(num_units=num_units,
                          memory=memory,
@@ -200,6 +212,8 @@ class LocalLuongAttention(LuongAttention):
 
         # The constant batch size to expect.
         self.const_batch_size = const_batch_size
+
+        self.force_gaussian = force_gaussian
 
     def __call__(self, query, state):
         """
@@ -245,7 +259,7 @@ class LocalLuongAttention(LuongAttention):
                 # Derive p_t as described by Luong for the predictive local-p case.
                 self.p = tf.cast(source_seq_length, tf.float32) * tf.sigmoid(_tmp)
 
-            elif self.attention_mode == AttentionMode.PREDICTIVE:
+            elif self.attention_mode == AttentionMode.MONOTONIC:
                 # Derive p_t as described by Luong for the predictive local-m case.
                 self.p = tf.tile(
                     [[self.time]],
@@ -544,7 +558,7 @@ class AdvancedAttentionWrapper(AttentionWrapper):
             # monotonic Luong attention.
             attention_mechanism.time = state.time
 
-            attention, alignments, next_attention_state = _compute_attention(
+            attention, alignments, next_attention_state = _luong_local_compute_attention(
                 attention_mechanism, cell_output, previous_attention_state[i],
                 self._attention_layers[i] if self._attention_layers else None)
             alignment_history = previous_alignment_history[i].write(
