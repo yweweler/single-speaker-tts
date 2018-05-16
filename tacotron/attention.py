@@ -115,6 +115,7 @@ class LocalLuongAttention(LuongAttention):
 
     def __init__(self, num_units,
                  memory,
+                 const_batch_size,
                  memory_sequence_length=None,
                  scale=False,
                  probability_fn=None,
@@ -123,7 +124,8 @@ class LocalLuongAttention(LuongAttention):
                  name="LocalLuongAttention",
                  d=10,
                  attention_mode=AttentionMode.MONOTONIC,
-                 score_mode=AttentionScore.DOT):
+                 score_mode=AttentionScore.DOT,
+                 ):
         """
         Arguments:
             num_units (int):
@@ -133,6 +135,10 @@ class LocalLuongAttention(LuongAttention):
             memory (tf.Tensor):
                 The memory to query; usually the output of an RNN encoder.
                 The shape is expected to be shape=(batch_size, encoder_max_time, ...)
+
+            const_batch_size (int):
+                The constant batch size to expect from every batch. Every batch is expected to
+                contain exactly `const_batch_size` samples.
 
             memory_sequence_length:
                 (optional) Sequence lengths for the batch entries
@@ -192,6 +198,9 @@ class LocalLuongAttention(LuongAttention):
         # Store the scoring function style to be used.
         self.score_mode = score_mode
 
+        # The constant batch size to expect.
+        self.const_batch_size = const_batch_size
+
     def __call__(self, query, state):
         """
         Calculate the alignments and next_state for the current decoder output.
@@ -209,79 +218,109 @@ class LocalLuongAttention(LuongAttention):
         Returns:
             (alignments, next_state):
                 alignments (tf.Tensor):
-                    TODO: Add documentation.
+                    The normalized attention scores for the attention window. The shape is
+                    shape=(B, 2D+1), with B being the batch size and `2D+1` being the window size.
                 next_state (tf.Tensor):
-                    TODO: Add documentation.
+                    In Luong attention this is equal to `alignments`.
         """
-        with tf.variable_scope(None, "local_luong_attention", [query]) as test:
+        with tf.variable_scope(None, "local_luong_attention", [query]):
             # Get the depth of the memory values.
             num_units = self._keys.get_shape()[-1]
 
             # Get the source sequence length from memory.
             source_seq_length = tf.shape(self._keys)[1]
 
-            # Predict p_t ==========================================================================
-            vp = tf.get_variable(name="local_v_p", shape=[num_units, 1], dtype=tf.float32)
-            wp = tf.get_variable(name="local_w_p", shape=[num_units, num_units], dtype=tf.float32)
+            if self.attention_mode == AttentionMode.PREDICTIVE:
+                # Predictive selection fo the attention window position.
+                vp = tf.get_variable(name="local_v_p", shape=[num_units, 1], dtype=tf.float32)
+                wp = tf.get_variable(name="local_w_p", shape=[num_units, num_units],
+                                     dtype=tf.float32)
 
-            # shape => (B, num_units)
-            _intermediate_result = tf.transpose(tf.tensordot(wp, query, [0, 1]))
+                # shape => (B, num_units)
+                _intermediate_result = tf.transpose(tf.tensordot(wp, query, [0, 1]))
 
-            # shape => (B, 1)
-            _tmp = tf.transpose(tf.tensordot(vp, tf.tanh(_intermediate_result), [0, 1]))
+                # shape => (B, 1)
+                _tmp = tf.transpose(tf.tensordot(vp, tf.tanh(_intermediate_result), [0, 1]))
 
-            _intermediate_prob = tf.sigmoid(_tmp)
+                # Derive p_t as described by Luong for the predictive local-p case.
+                self.p = tf.cast(source_seq_length, tf.float32) * tf.sigmoid(_tmp)
 
-            # p_t as described by Luong for the predictive local-p case.
-            # self.p = tf.cast(source_seq_length, tf.float32) * _intermediate_prob
-            # self.p = tf.Print(self.p, [self.p], 'LocalAttention self.p:', summarize=99)
+            elif self.attention_mode == AttentionMode.PREDICTIVE:
+                # Derive p_t as described by Luong for the predictive local-m case.
+                self.p = tf.tile(
+                    [[self.time]],
+                    tf.convert_to_tensor([self.batch_size, 1])
+                )
 
-            # p_t as described by Luong for the predictive local-m case.
-            self.p = tf.tile(
-                [[self.time]],
-                tf.convert_to_tensor([self.batch_size, 1])
-            )
+                # Prevent the window from leaving the memory.
+                self.p = tf.maximum(self.p, self.d)
+                self.p = tf.minimum(self.p, source_seq_length - (self.d + 1))
+                self.p = tf.cast(self.p, dtype=tf.float32)
 
-            self.p = tf.maximum(self.p, self.d)
-            self.p = tf.minimum(self.p, source_seq_length - (self.d + 1))
-
-            self.p = tf.cast(self.p, dtype=tf.float32)
-            # ======================================================================================
-
+            # Calculate the memory sequence index at which the window should start.
             start_index = tf.cast(self.p - self.d, dtype=tf.int32)
+            # Prevent the window from leaving the memory.
             self.window_start = tf.maximum(0, start_index)
 
+            # Calculate the memory sequence index at which the window should stop.
             stop_index = tf.cast(self.p + self.d + 1, dtype=tf.int32)
+            # Prevent the window from leaving the memory.
             self.window_stop = tf.minimum(source_seq_length, stop_index)
 
+            # Calculate how many padding frames should be added to the start of the window.
+            # This is used to get up to the total memory length again.
             self.full_seq_pre_padding = tf.abs(start_index)
+
+            # Calculate how many padding frames should be added to the end of the window.
+            # This is used to get up to the total memory length again.
             self.full_seq_post_padding = tf.abs(stop_index - source_seq_length)
 
+            # Calculate how many padding frames should be added to the start of the window.
+            # This is used to get the window up to 2D+1 frames.
             self.window_pre_padding = tf.abs(self.window_start - start_index)
+
+            # Calculate how many padding frames should be added to the end of the window.
+            # This is used to get the window up to 2D+1 frames.
             self.window_post_padding = tf.abs(self.window_stop - stop_index)
 
-            windows = []
-            for i in range(0, 4):
-                __window = self._keys[i, self.window_start[i][0]:self.window_stop[i][0], :]
+            # Slice the windows for every batch entry.
+            with tf.variable_scope(None, "window_extraction", [query]):
+                windows = []
+                # Iterate the batch entries.
+                for i in range(0, self.const_batch_size):
+                    # Slice out the window from the processed memory.
+                    __window = self._keys[i, self.window_start[i][0]:self.window_stop[i][0], :]
 
-                paddings = [
-                    [self.window_pre_padding[i][0], self.window_post_padding[i][0]],
-                    [0, 0]
-                ]
-                __window = tf.pad(__window, paddings, 'CONSTANT')
+                    # Add zero padding to the slice in order to ensure the window size is (2D+1).
+                    paddings = [
+                        [self.window_pre_padding[i][0], self.window_post_padding[i][0]],
+                        [0, 0]
+                    ]
+                    __window = tf.pad(__window, paddings, 'CONSTANT')
 
-                windows.append(__window)
+                    # Collect the extracted windows for each batch entry.
+                    windows.append(__window)
 
-            window = tf.stack(windows)
-            score = _luong_dot_score(query, window, self._scale)
+                # Merge all extracted windows into one tensor.
+                window = tf.stack(windows)
 
-        score = tf.Print(score, [tf.shape(window)], 'LocalAttention window:', summarize=99)
-        score = tf.Print(score, [tf.shape(self._keys)], 'LocalAttention _keys:')
+            # Calculate the not not normalized attention score as described by Luong as dot.
+            if self.score_mode == AttentionScore.DOT:
+                score = _luong_dot_score(query, window, self._scale)
+            # Calculate the not not normalized attention score as described by Luong as general.
+            elif self.score_mode == AttentionScore.GENERAL:
+                score = _luong_general_score(query, window)
+            # Calculate the not not normalized attention score as described by Luong as general.
+            elif self.score_mode == AttentionScore.CONCAT:
+                score = _luong_concat_score(query, window)
+            else:
+                score = None
+                raise Exception("An invalid attention scoring mode was supplied.")
 
+        # Normalize the scores.
         alignments = self._probability_fn(score, state)
-        next_state = alignments
 
-        alignments = tf.Print(alignments, [tf.shape(alignments)], 'LocalAttention alignments:')
+        next_state = alignments
 
         return alignments, next_state
 

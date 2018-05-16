@@ -198,7 +198,8 @@ class Tacotron:
                 memory=memory,
                 # memory_sequence_length=None,
                 # dtype=tf.float32
-                d=model_params.attention.luong_local_window_D
+                d=model_params.attention.luong_local_window_D,
+                const_batch_size=4
             )
 
             # Create the attention RNN cell.
