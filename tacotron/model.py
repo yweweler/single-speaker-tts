@@ -190,17 +190,25 @@ class Tacotron:
             # Query the number of units for the attention cell.
             n_attention_units = self.hparams.decoder.n_attention_units
 
+            # General attention mechanism parameters that are the same for all mechanisms.
+            mechanism_params = {
+                'num_units': n_attention_units,
+                'memory': memory,
+            }
+
+            if model_params.attention.mechanism == LocalLuongAttention:
+                # Update the parameters with additional parameters for the local attention case.
+                mechanism_params.update({
+                    'attention_mode': model_params.attention.luong_local_mode,
+                    'score_mode': model_params.attention.luong_local_score,
+                    'd': model_params.attention.luong_local_window_D,
+                    'force_gaussian': model_params.attention.luong_force_gaussian,
+                    'const_batch_size': 4
+                })
+
             # Create the attention mechanism.
-            attention_mechanism = LocalLuongAttention(
-                # attention_mechanism = tfc.seq2seq.LuongAttention(
-                # attention_mechanism = tfc.seq2seq.BahdanauAttention(
-                num_units=n_attention_units,
-                memory=memory,
-                attention_mode=model_params.attention.luong_local_mode,
-                score_mode=model_params.attention.luong_local_score,
-                d=model_params.attention.luong_local_window_D,
-                force_gaussian=model_params.attention.luong_force_gaussian,
-                const_batch_size=4
+            attention_mechanism = model_params.attention.mechanism(
+                **mechanism_params
             )
 
             # Create the attention RNN cell.
@@ -211,9 +219,14 @@ class Tacotron:
                                            self.hparams.decoder.pre_net_layers,
                                            self.is_training())
 
+            # Select the attention wrapper needed for the current attention mechanism.
+            if model_params.attention.mechanism == LocalLuongAttention:
+                wrapper = AdvancedAttentionWrapper
+            else:
+                wrapper = tfc.seq2seq.AttentionWrapper
+
             # Connect the attention cell with the attention mechanism.
-            # wrapped_attention_cell = tfc.seq2seq.AttentionWrapper(
-            wrapped_attention_cell = AdvancedAttentionWrapper(
+            wrapped_attention_cell = wrapper(
                 cell=attention_cell,
                 attention_mechanism=attention_mechanism,
                 attention_layer_size=n_attention_units,

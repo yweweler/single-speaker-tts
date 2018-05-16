@@ -1,7 +1,9 @@
 import tensorflow as tf
 
 # Default hyper-parameters:
-from tacotron.attention import AttentionMode, AttentionScore
+from tensorflow.contrib.seq2seq import BahdanauAttention, LuongAttention
+
+from tacotron.attention import AttentionMode, AttentionScore, LocalLuongAttention
 
 model_params = tf.contrib.training.HParams(
     # Number of unique characters in the vocabulary.
@@ -102,13 +104,15 @@ model_params = tf.contrib.training.HParams(
 
     # Attention parameters.
     attention=tf.contrib.training.HParams(
+        # mechanism=BahdanauAttention,
+        mechanism=LuongAttention,
         # mechanism=LocalLuongAttention,
 
         # Luong local style content based scoring function.
         luong_local_score=AttentionScore.DOT,
 
         # Luong local style attention mode.
-        luong_local_mode=AttentionMode.MONOTONIC,
+        luong_local_mode=AttentionMode.PREDICTIVE,
 
         # Luong local: Force a gaussian distribution onto the scores in the attention window.
         luong_force_gaussian=True,
