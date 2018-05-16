@@ -1,6 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib as tfc
 from tensorflow.contrib import seq2seq
+import tensorflow.contrib.cudnn_rnn as tfcrnn
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.synthesis import spectrogram_to_wav
@@ -212,7 +213,7 @@ class Tacotron:
             )
 
             # Create the attention RNN cell.
-            attention_cell = tf.nn.rnn_cell.GRUCell(num_units=n_attention_units)
+            attention_cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_attention_units)
 
             # Apply the pre-net to each decoder input as show in [1], figure 1.
             attention_cell = PrenetWrapper(attention_cell,
@@ -240,7 +241,7 @@ class Tacotron:
             cells = [wrapped_attention_cell]
             for i in range(n_decoder_layers):
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-                cell = tf.nn.rnn_cell.GRUCell(num_units=n_decoder_units)
+                cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_decoder_units)
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
                 cell = tf.nn.rnn_cell.ResidualWrapper(cell)
                 cells.append(cell)

@@ -226,13 +226,18 @@ def start_session(loss_op, summary_op):
     """
     checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)
 
-    saver_hook = tf.train.CheckpointSaverHook(
-        checkpoint_dir=checkpoint_dir,
-        save_secs=training_params.checkpoint_save_secs,
-        saver=tf.train.Saver(
+    saver = tf.train.Saver(
+            # NOTE: CUDNN RNNs do not support distributed saving of parameters.
+            sharded=False,
+            allow_empty=True,
             max_to_keep=training_params.checkpoints_to_keep,
             save_relative_paths=True
         )
+
+    saver_hook = tf.train.CheckpointSaverHook(
+        checkpoint_dir=checkpoint_dir,
+        save_secs=training_params.checkpoint_save_secs,
+        saver=saver
     )
 
     summary_hook = tf.train.SummarySaverHook(
@@ -262,6 +267,10 @@ def start_session(loss_op, summary_op):
         summary_hook,
         nan_hook,
         counter_hook],
+        # Note: When using a monitored session in combination with CUDNN RNNs this needs to be
+        # set otherwise the CUDNN RNN does not find a default device to collect variables for
+        # saving.
+        scaffold=tf.train.Scaffold(saver=saver),
         config=session_config,
         checkpoint_dir=checkpoint_dir)
 
