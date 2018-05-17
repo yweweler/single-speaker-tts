@@ -273,11 +273,13 @@ class LocalLuongAttention(LuongAttention):
 
             # Calculate the memory sequence index at which the window should start.
             start_index = tf.cast(self.p - self.d, dtype=tf.int32)
+            start_index = tf.Print(start_index, [start_index], 'start_index')
             # Prevent the window from leaving the memory.
             self.window_start = tf.maximum(0, start_index)
 
             # Calculate the memory sequence index at which the window should stop.
-            stop_index = tf.cast(self.p + self.d + 1, dtype=tf.int32)
+            stop_index = tf.cast(tf.ceil(self.p + self.d + 1), dtype=tf.int32)
+            stop_index = tf.Print(stop_index, [stop_index], 'stop_index')
             # Prevent the window from leaving the memory.
             self.window_stop = tf.minimum(source_seq_length, stop_index)
 
