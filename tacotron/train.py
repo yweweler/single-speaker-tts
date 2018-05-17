@@ -114,10 +114,7 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     # single tensor.
     sentence = tf.decode_raw(sentence, tf.int32)
 
-    # TODO: Implement a extra hyper-parameter for this.
-    pre_processed = True
-
-    if pre_processed:
+    if training_params.load_preprocessed:
         # The training files are expected to be preprocessed to they can be used directly.
 
         def _load_processed(wav_path):

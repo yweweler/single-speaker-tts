@@ -19,6 +19,9 @@ training_params = tf.contrib.training.HParams(
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
 
+    # Flag telling the training code to load pre-processed features or calculate them on the fly.
+    load_preprocessed=True,
+
     # Number of batches to pre-calculate for feeding to the GPU.
     n_pre_calc_batches=8,
 
