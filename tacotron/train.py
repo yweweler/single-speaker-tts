@@ -114,8 +114,22 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     # single tensor.
     sentence = tf.decode_raw(sentence, tf.int32)
 
-    # Apply load_audio to each wav_path of the tensorflow iterator.
-    mel_spec, lin_spec = tf.py_func(dataset.load_audio, [wav_path], [tf.float32, tf.float32])
+    # TODO: Implement a extra hyper-parameter for this.
+    pre_processed = True
+
+    if pre_processed:
+        # The training files are expected to be preprocessed to they can be used directly.
+
+        def _load_processed(wav_path):
+            file_path = os.path.splitext(wav_path.decode())[0]
+            data = np.load('{}.npz'.format(file_path))
+            return data['mel_mag_db'], data['linear_mag_db']
+
+        mel_spec, lin_spec = tf.py_func(_load_processed, [wav_path], [tf.float32, tf.float32])
+    else:
+        # Load and process audio file from disk.
+        # Apply load_audio to each wav_path of the tensorflow iterator.
+        mel_spec, lin_spec = tf.py_func(dataset.load_audio, [wav_path], [tf.float32, tf.float32])
 
     # The shape of the returned values from py_func seems to get lost for some reason.
     mel_spec.set_shape((None, model_params.n_mels * model_params.reduction))
