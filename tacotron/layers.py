@@ -2,6 +2,87 @@ import tensorflow as tf
 import tensorflow.contrib.cudnn_rnn as tfcrnn
 
 
+class MyDense(tf.layers.Dense):
+    def __init__(self, units, **kwargs):
+        super().__init__(units, **kwargs)
+
+    def call(self, inputs):
+        inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
+        shape = inputs.get_shape().as_list()
+
+        if len(shape) > 3:
+            raise Exception('MyDense does only support tensors up ti a rank of 3.')
+
+        if len(shape) == 3:
+            batch_size = tf.shape(inputs)[0]
+            kernel = tf.expand_dims(self.kernel, axis=0)
+            kernel = tf.tile(kernel, [batch_size, 1, 1])
+        else:
+            kernel = self.kernel
+
+        outputs = tf.matmul(inputs, kernel)
+
+        if self.use_bias:
+            outputs = tf.nn.bias_add(outputs, self.bias)
+
+        if self.activation is not None:
+            return self.activation(outputs)  # pylint: disable=not-callable
+
+        return outputs
+
+    def call_old(self, inputs):
+        inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
+        shape = inputs.get_shape().as_list()
+
+        if len(shape) > 2:
+            # Broadcasting is required for the inputs.
+            outputs = tf.tensordot(inputs, self.kernel, [[len(shape) - 1], [0]])
+        else:
+            outputs = tf.matmul(inputs, self.kernel)
+
+        if self.use_bias:
+            outputs = tf.nn.bias_add(outputs, self.bias)
+
+        if self.activation is not None:
+            return self.activation(outputs)  # pylint: disable=not-callable
+
+        return outputs
+
+
+def my_dense(
+        inputs, units,
+        activation=None,
+        use_bias=True,
+        kernel_initializer=None,
+        bias_initializer=tf.zeros_initializer(),
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        trainable=True,
+        name=None,
+        reuse=None):
+
+    with tf.device('/gpu:0'):
+        layer = MyDense(units,
+                    activation=activation,
+                    use_bias=use_bias,
+                    kernel_initializer=kernel_initializer,
+                    bias_initializer=bias_initializer,
+                    kernel_regularizer=kernel_regularizer,
+                    bias_regularizer=bias_regularizer,
+                    activity_regularizer=activity_regularizer,
+                    kernel_constraint=kernel_constraint,
+                    bias_constraint=bias_constraint,
+                    trainable=trainable,
+                    name=name,
+                    dtype=inputs.dtype.base_dtype,
+                    _scope=name,
+                    _reuse=reuse)
+        return layer.apply(inputs)
+
+
 def prelu(inputs, layer_wise=False):
     """
     Implements a Parametric Rectified Linear Unit (PReLU).
@@ -69,7 +150,8 @@ def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
 
     """
     # Make sure the the input dimensionality is equal to the output dimensionality.
-    tf.assert_equal(inputs.shape[-1], units)
+    # TODO: The assert is not iplemented for the GPU.
+    # tf.assert_equal(inputs.shape[-1], units)
 
     network = inputs
     with tf.variable_scope(scope):
@@ -133,7 +215,7 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
         not particularly deep there should not be a major impact from using it.
     """
     with tf.variable_scope(scope):
-        h = tf.layers.dense(inputs=inputs,
+        h = my_dense(inputs=inputs,
                             units=units,
                             activation=activation,
                             kernel_initializer=tf.glorot_normal_initializer(),
@@ -142,7 +224,7 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
 
         # For the transform gate we follow [1], section "2.2 Training Deep Highway Networks" using a
         # sigmoid activation function and a negative bias initializer.
-        t = tf.layers.dense(inputs=inputs,
+        t = my_dense(inputs=inputs,
                             units=units,
                             activation=tf.nn.sigmoid,
                             kernel_initializer=tf.glorot_normal_initializer(),
@@ -183,7 +265,7 @@ def pre_net(inputs, layers, scope='pre_net', training=True):
     network = inputs
     with tf.variable_scope(scope):
         for i, (layer_units, layer_dropout, layer_activation) in enumerate(layers):
-            network = tf.layers.dense(inputs=network,
+            network = my_dense(inputs=network,
                                       units=layer_units,
                                       activation=layer_activation,
                                       kernel_initializer=tf.glorot_normal_initializer(),
@@ -434,7 +516,7 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
 
     # Highway network dimensionality lifter.
     # network.shape => (B, T, n_highway_units)
-    network = tf.layers.dense(inputs=network,
+    network = my_dense(inputs=network,
                               units=n_highway_units,
                               activation=tf.nn.relu,
                               kernel_initializer=tf.glorot_normal_initializer(),
