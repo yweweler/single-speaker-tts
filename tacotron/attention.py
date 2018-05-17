@@ -271,23 +271,18 @@ class LocalLuongAttention(LuongAttention):
                 self.p = tf.cast(self.p, dtype=tf.float32)
 
             # Calculate the memory sequence index at which the window should start.
-            start_index = self.p - self.d
-            start_index = tf.Print(start_index,
-                                   [tf.reshape(start_index, [-1])], 'start_index FLOAT',
-                                   summarize=99)
-            start_index = tf.cast(tf.ceil(start_index), dtype=tf.int32)
-            start_index = tf.Print(start_index, [tf.reshape(start_index, [-1])], 'start_index',
-                                   summarize=99)
+            start_index = tf.floor(self.p) - self.d
+            start_index = tf.Print(start_index, [tf.reshape(start_index, [-1])], 'start_index FLOAT', summarize=99)
+            start_index = tf.cast(start_index, dtype=tf.int32)
+
             # Prevent the window from leaving the memory.
             self.window_start = tf.maximum(0, start_index)
 
             # Calculate the memory sequence index at which the window should stop.
-            stop_index = self.p + self.d + 1
-            stop_index = tf.Print(stop_index,
-                                  [tf.reshape(stop_index, [-1])], 'stop_index FLOAT',
-                                  summarize=99)
-            stop_index = tf.cast(tf.ceil(stop_index), dtype=tf.int32)
-            stop_index = tf.Print(stop_index, [stop_index], 'stop_index', summarize=99)
+            stop_index = tf.floor(self.p) + self.d + 1
+            stop_index = tf.Print(stop_index, [tf.reshape(stop_index, [-1])], 'stop_index FLOAT', summarize=99)
+            stop_index = tf.cast(stop_index, dtype=tf.int32)
+
             # Prevent the window from leaving the memory.
             self.window_stop = tf.minimum(source_seq_length, stop_index)
 
