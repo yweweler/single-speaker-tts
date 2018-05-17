@@ -28,7 +28,7 @@ class Tacotron:
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, inputs, mode):
+    def __init__(self, inputs, mode, training_summary=True):
         """
         Creates an instance of the Tacotron model.
 
@@ -60,11 +60,15 @@ class Tacotron:
                         Batched number of frames in the spectrogram's excluding the padding
                         frames. The shape is shape=(B), with B being the batch size.
 
-
             mode (Mode):
                 Flag that controls the application of special architecture behaviour that only
                 has to be applied during training or evaluation.
                 Permitted modes are `TRAIN`, `EVAL` and `PREDICT`.
+
+            training_summary (boolean):
+                Flag controlling if summaries should be written during training.
+                The only exceptions to this are attention summary plots and the train losses.
+                These are written always. Default is True.
         """
         self.hparams = model_params
 
@@ -95,6 +99,7 @@ class Tacotron:
         self.alignment_history = None
 
         self._mode = mode
+        self._training_summary = training_summary
 
         # Construct the network.
         self.model()
@@ -393,7 +398,7 @@ class Tacotron:
         output_mel_spec = self.output_mel_spec
         output_linear_spec = self.output_linear_spec
 
-        if self.is_training():
+        if self.is_training() and self._training_summary is True:
             # ======================================================================================
             mel_spec_img = tf.expand_dims(
                 tf.reshape(inp_mel_spec[0], (1, -1, self.hparams.n_mels)), -1)
@@ -450,28 +455,30 @@ class Tacotron:
                 tf.summary.scalar('loss_decoder', self.loss_op_decoder)
                 tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
-            with tf.name_scope('normalized_inputs'):
-                # Convert the mel spectrogram into an image that can be displayed.
-                # => shape=(1, T_spec, n_mels, 1)
-                mel_spec_img = tf.expand_dims(
-                    tf.reshape(self.inp_mel_spec[0],
-                               (1, -1, self.hparams.n_mels)), -1)
+            # We only write image summaries during training if it is requested.
+            if self._training_summary is True:
+                with tf.name_scope('normalized_inputs'):
+                    # Convert the mel spectrogram into an image that can be displayed.
+                    # => shape=(1, T_spec, n_mels, 1)
+                    mel_spec_img = tf.expand_dims(
+                        tf.reshape(self.inp_mel_spec[0],
+                                   (1, -1, self.hparams.n_mels)), -1)
 
-                # => shape=(1, n_mels, T_spec, 1)
-                mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
-                mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
-                tf.summary.image('mel_spec', mel_spec_img, max_outputs=1)
+                    # => shape=(1, n_mels, T_spec, 1)
+                    mel_spec_img = tf.transpose(mel_spec_img, perm=[0, 2, 1, 3])
+                    mel_spec_img = tf.reverse(mel_spec_img, axis=tf.convert_to_tensor([1]))
+                    tf.summary.image('mel_spec', mel_spec_img, max_outputs=1)
 
-                # Convert thew linear spectrogram into an image that can be displayed.
-                # => shape=(1, T_spec, (1 + n_fft // 2), 1)
-                linear_spec_image = tf.expand_dims(
-                    tf.reshape(self.inp_linear_spec[0],
-                               (1, -1, (1 + self.hparams.n_fft // 2))), -1)
+                    # Convert thew linear spectrogram into an image that can be displayed.
+                    # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+                    linear_spec_image = tf.expand_dims(
+                        tf.reshape(self.inp_linear_spec[0],
+                                   (1, -1, (1 + self.hparams.n_fft // 2))), -1)
 
-                # => shape=(1, (1 + n_fft // 2), T_spec, 1)
-                linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
-                linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
-                tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
+                    # => shape=(1, (1 + n_fft // 2), T_spec, 1)
+                    linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+                    linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+                    tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # Evaluation only ==========================================================================
         if self._mode == Mode.EVAL:
@@ -501,7 +508,7 @@ class Tacotron:
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         # Training and evaluation ==================================================================
-        if self._mode == Mode.TRAIN or self._mode == Mode.EVAL:
+        if (self._mode == Mode.TRAIN and self._training_summary is True) or self._mode == Mode.EVAL:
             with tf.name_scope('normalized_outputs'):
                 # Convert the mel spectrogram into an image that can be displayed.
                 # => shape=(1, T_spec, n_mels, 1)

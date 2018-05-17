@@ -48,6 +48,10 @@ training_params = tf.contrib.training.HParams(
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,
 
+    # Flag controlling whether to actually write a write a summary during training.
+    # The only exceptions to this are the attention alignment plots and the train losses.
+    write_summary=False,
+
     # Maximal number of checkpoints to keep.
     checkpoints_to_keep=3000,
 
