@@ -6,12 +6,12 @@ class GPUDense(tf.layers.Dense):
     def __init__(self, units, **kwargs):
         super().__init__(units, **kwargs)
 
-    def call(self, inputs):
+    def __call_tiled(self, inputs):
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         shape = inputs.get_shape().as_list()
 
         if len(shape) > 3:
-            raise Exception('MyDense does only support tensors up to a rank of 3.')
+            raise Exception('GPUDense.__call_tiled does only support tensors up to a rank of 3.')
 
         if len(shape) == 3:
             batch_size = tf.shape(inputs)[0]
@@ -30,13 +30,15 @@ class GPUDense(tf.layers.Dense):
 
         return outputs
 
-    def call_old(self, inputs):
+    def __call_einsum(self, inputs):
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         shape = inputs.get_shape().as_list()
 
-        if len(shape) > 2:
-            # Broadcasting is required for the inputs.
-            outputs = tf.tensordot(inputs, self.kernel, [[len(shape) - 1], [0]])
+        if len(shape) > 3:
+            raise Exception('GPUDense.__call_einsum does only support tensors up to a rank of 3.')
+
+        if len(shape) == 3:
+            outputs = tf.einsum('aij,jk->aik', inputs, self.kernel)
         else:
             outputs = tf.matmul(inputs, self.kernel)
 
@@ -47,6 +49,16 @@ class GPUDense(tf.layers.Dense):
             return self.activation(outputs)  # pylint: disable=not-callable
 
         return outputs
+
+    def call(self, inputs):
+        # Original tf.Dense call implementation.
+        # return super().call(inputs)
+
+        # Implementation using tf.tile and tf.matmul to replace tf.tensordot.
+        # return self.call(inputs)
+
+        # Implementation using tf.einsum to replace tf.tensordot.
+        return self.__call_einsum(inputs)
 
 
 def gpu_dense(
