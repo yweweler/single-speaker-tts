@@ -303,7 +303,8 @@ if __name__ == '__main__':
                                                    batch_size=training_params.batch_size)
 
     # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN)
+    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
+                              training_summary=training_params.write_summary)
 
     # Train the model.
     train(tacotron_model)
