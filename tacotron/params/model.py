@@ -44,6 +44,9 @@ model_params = tf.contrib.training.HParams(
     # The number of Griffin-Lim reconstruction iterations.
     reconstruction_iterations=75,
 
+    # Flag allowing to force the use accelerated RNN implementation from CUDNN.
+    force_cudnn=True,
+
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
         # Embedding size for each sentence character.

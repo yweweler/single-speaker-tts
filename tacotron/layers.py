@@ -429,7 +429,7 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope, traini
 
 
 def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projections,
-         n_gru_units, training=True):
+         n_gru_units, training=True, force_cudnn=False):
     """
     Implementation of a CBHG (1-D convolution bank + highway network + bidirectional GRU)
     described in "Tacotron: Towards End-to-End Speech Synthesis".
@@ -472,6 +472,9 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
         training (boolean):
             Boolean defining whether the network will be trained or just used for inference.
             Default is True.
+
+        force_cudnn (boolean):
+            Boolean defining whether the CBHG will use an CUDNN accelerated RNN.
 
     Returns:
         (outputs, output_states):
@@ -537,22 +540,38 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
                               layers=n_highway_layers,
                               scope='highway_network')
 
-    # Create a bidirectional GRU cell RNN.
-    gru = tfcrnn.CudnnGRU(
-        num_layers=1,
-        num_units=n_gru_units,
-        direction="bidirectional",
-        dtype=tf.float32,
-        name='gru'
-    )
+    if force_cudnn is True:
+        # Create a CUDNN accelerated bidirectional GRU cell RNN.
+        gru = tfcrnn.CudnnGRU(
+            num_layers=1,
+            num_units=n_gru_units,
+            direction='bidirectional',
+            dtype=tf.float32,
+            name='gru'
+        )
 
-    # Transform the data into time major format. (CUDNN RNNs only support time major inputs)
-    network = tf.transpose(network, (1, 0, 2))
+        # Transform the data into time major format. (CUDNN RNNs only support time major inputs)
+        network = tf.transpose(network, (1, 0, 2))
 
-    # Let the RNN process the data.
-    outputs, output_states = gru(network)
+        # Let the RNN process the data.
+        outputs, output_states = gru(network)
 
-    # Transform the RNN outputs back into batch major format.
-    network = tf.transpose(outputs, (1, 0, 2))
+        # Transform the RNN outputs back into batch major format.
+        outputs = tf.transpose(outputs, (1, 0, 2))
+    else:
+        cell_forward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_fw')
+        cell_backward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_bw')
 
-    return network, output_states
+        # Create a bidirectional GRU cell RNN.
+        outputs, output_states = tf.nn.bidirectional_dynamic_rnn(
+            cell_fw=cell_forward,
+            cell_bw=cell_backward,
+            inputs=network,
+            dtype=tf.float32,
+            scope='gru'
+        )
+
+        # network.shape => (B, T, n_gru_units * 2)
+        outputs = tf.concat(outputs, -1)
+
+    return outputs, output_states

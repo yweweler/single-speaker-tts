@@ -163,7 +163,8 @@ class Tacotron:
                                   n_highway_units=self.hparams.encoder.n_highway_units,
                                   projections=self.hparams.encoder.projections,
                                   n_gru_units=self.hparams.encoder.n_gru_units,
-                                  training=self.is_training())
+                                  training=self.is_training(),
+                                  force_cudnn=model_params.force_cudnn)
 
         return network, state
 
@@ -218,7 +219,10 @@ class Tacotron:
             )
 
             # Create the attention RNN cell.
-            attention_cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_attention_units)
+            if model_params.force_cudnn:
+                attention_cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_attention_units)
+            else:
+                attention_cell = tf.nn.rnn_cell.GRUCell(num_units=n_attention_units)
 
             # Apply the pre-net to each decoder input as show in [1], figure 1.
             attention_cell = PrenetWrapper(attention_cell,
@@ -245,8 +249,14 @@ class Tacotron:
             # Before the input reaches the decoder RNN it passes through the attention cell.
             cells = [wrapped_attention_cell]
             for i in range(n_decoder_layers):
-                # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-                cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_decoder_units)
+                # Create a decoder GRU cell.
+                if model_params.force_cudnn:
+                    # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+                    cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_decoder_units)
+                else:
+                    # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+                    cell = tf.nn.rnn_cell.GRUCell(num_units=n_decoder_units)
+
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
                 cell = tf.nn.rnn_cell.ResidualWrapper(cell)
                 cells.append(cell)
@@ -346,7 +356,8 @@ class Tacotron:
                                   n_highway_units=self.hparams.post.n_highway_units,
                                   projections=self.hparams.post.projections,
                                   n_gru_units=self.hparams.post.n_gru_units,
-                                  training=self.is_training())
+                                  training=self.is_training(),
+                                  force_cudnn=model_params.force_cudnn)
 
         return network
 
