@@ -6,7 +6,7 @@ evaluation_params = tf.contrib.training.HParams(
     batch_size=4,
 
     # Number of threads used to load data during evaluation.
-    n_threads=4,
+    n_threads=32,
 
     # Maximal number of samples to load from the evaluation dataset.
     max_samples=256,
