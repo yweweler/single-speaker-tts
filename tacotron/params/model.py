@@ -7,10 +7,10 @@ from tacotron.attention import AttentionMode, AttentionScore, LocalLuongAttentio
 
 model_params = tf.contrib.training.HParams(
     # Number of unique characters in the vocabulary.
-    vocabulary_size=42,
+    vocabulary_size=29,
 
     # Target sampling rate.
-    sampling_rate=16000,
+    sampling_rate=22050,
 
     # FFT window size.
     n_fft=2048,
@@ -27,7 +27,7 @@ model_params = tf.contrib.training.HParams(
     n_mels=80,
 
     # Mel spectrum lower cutoff frequency.
-    mel_fmin=50,
+    mel_fmin=0,
 
     # Mel spectrum upper cutoff frequency.
     mel_fmax=8000,
