@@ -297,14 +297,14 @@ if __name__ == '__main__':
                                                   fill_dict=False)
 
     # Create batched placeholders from the dataset.
-    placeholders, n_samples = batched_placeholders(dataset=train_dataset,
+    with tf.device('/cpu:0'):
+        placeholders, n_samples = batched_placeholders(dataset=train_dataset,
                                                    max_samples=training_params.max_samples,
                                                    n_epochs=training_params.n_epochs,
                                                    batch_size=training_params.batch_size)
 
     # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
-                              training_summary=training_params.write_summary)
+    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN, training_summary=training_params.write_summary)
 
     # Train the model.
     train(tacotron_model)

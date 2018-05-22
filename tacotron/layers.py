@@ -2,6 +2,115 @@ import tensorflow as tf
 import tensorflow.contrib.cudnn_rnn as tfcrnn
 
 
+class GPUDense(tf.layers.Dense):
+    def __init__(self, units, **kwargs):
+        super().__init__(units, **kwargs)
+
+    def __call_tiled(self, inputs):
+        inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
+        shape = inputs.get_shape().as_list()
+
+        if len(shape) > 3:
+            raise Exception('GPUDense.__call_tiled does only support tensors up to a rank of 3.')
+
+        if len(shape) == 3:
+            batch_size = tf.shape(inputs)[0]
+            kernel = tf.expand_dims(self.kernel, axis=0)
+            kernel = tf.tile(kernel, [batch_size, 1, 1])
+        else:
+            kernel = self.kernel
+
+        outputs = tf.matmul(inputs, kernel)
+
+        if self.use_bias:
+            outputs = tf.nn.bias_add(outputs, self.bias)
+
+        if self.activation is not None:
+            return self.activation(outputs)  # pylint: disable=not-callable
+
+        return outputs
+
+    def __call_einsum(self, inputs):
+        inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
+        shape = inputs.get_shape().as_list()
+
+        if len(shape) > 3:
+            raise Exception('GPUDense.__call_einsum does only support tensors up to a rank of 3.')
+
+        if len(shape) == 3:
+            outputs = tf.einsum('aij,jk->aik', inputs, self.kernel)
+        else:
+            outputs = tf.matmul(inputs, self.kernel)
+
+        if self.use_bias:
+            outputs = tf.nn.bias_add(outputs, self.bias)
+
+        if self.activation is not None:
+            return self.activation(outputs)  # pylint: disable=not-callable
+
+        return outputs
+
+    def call(self, inputs):
+        # Original tf.Dense call implementation.
+        # return super().call(inputs)
+
+        # Implementation using tf.tile and tf.matmul to replace tf.tensordot.
+        # return self.call(inputs)
+
+        # Implementation using tf.einsum to replace tf.tensordot.
+        return self.__call_einsum(inputs)
+
+
+def wrapped_dense(
+        inputs, units,
+        activation=None,
+        use_bias=True,
+        kernel_initializer=None,
+        bias_initializer=tf.zeros_initializer(),
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        trainable=True,
+        name=None,
+        reuse=None):
+    # with tf.device('/gpu:0'):
+    #     layer = GPUDense(units,
+    #                      activation=activation,
+    #                      use_bias=use_bias,
+    #                      kernel_initializer=kernel_initializer,
+    #                      bias_initializer=bias_initializer,
+    #                      kernel_regularizer=kernel_regularizer,
+    #                      bias_regularizer=bias_regularizer,
+    #                      activity_regularizer=activity_regularizer,
+    #                      kernel_constraint=kernel_constraint,
+    #                      bias_constraint=bias_constraint,
+    #                      trainable=trainable,
+    #                      name=name,
+    #                      dtype=inputs.dtype.base_dtype,
+    #                      _scope=name,
+    #                      _reuse=reuse)
+    #     return layer.apply(inputs)
+
+    layer = tf.layers.Dense(units,
+                            activation=activation,
+                            use_bias=use_bias,
+                            kernel_initializer=kernel_initializer,
+                            bias_initializer=bias_initializer,
+                            kernel_regularizer=kernel_regularizer,
+                            bias_regularizer=bias_regularizer,
+                            activity_regularizer=activity_regularizer,
+                            kernel_constraint=kernel_constraint,
+                            bias_constraint=bias_constraint,
+                            trainable=trainable,
+                            name=name,
+                            dtype=inputs.dtype.base_dtype,
+                            _scope=name,
+                            _reuse=reuse)
+    return layer.apply(inputs)
+
+
 def prelu(inputs, layer_wise=False):
     """
     Implements a Parametric Rectified Linear Unit (PReLU).
@@ -68,9 +177,6 @@ def highway_network(inputs, units, layers, scope, activation=tf.nn.relu):
             number of time frames and F being the size of the features.
 
     """
-    # Make sure the the input dimensionality is equal to the output dimensionality.
-    tf.assert_equal(inputs.shape[-1], units)
-
     network = inputs
     with tf.variable_scope(scope):
         for layer in range(layers):
@@ -133,21 +239,21 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
         not particularly deep there should not be a major impact from using it.
     """
     with tf.variable_scope(scope):
-        h = tf.layers.dense(inputs=inputs,
-                            units=units,
-                            activation=activation,
-                            kernel_initializer=tf.glorot_normal_initializer(),
-                            bias_initializer=tf.zeros_initializer(),
-                            name='H')
+        h = wrapped_dense(inputs=inputs,
+                          units=units,
+                          activation=activation,
+                          kernel_initializer=tf.glorot_normal_initializer(),
+                          bias_initializer=tf.zeros_initializer(),
+                          name='H')
 
         # For the transform gate we follow [1], section "2.2 Training Deep Highway Networks" using a
         # sigmoid activation function and a negative bias initializer.
-        t = tf.layers.dense(inputs=inputs,
-                            units=units,
-                            activation=tf.nn.sigmoid,
-                            kernel_initializer=tf.glorot_normal_initializer(),
-                            bias_initializer=tf.constant_initializer(t_bias_init),
-                            name='T')
+        t = wrapped_dense(inputs=inputs,
+                          units=units,
+                          activation=tf.nn.sigmoid,
+                          kernel_initializer=tf.glorot_normal_initializer(),
+                          bias_initializer=tf.constant_initializer(t_bias_init),
+                          name='T')
 
     return tf.add(tf.multiply(h, t), tf.multiply(inputs, (1.0 - t)))
     # return h * t + inputs * (1.0 - t)
@@ -183,12 +289,12 @@ def pre_net(inputs, layers, scope='pre_net', training=True):
     network = inputs
     with tf.variable_scope(scope):
         for i, (layer_units, layer_dropout, layer_activation) in enumerate(layers):
-            network = tf.layers.dense(inputs=network,
-                                      units=layer_units,
-                                      activation=layer_activation,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      bias_initializer=tf.zeros_initializer(),
-                                      name='{}-FC-{}'.format(i + 1, layer_units))
+            network = wrapped_dense(inputs=network,
+                                    units=layer_units,
+                                    activation=layer_activation,
+                                    kernel_initializer=tf.glorot_normal_initializer(),
+                                    bias_initializer=tf.zeros_initializer(),
+                                    name='{}-FC-{}'.format(i + 1, layer_units))
 
             network = tf.layers.dropout(inputs=network,
                                         rate=layer_dropout,
@@ -340,7 +446,7 @@ def conv_1d_projection(inputs, n_filters, kernel_size, activation, scope, traini
 
 
 def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projections,
-         n_gru_units, training=True):
+         n_gru_units, training=True, force_cudnn=False):
     """
     Implementation of a CBHG (1-D convolution bank + highway network + bidirectional GRU)
     described in "Tacotron: Towards End-to-End Speech Synthesis".
@@ -383,6 +489,9 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
         training (boolean):
             Boolean defining whether the network will be trained or just used for inference.
             Default is True.
+
+        force_cudnn (boolean):
+            Boolean defining whether the CBHG will use an CUDNN accelerated RNN.
 
     Returns:
         (outputs, output_states):
@@ -434,12 +543,12 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
 
     # Highway network dimensionality lifter.
     # network.shape => (B, T, n_highway_units)
-    network = tf.layers.dense(inputs=network,
-                              units=n_highway_units,
-                              activation=tf.nn.relu,
-                              kernel_initializer=tf.glorot_normal_initializer(),
-                              bias_initializer=tf.glorot_normal_initializer(),
-                              name='lifter')
+    network = wrapped_dense(inputs=network,
+                            units=n_highway_units,
+                            activation=tf.nn.relu,
+                            kernel_initializer=tf.glorot_normal_initializer(),
+                            bias_initializer=tf.glorot_normal_initializer(),
+                            name='lifter')
 
     # Multi layer highway network.
     # network.shape => (B, T, n_highway_units)
@@ -448,22 +557,38 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
                               layers=n_highway_layers,
                               scope='highway_network')
 
-    # Create a bidirectional GRU cell RNN.
-    gru = tfcrnn.CudnnGRU(
-        num_layers=1,
-        num_units=n_gru_units,
-        direction="bidirectional",
-        dtype=tf.float32,
-        name='gru'
-    )
+    if force_cudnn is True:
+        # Create a CUDNN accelerated bidirectional GRU cell RNN.
+        gru = tfcrnn.CudnnGRU(
+            num_layers=1,
+            num_units=n_gru_units,
+            direction='bidirectional',
+            dtype=tf.float32,
+            name='gru'
+        )
 
-    # Transform the data into time major format. (CUDNN RNNs only support time major inputs)
-    network = tf.transpose(network, (1, 0, 2))
+        # Transform the data into time major format. (CUDNN RNNs only support time major inputs)
+        network = tf.transpose(network, (1, 0, 2))
 
-    # Let the RNN process the data.
-    outputs, output_states = gru(network)
+        # Let the RNN process the data.
+        outputs, output_states = gru(network)
 
-    # Transform the RNN outputs back into batch major format.
-    network = tf.transpose(outputs, (1, 0, 2))
+        # Transform the RNN outputs back into batch major format.
+        outputs = tf.transpose(outputs, (1, 0, 2))
+    else:
+        cell_forward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_fw')
+        cell_backward = tf.nn.rnn_cell.GRUCell(num_units=n_gru_units, name='gru_cell_bw')
 
-    return network, output_states
+        # Create a bidirectional GRU cell RNN.
+        outputs, output_states = tf.nn.bidirectional_dynamic_rnn(
+            cell_fw=cell_forward,
+            cell_bw=cell_backward,
+            inputs=network,
+            dtype=tf.float32,
+            scope='gru'
+        )
+
+        # network.shape => (B, T, n_gru_units * 2)
+        outputs = tf.concat(outputs, -1)
+
+    return outputs, output_states

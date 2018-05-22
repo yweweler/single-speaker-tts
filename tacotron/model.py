@@ -7,7 +7,7 @@ from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_
 from audio.synthesis import spectrogram_to_wav
 from tacotron.attention import LocalLuongAttention, AdvancedAttentionWrapper
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
-from tacotron.layers import cbhg, pre_net
+from tacotron.layers import cbhg, pre_net, wrapped_dense
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.wrappers import PrenetWrapper
@@ -163,7 +163,8 @@ class Tacotron:
                                   n_highway_units=self.hparams.encoder.n_highway_units,
                                   projections=self.hparams.encoder.projections,
                                   n_gru_units=self.hparams.encoder.n_gru_units,
-                                  training=self.is_training())
+                                  training=self.is_training(),
+                                  force_cudnn=model_params.force_cudnn)
 
         return network, state
 
@@ -218,7 +219,10 @@ class Tacotron:
             )
 
             # Create the attention RNN cell.
-            attention_cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_attention_units)
+            if model_params.force_cudnn:
+                attention_cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_attention_units)
+            else:
+                attention_cell = tf.nn.rnn_cell.GRUCell(num_units=n_attention_units)
 
             # Apply the pre-net to each decoder input as show in [1], figure 1.
             attention_cell = PrenetWrapper(attention_cell,
@@ -245,8 +249,14 @@ class Tacotron:
             # Before the input reaches the decoder RNN it passes through the attention cell.
             cells = [wrapped_attention_cell]
             for i in range(n_decoder_layers):
-                # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
-                cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_decoder_units)
+                # Create a decoder GRU cell.
+                if model_params.force_cudnn:
+                    # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+                    cell = tfcrnn.CudnnCompatibleGRUCell(num_units=n_decoder_units)
+                else:
+                    # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
+                    cell = tf.nn.rnn_cell.GRUCell(num_units=n_decoder_units)
+
                 # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
                 cell = tf.nn.rnn_cell.ResidualWrapper(cell)
                 cells.append(cell)
@@ -346,7 +356,8 @@ class Tacotron:
                                   n_highway_units=self.hparams.post.n_highway_units,
                                   projections=self.hparams.post.projections,
                                   n_gru_units=self.hparams.post.n_gru_units,
-                                  training=self.is_training())
+                                  training=self.is_training(),
+                                  force_cudnn=model_params.force_cudnn)
 
         return network
 
@@ -379,11 +390,11 @@ class Tacotron:
             outputs = self.post_process(outputs)
 
         # shape => (B, T_spec, (1 + n_fft // 2))
-        outputs = tf.layers.dense(inputs=outputs,
-                                  units=(1 + self.hparams.n_fft // 2),
-                                  # activation=tf.nn.sigmoid,
-                                  kernel_initializer=tf.glorot_normal_initializer(),
-                                  bias_initializer=tf.glorot_normal_initializer())
+        outputs = wrapped_dense(inputs=outputs,
+                                units=(1 + self.hparams.n_fft // 2),
+                                # activation=tf.nn.sigmoid,
+                                kernel_initializer=tf.glorot_normal_initializer(),
+                                bias_initializer=tf.glorot_normal_initializer())
 
         # shape => (B, T_spec, (1 + n_fft // 2))
         self.output_linear_spec = outputs
