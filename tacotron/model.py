@@ -7,7 +7,7 @@ from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_
 from audio.synthesis import spectrogram_to_wav
 from tacotron.attention import LocalLuongAttention, AdvancedAttentionWrapper
 from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
-from tacotron.layers import cbhg, pre_net, gpu_dense
+from tacotron.layers import cbhg, pre_net, wrapped_dense
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.wrappers import PrenetWrapper
@@ -390,11 +390,11 @@ class Tacotron:
             outputs = self.post_process(outputs)
 
         # shape => (B, T_spec, (1 + n_fft // 2))
-        outputs = gpu_dense(inputs=outputs,
-                            units=(1 + self.hparams.n_fft // 2),
-                            # activation=tf.nn.sigmoid,
-                            kernel_initializer=tf.glorot_normal_initializer(),
-                            bias_initializer=tf.glorot_normal_initializer())
+        outputs = wrapped_dense(inputs=outputs,
+                                units=(1 + self.hparams.n_fft // 2),
+                                # activation=tf.nn.sigmoid,
+                                kernel_initializer=tf.glorot_normal_initializer(),
+                                bias_initializer=tf.glorot_normal_initializer())
 
         # shape => (B, T_spec, (1 + n_fft // 2))
         self.output_linear_spec = outputs

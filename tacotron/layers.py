@@ -61,7 +61,7 @@ class GPUDense(tf.layers.Dense):
         return self.__call_einsum(inputs)
 
 
-def gpu_dense(
+def wrapped_dense(
         inputs, units,
         activation=None,
         use_bias=True,
@@ -75,23 +75,40 @@ def gpu_dense(
         trainable=True,
         name=None,
         reuse=None):
-    with tf.device('/gpu:0'):
-        layer = GPUDense(units,
-                         activation=activation,
-                         use_bias=use_bias,
-                         kernel_initializer=kernel_initializer,
-                         bias_initializer=bias_initializer,
-                         kernel_regularizer=kernel_regularizer,
-                         bias_regularizer=bias_regularizer,
-                         activity_regularizer=activity_regularizer,
-                         kernel_constraint=kernel_constraint,
-                         bias_constraint=bias_constraint,
-                         trainable=trainable,
-                         name=name,
-                         dtype=inputs.dtype.base_dtype,
-                         _scope=name,
-                         _reuse=reuse)
-        return layer.apply(inputs)
+    # with tf.device('/gpu:0'):
+    #     layer = GPUDense(units,
+    #                      activation=activation,
+    #                      use_bias=use_bias,
+    #                      kernel_initializer=kernel_initializer,
+    #                      bias_initializer=bias_initializer,
+    #                      kernel_regularizer=kernel_regularizer,
+    #                      bias_regularizer=bias_regularizer,
+    #                      activity_regularizer=activity_regularizer,
+    #                      kernel_constraint=kernel_constraint,
+    #                      bias_constraint=bias_constraint,
+    #                      trainable=trainable,
+    #                      name=name,
+    #                      dtype=inputs.dtype.base_dtype,
+    #                      _scope=name,
+    #                      _reuse=reuse)
+    #     return layer.apply(inputs)
+
+    layer = tf.layers.Dense(units,
+                            activation=activation,
+                            use_bias=use_bias,
+                            kernel_initializer=kernel_initializer,
+                            bias_initializer=bias_initializer,
+                            kernel_regularizer=kernel_regularizer,
+                            bias_regularizer=bias_regularizer,
+                            activity_regularizer=activity_regularizer,
+                            kernel_constraint=kernel_constraint,
+                            bias_constraint=bias_constraint,
+                            trainable=trainable,
+                            name=name,
+                            dtype=inputs.dtype.base_dtype,
+                            _scope=name,
+                            _reuse=reuse)
+    return layer.apply(inputs)
 
 
 def prelu(inputs, layer_wise=False):
@@ -222,21 +239,21 @@ def highway_network_layer(inputs, units, scope, activation=tf.nn.relu, t_bias_in
         not particularly deep there should not be a major impact from using it.
     """
     with tf.variable_scope(scope):
-        h = gpu_dense(inputs=inputs,
-                      units=units,
-                      activation=activation,
-                      kernel_initializer=tf.glorot_normal_initializer(),
-                      bias_initializer=tf.zeros_initializer(),
-                      name='H')
+        h = wrapped_dense(inputs=inputs,
+                          units=units,
+                          activation=activation,
+                          kernel_initializer=tf.glorot_normal_initializer(),
+                          bias_initializer=tf.zeros_initializer(),
+                          name='H')
 
         # For the transform gate we follow [1], section "2.2 Training Deep Highway Networks" using a
         # sigmoid activation function and a negative bias initializer.
-        t = gpu_dense(inputs=inputs,
-                      units=units,
-                      activation=tf.nn.sigmoid,
-                      kernel_initializer=tf.glorot_normal_initializer(),
-                      bias_initializer=tf.constant_initializer(t_bias_init),
-                      name='T')
+        t = wrapped_dense(inputs=inputs,
+                          units=units,
+                          activation=tf.nn.sigmoid,
+                          kernel_initializer=tf.glorot_normal_initializer(),
+                          bias_initializer=tf.constant_initializer(t_bias_init),
+                          name='T')
 
     return tf.add(tf.multiply(h, t), tf.multiply(inputs, (1.0 - t)))
     # return h * t + inputs * (1.0 - t)
@@ -272,12 +289,12 @@ def pre_net(inputs, layers, scope='pre_net', training=True):
     network = inputs
     with tf.variable_scope(scope):
         for i, (layer_units, layer_dropout, layer_activation) in enumerate(layers):
-            network = gpu_dense(inputs=network,
-                                units=layer_units,
-                                activation=layer_activation,
-                                kernel_initializer=tf.glorot_normal_initializer(),
-                                bias_initializer=tf.zeros_initializer(),
-                                name='{}-FC-{}'.format(i + 1, layer_units))
+            network = wrapped_dense(inputs=network,
+                                    units=layer_units,
+                                    activation=layer_activation,
+                                    kernel_initializer=tf.glorot_normal_initializer(),
+                                    bias_initializer=tf.zeros_initializer(),
+                                    name='{}-FC-{}'.format(i + 1, layer_units))
 
             network = tf.layers.dropout(inputs=network,
                                         rate=layer_dropout,
@@ -526,12 +543,12 @@ def cbhg(inputs, n_banks, n_filters, n_highway_layers, n_highway_units, projecti
 
     # Highway network dimensionality lifter.
     # network.shape => (B, T, n_highway_units)
-    network = gpu_dense(inputs=network,
-                        units=n_highway_units,
-                        activation=tf.nn.relu,
-                        kernel_initializer=tf.glorot_normal_initializer(),
-                        bias_initializer=tf.glorot_normal_initializer(),
-                        name='lifter')
+    network = wrapped_dense(inputs=network,
+                            units=n_highway_units,
+                            activation=tf.nn.relu,
+                            kernel_initializer=tf.glorot_normal_initializer(),
+                            bias_initializer=tf.glorot_normal_initializer(),
+                            name='lifter')
 
     # Multi layer highway network.
     # network.shape => (B, T, n_highway_units)
