@@ -3,7 +3,7 @@ import tensorflow as tf
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
-    batch_size=4,
+    batch_size=32,
 
     # Number of threads used to load data during evaluation.
     n_threads=4,
@@ -29,7 +29,7 @@ evaluation_params = tf.contrib.training.HParams(
     allow_smaller_batches=True,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/pavoque/PAVOQUE',
+    checkpoint_dir='/tmp/tacotron/ljspeech/LJSpeech',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',

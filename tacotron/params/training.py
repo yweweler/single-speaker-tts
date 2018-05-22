@@ -8,7 +8,7 @@ training_params = tf.contrib.training.HParams(
     n_epochs=5000,
 
     # Batch size used for training.
-    batch_size=4,
+    batch_size=32,
 
     # Number of threads used to load data during training.
     n_threads=4,
@@ -20,7 +20,7 @@ training_params = tf.contrib.training.HParams(
     shuffle_samples=False,
 
     # Flag telling the training code to load pre-processed features or calculate them on the fly.
-    load_preprocessed=True,
+    load_preprocessed=False,
 
     # Number of batches to pre-calculate for feeding to the GPU.
     n_pre_calc_batches=8,
@@ -37,7 +37,7 @@ training_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for training.
-    checkpoint_dir='/tmp/tacotron/pavoque/PAVOQUE',
+    checkpoint_dir='/tmp/tacotron/ljspeech/LJSpeech',
 
     # Run folder to load data from and save data in to the checkpoint folder.
     checkpoint_run='train',
