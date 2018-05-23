@@ -1,5 +1,6 @@
 import abc
 
+import os
 import numpy as np
 
 
@@ -255,6 +256,26 @@ class DatasetHelper:
                     shape is shape=(T_spec, 1 + n_fft // 2).
         """
         raise NotImplementedError
+
+    def pre_compute_features(self, paths):
+        # Get the total number of samples in the dataset.
+        n_samples = len(paths)
+
+        print('Loaded {} dataset entries.'.format(n_samples))
+
+        for wav_path in paths:
+            # Load and process the audio file.
+            mel_mag_db, linear_mag_db = self.load_audio(wav_path.encode())
+
+            # Extract the file path and file name without the extension.
+            file_path = os.path.splitext(wav_path)[0]
+
+            # Create the target file path.
+            out_path = '{}.npz'.format(file_path)
+            print('Writing: "{}"'.format(out_path))
+
+            # Save the audio file as a numpy .npz file.
+            np.savez(out_path, mel_mag_db=mel_mag_db, linear_mag_db=linear_mag_db)
 
     @staticmethod
     def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
