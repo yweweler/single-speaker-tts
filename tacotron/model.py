@@ -272,9 +272,6 @@ class Tacotron:
                 # activation=tf.nn.sigmoid
             )
 
-            # TODO: Experiment with the encoder state as the initial state:
-            # ".clone(cell_state=encoder_state)"
-            # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
             decoder_initial_state = output_cell.zero_state(
                 batch_size=batch_size,
                 dtype=tf.float32
