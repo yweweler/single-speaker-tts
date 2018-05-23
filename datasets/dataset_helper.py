@@ -1,6 +1,6 @@
 import abc
-
 import os
+
 import numpy as np
 
 
@@ -258,6 +258,17 @@ class DatasetHelper:
         raise NotImplementedError
 
     def pre_compute_features(self, paths):
+        """
+        Loads all audio files from the dataset, computes features and saves these pre-computed
+        features as numpy .npz files to disk.
+
+        For example: The features of an audio file <path>/<filename>.wav are saved next to the
+        audio file in <path>/<filename>.npz.
+
+        Arguments:
+            paths (:obj:`list` of :obj:`str`):
+                File paths for all audio files of the dataset to pre-compute features for.
+        """
         # Get the total number of samples in the dataset.
         n_samples = len(paths)
 
