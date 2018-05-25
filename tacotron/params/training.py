@@ -8,7 +8,7 @@ training_params = tf.contrib.training.HParams(
     n_epochs=5000,
 
     # Batch size used for training.
-    batch_size=4,
+    batch_size=40,
 
     # Number of threads used to load data during training.
     n_threads=4,
@@ -37,7 +37,7 @@ training_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for training.
-    checkpoint_dir='/tmp/tacotron/pavoque/PAVOQUE',
+    checkpoint_dir='/tmp/tacotron/cmu/slt',
 
     # Run folder to load data from and save data in to the checkpoint folder.
     checkpoint_run='train',

@@ -210,7 +210,7 @@ class Tacotron:
                     'score_mode': model_params.attention.luong_local_score,
                     'd': model_params.attention.luong_local_window_D,
                     'force_gaussian': model_params.attention.luong_force_gaussian,
-                    'const_batch_size': 4
+                    'const_batch_size': 40
                 })
 
             # Create the attention mechanism.

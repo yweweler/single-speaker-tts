@@ -3,13 +3,13 @@ import tensorflow as tf
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
-    batch_size=4,
+    batch_size=40,
 
     # Number of threads used to load data during evaluation.
     n_threads=4,
 
     # Maximal number of samples to load from the evaluation dataset.
-    max_samples=256,
+    max_samples=8*40,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
@@ -26,10 +26,10 @@ evaluation_params = tf.contrib.training.HParams(
 
     # Flag enabling the bucketing mechanism to output batches of smaller size than
     # `batch_size` if not enough samples are available.
-    allow_smaller_batches=True,
+    allow_smaller_batches=False,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/pavoque/PAVOQUE',
+    checkpoint_dir='/tmp/tacotron/cmu/slt',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',

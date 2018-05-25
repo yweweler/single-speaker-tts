@@ -7,7 +7,7 @@ from tacotron.attention import AttentionMode, AttentionScore, LocalLuongAttentio
 
 model_params = tf.contrib.training.HParams(
     # Number of unique characters in the vocabulary.
-    vocabulary_size=42,
+    vocabulary_size=33,
 
     # Target sampling rate.
     sampling_rate=16000,
