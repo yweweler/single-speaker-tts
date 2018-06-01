@@ -43,7 +43,10 @@ training_params = tf.contrib.training.HParams(
     checkpoint_run='train',
 
     # Duration in seconds after which to save a checkpoint.
-    checkpoint_save_secs=60 * 30,
+    # checkpoint_save_secs=60 * 30,
+
+    # Number of batches after which to save a checkpoint.
+    checkpoint_save_steps=5000,
 
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,
@@ -63,7 +66,7 @@ training_params = tf.contrib.training.HParams(
 
     # Initial learning rate.
     lr=0.001,
-    
+
     # The minimal learning rate to use.
     minimum_lr=1e-5,
 
