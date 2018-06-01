@@ -64,6 +64,9 @@ training_params = tf.contrib.training.HParams(
     # Initial learning rate.
     lr=0.001,
 
+    # The minimal learning rate to use.
+    minimum_lr=1e-5,
+
     # Number of global steps after which the learning rate should be decayed.
     lr_decay_steps=25000,
 
