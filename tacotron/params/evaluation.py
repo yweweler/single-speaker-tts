@@ -3,10 +3,10 @@ import tensorflow as tf
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
-    batch_size=4,
+    batch_size=43,
 
     # Number of threads used to load data during evaluation.
-    n_threads=32,
+    n_threads=4,
 
     # Maximal number of samples to load from the evaluation dataset.
     max_samples=256,
