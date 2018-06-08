@@ -37,6 +37,9 @@ evaluation_params = tf.contrib.training.HParams(
     # Run folder to save summaries in the checkpoint folder.
     checkpoint_save_run='evaluate',
 
+    # Flag to control if all checkpoints or only the latest one should be evaluated.
+    evaluate_all_checkpoints=False,
+
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,
 
