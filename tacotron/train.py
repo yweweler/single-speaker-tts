@@ -192,6 +192,9 @@ def train(model):
             decay_rate=training_params.lr_decay_rate,
             staircase=training_params.lr_staircase)
 
+        # Force decrease to stop at a minimal learning rate.
+        learning_rate = tf.maximum(learning_rate, training_params.minimum_lr)
+
         # Add a learning rate summary.
         tf.summary.scalar('lr', learning_rate)
 
@@ -247,7 +250,8 @@ def start_session(loss_op, summary_op):
 
     saver_hook = tf.train.CheckpointSaverHook(
         checkpoint_dir=checkpoint_dir,
-        save_secs=training_params.checkpoint_save_secs,
+        # save_secs=training_params.checkpoint_save_secs,
+        save_steps=training_params.checkpoint_save_steps,
         saver=saver
     )
 
