@@ -7,7 +7,7 @@ from datasets.pavoque import PAVOQUEDatasetHelper
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/home/st/y/yw132854/workspace/cmu_us_slt_arctic',
+    dataset_folder='/tmp/datasets_tmpfs/cmu_us_slt_arctic',
 
     # Dataset load helper.
     dataset_loader=CMUDatasetHelper,

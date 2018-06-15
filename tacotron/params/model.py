@@ -108,20 +108,20 @@ model_params = tf.contrib.training.HParams(
     # Attention parameters.
     attention=tf.contrib.training.HParams(
         # mechanism=BahdanauAttention,
-        mechanism=LuongAttention,
-        # mechanism=LocalLuongAttention,
+        # mechanism=LuongAttention,
+        mechanism=LocalLuongAttention,
 
         # Luong local style content based scoring function.
         luong_local_score=AttentionScore.DOT,
 
         # Luong local style attention mode.
-        luong_local_mode=AttentionMode.PREDICTIVE,
+        luong_local_mode=AttentionMode.MONOTONIC,
 
         # Luong local: Force a gaussian distribution onto the scores in the attention window.
-        luong_force_gaussian=True,
+        luong_force_gaussian=False,
 
         # Luong local style window D parameter. (Window size will be `2D+1`).
-        luong_local_window_D=10
+        luong_local_window_D=6
     ),
 
     # Post-processing network parameters.
