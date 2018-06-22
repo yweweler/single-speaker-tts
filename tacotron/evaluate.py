@@ -158,20 +158,9 @@ def evaluate(model, checkpoint_file):
         model (Tacotron):
             The Tacotron model instance to be evaluated.
 
-        n_samples (int):
-            Number of samples used for evaluation.
+        checkpoint_file (string):
+            Absolute path to the checkpoint file to be evaluated.
     """
-    # Get the models loss function.
-    loss_op = model.get_loss_op()
-
-    # Checkpoint folder to load the evaluation checkpoint from.
-    checkpoint_load_dir = os.path.join(
-        evaluation_params.checkpoint_dir,
-        evaluation_params.checkpoint_load_run
-    )
-
-    print('checkpoint_file', checkpoint_file)
-
     # Checkpoint folder to save the evaluation summaries into.
     checkpoint_save_dir = os.path.join(
         evaluation_params.checkpoint_dir,
@@ -180,13 +169,12 @@ def evaluate(model, checkpoint_file):
 
     # Get the checkpoints global step from the checkpoints file name.
     global_step = int(checkpoint_file.split('-')[-1])
+    print('[checkpoint_file] step: {}, file: "{}"'.format(global_step, checkpoint_file))
+
     saver = tf.train.Saver()
 
-    
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph(), flush_secs=10)
     summary_op = model.summary()
-
-    # ========================================================
 
     session_config = tf.ConfigProto(
         gpu_options=tf.GPUOptions(
@@ -348,7 +336,6 @@ if __name__ == '__main__':
 
         # Evaluate the model.
         evaluate(tacotron_model, _checkpoint_file)
-        tf.reset_default_graph()
 
     if evaluation_params.evaluate_all_checkpoints is False:
         # Get the latest checkpoint for evaluation.
@@ -357,7 +344,6 @@ if __name__ == '__main__':
     else:
         # Get all checkpoints and evaluate the sequentially.
         checkpoint_files = collect_checkpoint_paths(checkpoint_load_dir)
-        print("Found #{} checkpoints to evalue.".format(len(checkpoint_files)))
+
         for checkpoint_file in checkpoint_files:
-            print(checkpoint_file)
             __eval_cycle(checkpoint_file)
