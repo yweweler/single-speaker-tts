@@ -3,13 +3,13 @@ import tensorflow as tf
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
-    batch_size=40,
+    batch_size=16,
 
     # Number of threads used to load data during evaluation.
     n_threads=4,
 
     # Maximal number of samples to load from the evaluation dataset.
-    max_samples=8*40,
+    max_samples=1024,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
@@ -29,7 +29,7 @@ evaluation_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/cmu/slt',
+    checkpoint_dir='/tmp/tacotron/luong_local_dot_gaussian/slt/',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',
@@ -38,7 +38,7 @@ evaluation_params = tf.contrib.training.HParams(
     checkpoint_save_run='evaluate',
 
     # Flag to control if all checkpoints or only the latest one should be evaluated.
-    evaluate_all_checkpoints=False,
+    evaluate_all_checkpoints=True,
 
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,

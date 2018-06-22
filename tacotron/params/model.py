@@ -118,10 +118,10 @@ model_params = tf.contrib.training.HParams(
         luong_local_mode=AttentionMode.MONOTONIC,
 
         # Luong local: Force a gaussian distribution onto the scores in the attention window.
-        luong_force_gaussian=False,
+        luong_force_gaussian=True,
 
         # Luong local style window D parameter. (Window size will be `2D+1`).
-        luong_local_window_D=6
+        luong_local_window_D=10
     ),
 
     # Post-processing network parameters.
