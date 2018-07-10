@@ -7,7 +7,7 @@ from tacotron.attention import AttentionMode, AttentionScore, LocalLuongAttentio
 
 model_params = tf.contrib.training.HParams(
     # Number of unique characters in the vocabulary.
-    vocabulary_size=42,
+    vocabulary_size=33,
 
     # Target sampling rate.
     sampling_rate=16000,
@@ -108,14 +108,14 @@ model_params = tf.contrib.training.HParams(
     # Attention parameters.
     attention=tf.contrib.training.HParams(
         # mechanism=BahdanauAttention,
-        mechanism=LuongAttention,
-        # mechanism=LocalLuongAttention,
+        # mechanism=LuongAttention,
+        mechanism=LocalLuongAttention,
 
         # Luong local style content based scoring function.
         luong_local_score=AttentionScore.DOT,
 
         # Luong local style attention mode.
-        luong_local_mode=AttentionMode.PREDICTIVE,
+        luong_local_mode=AttentionMode.MONOTONIC,
 
         # Luong local: Force a gaussian distribution onto the scores in the attention window.
         luong_force_gaussian=True,

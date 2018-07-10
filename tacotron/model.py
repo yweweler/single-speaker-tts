@@ -210,7 +210,7 @@ class Tacotron:
                     'score_mode': model_params.attention.luong_local_score,
                     'd': model_params.attention.luong_local_window_D,
                     'force_gaussian': model_params.attention.luong_force_gaussian,
-                    'const_batch_size': 4
+                    'const_batch_size': 16
                 })
 
             # Create the attention mechanism.
@@ -489,7 +489,7 @@ class Tacotron:
                     tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # Evaluation only ==========================================================================
-        if self._mode == Mode.EVAL:
+        if self._mode == Mode.EVAL and False:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len, self.hparams.sampling_rate)
                 win_hop = ms_to_samples(self.hparams.win_hop, self.hparams.sampling_rate)

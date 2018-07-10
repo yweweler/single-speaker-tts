@@ -171,7 +171,7 @@ if __name__ == '__main__':
         'x': 33, 'ß': 34, ':': 35, 'q': 36, '"': 37, '?': 38, '!': 39, "'": 40, '/': 41
     }
 
-    dataset = PAVOQUEDatasetHelper(dataset_folder='/home/yves-noel/downloads/PAVOQUE',
+    dataset = PAVOQUEDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/PAVOQUE',
                                    char_dict=init_char_dict,
                                    fill_dict=False)
 
