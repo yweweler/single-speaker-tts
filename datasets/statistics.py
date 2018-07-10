@@ -96,7 +96,7 @@ def collect_decibel_statistics(path_listing):
     return stats
 
 
-def collect_duration_statistics(path_listing):
+def collect_duration_statistics(dataset_name, path_listing):
     durations = []
 
     print("Collecting duration statistics for {} files ...".format(len(path_listing)))
@@ -117,11 +117,20 @@ def collect_duration_statistics(path_listing):
     print("durations_max: {} sec.".format(durations_max))
 
     # Create a histogram of the individual file durations.
-    plt.hist(durations, bins=50)
-    plt.title("Dataset file durations")
-    plt.xlabel("Duration")
+    fig = plt.figure(figsize=(1.5*14.0/2.54, 7.7/2.54), dpi=100)
+    plt.hist(durations, bins=100, normed=False, color="#E1D5E7")
+    plt.grid(linestyle='dashed')
+    plt.xlim([0, 20.5])
+    plt.title('"{}" file duration distribution'.format(dataset_name))
+    plt.xlabel("Duration (seconds)")
     plt.ylabel("Count")
     plt.show()
+
+    # DEBUG: Dump plot into a pdf file.
+    fig.savefig("/tmp/durations.pdf", bbox_inches='tight')
+
+    # DEBUG: Dump statistics into a csv file.
+    np.savetxt("/tmp/durations.csv", durations, delimiter=",", fmt='%s', header="duration")
 
 
 if __name__ == '__main__':
