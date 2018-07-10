@@ -1,6 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
-from audio.conversion import magnitude_to_decibel
+from audio.conversion import magnitude_to_decibel, get_duration
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 
@@ -93,6 +94,34 @@ def collect_decibel_statistics(path_listing):
     stats /= n_files
 
     return stats
+
+
+def collect_duration_statistics(path_listing):
+    durations = []
+
+    print("Collecting duration statistics for {} files ...".format(len(path_listing)))
+    for path in path_listing:
+        # Load the audio file.
+        wav, sampling_rate = load_wav(path)
+        # Get the duration in seconds.
+        duration = get_duration(wav, sampling_rate)
+        # Collect durations.
+        durations.append(duration)
+
+    durations_sum = sum(durations)
+    durations_min = min(durations)
+    durations_max = max(durations)
+
+    print("durations_sum: {} sec.".format(durations_sum))
+    print("durations_min: {} sec.".format(durations_min))
+    print("durations_max: {} sec.".format(durations_max))
+
+    # Create a histogram of the individual file durations.
+    plt.hist(durations, bins=50)
+    plt.title("Dataset file durations")
+    plt.xlabel("Duration")
+    plt.ylabel("Count")
+    plt.show()
 
 
 if __name__ == '__main__':
