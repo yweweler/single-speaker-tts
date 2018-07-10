@@ -1,4 +1,5 @@
 import numpy as np
+import librosa
 
 
 def magnitude_to_decibel(mag):
@@ -131,3 +132,20 @@ def ms_to_samples(ms, sampling_rate):
         int: Duration in samples.
     """
     return int((ms / 1000) * sampling_rate)
+
+
+def get_duration(wav, sr):
+    """
+    Compute the duration (in seconds) of an audio time series.
+
+    Arguments:
+        wav (np.ndarray):
+            Audio time series to get the duration of.
+
+        sampling_rate (int):
+            Sampling rate of `wav`.
+
+    Returns:
+        float: Duration in seconds.
+    """
+    return librosa.core.get_duration(y=wav, sr=sr)
