@@ -170,4 +170,4 @@ if __name__ == '__main__':
     # print("avg. max. mel magnitude (dB)", max_mel_db)           # +09.55 dB
 
     # Collect and print the duration statistics for all the files.
-    collect_duration_statistics("Blizzard Nancy", paths)
+    # collect_duration_statistics("Blizzard Nancy", paths)

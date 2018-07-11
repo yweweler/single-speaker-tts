@@ -8,6 +8,7 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
+from datasets.statistics import collect_duration_statistics
 from tacotron.params.model import model_params
 
 
@@ -215,3 +216,6 @@ if __name__ == '__main__':
     # print("avg. max. linear magnitude (dB)", max_linear_db)
     # print("avg. min. mel magnitude (dB)", min_mel_db)
     # print("avg. max. mel magnitude (dB)", max_mel_db)
+
+    # Collect and print the duration statistics for all the files.
+    collect_duration_statistics("LJSpeech v1.1", paths)

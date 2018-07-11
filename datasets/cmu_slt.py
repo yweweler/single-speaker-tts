@@ -167,4 +167,4 @@ if __name__ == '__main__':
     # print("avg. max. mel magnitude (dB)", max_mel_db)        # 9.33
 
     # Collect and print the duration statistics for all the files.
-    # collect_duration_statistics(paths)
+    collect_duration_statistics("CMU US SLT Arctic", paths)
