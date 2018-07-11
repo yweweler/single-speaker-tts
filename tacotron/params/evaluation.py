@@ -29,7 +29,7 @@ evaluation_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/luong_local_dot_gaussian/slt/',
+    checkpoint_dir='/tmp/tacotron/blizzard/nancy',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',

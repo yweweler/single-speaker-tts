@@ -3,14 +3,15 @@ import tensorflow as tf
 from datasets.cmu_slt import CMUDatasetHelper
 from datasets.lj_speech import LJSpeechDatasetHelper
 from datasets.pavoque import PAVOQUEDatasetHelper
+from datasets.blizzard_nancy import BlizzardNancyDatasetHelper
 
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/tmp/datasets_tmpfs/cmu_us_slt_arctic',
+    dataset_folder='/tmp/datasets_tmpfs/blizzard_nancy',
 
     # Dataset load helper.
-    dataset_loader=CMUDatasetHelper,
+    dataset_loader=BlizzardNancyDatasetHelper,
 
     # Vocabulary definition.
     # This definition has to include the padding and end of sequence tokens.
@@ -19,12 +20,13 @@ dataset_params = tf.contrib.training.HParams(
         'pad': 0,  # padding
         'eos': 1,  # end of sequence
         # --------------------------
-        'a': 2, 'u': 3, 't': 4, 'h': 5, 'o': 6, 'r': 7, ' ': 8, 'f': 9, 'e': 10, 'd': 11, 'n': 12,
-        'g': 13, 'i': 14, 'l': 15, ',': 16, 'p': 17, 's': 18, 'c': 19, 'm': 20, 'z': 21, 'w': 22,
-        'v': 23, 'k': 24, 'b': 25, "'": 26, 'y': 27, 'j': 28, 'q': 29, 'x': 30, '-': 31, ';': 32
+        'a': 2, 'c': 3, 't': 4, 'i': 5, 'n': 6, 'g': 7, ' ': 8, 'o': 9, 'u': 10, 'f': 11, 'p': 12,
+        ',': 13, 'b': 14, 'e': 15, 'r': 16, 's': 17, 'd': 18, 'l': 19, 'v': 20, 'm': 21, 'w': 22,
+        'h': 23, 'y': 24, 'k': 25, '-': 26, "'": 27, 'q': 28, '?': 29, 'j': 30, ':': 31, ';': 32,
+        'x': 33, '!': 34, 'z': 35
         # --------------------------
     },
 
     # Number of unique characters in the vocabulary.
-    vocabulary_size=33,
+    vocabulary_size=36,
 )

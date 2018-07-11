@@ -66,7 +66,7 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     """
     n_threads = training_params.n_threads
 
-    # Load alĺ sentences and the corresponding audio file paths.
+    # Load all sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
 
     # Get the total number of samples in the dataset.

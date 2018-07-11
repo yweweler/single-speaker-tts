@@ -64,7 +64,7 @@ def batched_placeholders(dataset, max_samples, batch_size):
     """
     n_threads = evaluation_params.n_threads
 
-    # Load alĺ sentences and the corresponding audio file paths.
+    # Load all sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
 
     # Get the total number of samples in the dataset.
@@ -336,6 +336,7 @@ if __name__ == '__main__':
 
         # Evaluate the model.
         evaluate(tacotron_model, _checkpoint_file)
+        tf.reset_default_graph()
 
     if evaluation_params.evaluate_all_checkpoints is False:
         # Get the latest checkpoint for evaluation.

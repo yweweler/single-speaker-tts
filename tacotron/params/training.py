@@ -17,10 +17,10 @@ training_params = tf.contrib.training.HParams(
     max_samples=None,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
-    shuffle_samples=False,
+    shuffle_samples=True,
 
     # Flag telling the training code to load pre-processed features or calculate them on the fly.
-    load_preprocessed=True,
+    load_preprocessed=False,
 
     # Number of batches to pre-calculate for feeding to the GPU.
     n_pre_calc_batches=8,
@@ -37,7 +37,7 @@ training_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for training.
-    checkpoint_dir='/tmp/tacotron/cmu/slt',
+    checkpoint_dir='/tmp/tacotron/blizzard/nancy',
 
     # Run folder to load data from and save data in to the checkpoint folder.
     checkpoint_run='train',
@@ -54,7 +54,7 @@ training_params = tf.contrib.training.HParams(
 
     # Flag controlling whether to actually write a write a summary during training.
     # The only exceptions to this are the attention alignment plots and the train losses.
-    write_summary=False,
+    write_summary=True,
 
     # Maximal number of checkpoints to keep.
     checkpoints_to_keep=3000,
@@ -63,7 +63,7 @@ training_params = tf.contrib.training.HParams(
     performance_log_steps=50,
 
     # The clipping ratio used for gradient clipping by global norm.
-    gradient_clip_norm=5.0,
+    gradient_clip_norm=1.0,
 
     # Initial learning rate.
     lr=0.001,
