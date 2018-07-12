@@ -109,10 +109,12 @@ def collect_duration_statistics(dataset_name, path_listing):
         durations.append(duration)
 
     durations_sum = sum(durations)
+    durations_avg = durations_sum / len(durations)
     durations_min = min(durations)
     durations_max = max(durations)
 
     print("durations_sum: {} sec.".format(durations_sum))
+    print("durations_avg: {} sec.".format(durations_avg))
     print("durations_min: {} sec.".format(durations_min))
     print("durations_max: {} sec.".format(durations_max))
 

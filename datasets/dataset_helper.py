@@ -214,8 +214,6 @@ class DatasetHelper:
         self._statistics['n_words_clip_avg'] = self._statistics['n_words_total'] / len(sentences)
         self._statistics['n_chars_clip_avg'] = self._statistics['n_chars_total'] / len(sentences)
 
-        print(character_set)
-
         eos_token = self._char2idx_dict['eos']
 
         for sentence in sentences:
