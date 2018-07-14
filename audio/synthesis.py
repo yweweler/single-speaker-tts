@@ -75,21 +75,48 @@ def griffin_lim_v2(spectrogram, win_length, hop_length, n_fft, n_iter):
     # TODO: The code is extremely slow. We should try to implement a faster version.
     # TODO: Another approach to speed this up could be to implement it on the gpu using tf.signal.
     window = 'hann'
+
+    # Initialize the phase component.
     angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
 
+    # Note: Instead of randomly initializing an estimated signal (just to immediately replace its
+    # magnitude components during the first reconstruction iteration) we only randomly initialize
+    # the phases.
+
     for i in range(n_iter):
+        # Substitution of the estimated STFT magnitudes (STFTM) with the given target STFTM.
         full = np.abs(spectrogram).astype(np.complex) * angles
-        inverse = librosa.istft(full, win_length=win_length, hop_length=hop_length, window=window)
-        rebuilt = librosa.stft(inverse, n_fft=n_fft, hop_length=hop_length, win_length=win_length,
-                               window=window)
-        angles = np.exp(1j * np.angle(rebuilt))
+
+        # Revert the estimated STFT back into a time domain signal.
+        estimated_signal = librosa.istft(full,
+                                         n_fft=n_fft,
+                                         win_length=win_length,
+                                         hop_length=hop_length,
+                                         window=window)
+
+        # Compute the STFT from the estimated time domain signal.
+        estimated_stft = librosa.stft(estimated_signal,
+                                      n_fft=n_fft,
+                                      win_length=win_length,
+                                      hop_length=hop_length,
+                                      window=window)
+
+        # Extract the phase components from the estimated STFT.
+        angles = np.exp(1j * np.angle(estimated_stft))
 
         # Reconstruction quality measurement for debugging purposes.
         # if False:
-        #     diff = np.abs(spectrogram) - np.abs(rebuilt)
+        #     diff = np.abs(spectrogram) - np.abs(estimated_stft)
         #     print("loss:", np.linalg.norm(diff, 'fro'))
 
+    # Calculate the final estimate STFT.
     full = np.abs(spectrogram).astype(np.complex) * angles
-    inverse = librosa.istft(full, hop_length=hop_length, win_length=win_length, window=window)
 
-    return inverse
+    # Revert the estimated STFT back into a time domain signal.
+    estimated_signal = librosa.istft(full,
+                                     n_fft=n_fft,
+                                     win_length=win_length,
+                                     hop_length=hop_length,
+                                     window=window)
+
+    return estimated_signal
