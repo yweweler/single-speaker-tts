@@ -7,7 +7,8 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
-from datasets.statistics import collect_decibel_statistics, collect_duration_statistics
+from datasets.statistics import collect_decibel_statistics, collect_duration_statistics, \
+    collect_reconstruction_error, plot_iterate_reconstruction_error
 from tacotron.params.model import model_params
 
 
@@ -171,3 +172,8 @@ if __name__ == '__main__':
 
     # Collect and print the duration statistics for all the files.
     # collect_duration_statistics("Blizzard Nancy", paths)
+
+    # Collect and print the reconstruction MSE statistics.
+    # plot_iterate_reconstruction_error("Blizzard Nancy", paths, 100)
+
+    # print(dataset._statistics)
