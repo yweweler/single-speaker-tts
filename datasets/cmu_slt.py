@@ -1,74 +1,59 @@
 import os
 
+import librosa
 import numpy as np
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
-from audio.effects import silence_interval_from_spectrogram
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
-from datasets.statistics import collect_duration_statistics
+from datasets.statistics import collect_decibel_statistics, collect_duration_statistics
 from tacotron.params.model import model_params
 
 
-class PAVOQUEDatasetHelper(DatasetHelper):
+class CMUDatasetHelper(DatasetHelper):
     """
-    Dataset loading helper for the PAVOQUE v0.2 dataset.
+    Dataset loading helper for the CMU_ARCTIC dataset.
     """
-    # TODO: Update the decibel values.
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = 12.63
+    mel_mag_ref_db = 9.33
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
     mel_mag_max_db = 100.0
 
     # Linear scale spectrogram reference dB over the entire dataset.
-    linear_ref_db = 24
+    linear_ref_db = 36.50
 
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
 
     # Raw waveform silence reference signal dB.
-    raw_silence_db = -15.0
+    raw_silence_db = None
 
     def __init__(self, dataset_folder, char_dict, fill_dict):
         super().__init__(dataset_folder, char_dict, fill_dict)
 
         self._abbreviations = {
-            '(': '',
-            ')': '',
-            '[': '',
-            ']': '',
-            '-': '',
-            'é': 'e',
-            'ô': 'o',
-            'ś': 's',
-            'ê': 'e',
-            'î': 'i',
-            'š': 's',
-            'í': 'i',
-            'è': 'e',
-            'à': 'a',
-            'ć': 'c',
-            'á': 'a',
-            'ó': 'o',
-            '´': ''
+            '.': ''
         }
 
-    def load(self, max_samples=None, min_len=5, max_len=90, listing_file_name='neutral.txt'):
+    def load(self, max_samples=None, min_len=None, max_len=None, listing_file_name='train.txt'):
         data_file = os.path.join(self._dataset_folder, listing_file_name)
-        # wav_folder = os.path.join(self._dataset_folder, 'wavs')
+        wav_folder = os.path.join(self._dataset_folder, 'wav')
 
         file_paths = []
         sentences = []
         with open(data_file, 'r') as listing_file:
-            # Iterate the file listing file.
+            # Iterate the metadata file.
             for line in listing_file:
-                line = line.replace('\n', '')
-                wav_path, normalized_sentence = line.split(' | ')
+                file_id, normalized_sentence = line.split(' ', maxsplit=1)
+
+                # Remove new line characters.
+                normalized_sentence = normalized_sentence.strip()
 
                 # Extract the transcription.
-                sentence = normalized_sentence
+                # We do not want the sentence to contain any non ascii characters.
+                sentence = self.utf8_to_ascii(normalized_sentence)
 
                 # Skip sentences in case they do not meet the length requirements.
                 sentence_len = len(sentence)
@@ -84,8 +69,7 @@ class PAVOQUEDatasetHelper(DatasetHelper):
                 sentences.append(sentence)
 
                 # Get the audio file path.
-                # TODO: '../' is a hack since the listing paths contain the base folder too.
-                file_path = os.path.join(self._dataset_folder, '../', wav_path)
+                file_path = '{}.wav'.format(os.path.join(wav_folder, file_id))
                 file_paths.append(file_path)
 
                 if max_samples is not None:
@@ -110,27 +94,15 @@ class PAVOQUEDatasetHelper(DatasetHelper):
         # Load the actual audio file.
         wav, sr = load_wav(file_path.decode())
 
+        # TODO: Determine a better silence reference level for the CMU_ARCTIC dataset (See: #9).
+        # Remove silence at the beginning and end of the wav so the network does not have to learn
+        # some random initial silence delay after which it is allowed to speak.
+        wav, _ = librosa.effects.trim(wav)
+
         # Calculate the linear scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, 1 + n_fft // 2) so dense layers
         # for example are applied to each frame automatically.
         linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
-
-        # TODO: Experimental noise removal <64Hz
-        linear_spec[:, 0:8] = 0
-
-        # Convert the linear spectrogram into decibel representation.
-        linear_mag = np.abs(linear_spec)
-        linear_mag_db = magnitude_to_decibel(linear_mag)
-
-        linear_mag_db = normalize_decibel(linear_mag_db,
-                                          PAVOQUEDatasetHelper.linear_ref_db,
-                                          PAVOQUEDatasetHelper.linear_mag_max_db)
-        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
-
-        # Calculate how many frames we have to crop at the beginning and end to remove silence.
-        trim_start, trim_end = silence_interval_from_spectrogram(linear_mag_db,
-                                                                 PAVOQUEDatasetHelper.raw_silence_db,
-                                                                 np.max)
 
         # Calculate the Mel. scale spectrogram.
         # Note the spectrogram shape is transposed to be (T_spec, n_mels) so dense layers for
@@ -139,18 +111,21 @@ class PAVOQUEDatasetHelper(DatasetHelper):
                                          model_params.mel_fmin, model_params.mel_fmax, hop_len,
                                          win_len, 1).T
 
+        # Convert the linear spectrogram into decibel representation.
+        linear_mag = np.abs(linear_spec)
+        linear_mag_db = magnitude_to_decibel(linear_mag)
+        linear_mag_db = normalize_decibel(linear_mag_db,
+                                          CMUDatasetHelper.linear_ref_db,
+                                          CMUDatasetHelper.linear_mag_max_db)
+        # => linear_mag_db.shape = (T_spec, 1 + n_fft // 2)
+
         # Convert the mel spectrogram into decibel representation.
         mel_mag = np.abs(mel_spec)
         mel_mag_db = magnitude_to_decibel(mel_mag)
         mel_mag_db = normalize_decibel(mel_mag_db,
-                                       PAVOQUEDatasetHelper.mel_mag_ref_db,
-                                       PAVOQUEDatasetHelper.mel_mag_max_db)
+                                       CMUDatasetHelper.mel_mag_ref_db,
+                                       CMUDatasetHelper.mel_mag_max_db)
         # => mel_mag_db.shape = (T_spec, n_mels)
-
-        # Remove silence at the beginning and end of the spectrogram's so the network does not have
-        # to learn some random initial silence delay after which it is allowed to speak.
-        linear_mag_db = linear_mag_db[trim_start:trim_end, :]
-        mel_mag_db = mel_mag_db[trim_start:trim_end, :]
 
         # Tacotron reduction factor.
         if model_params.reduction > 1:
@@ -166,29 +141,30 @@ if __name__ == '__main__':
     init_char_dict = {
         'pad': 0,  # padding
         'eos': 1,  # end of sequence
-        'i': 2, 'n': 3, ' ': 4, 's': 5, 'e': 6, 'r': 7, 'j': 8, 'u': 9, 'g': 10, 'd': 11, 'a': 12,
-        'b': 13, 't': 14, 'c': 15, 'h': 16, 'l': 17, 'ä': 18, '.': 19, 'ü': 20, 'm': 21, 'p': 22,
-        'w': 23, 'z': 24, ',': 25, 'ö': 26, 'o': 27, 'f': 28, 'k': 29, ';': 30, 'y': 31, 'v': 32,
-        'x': 33, 'ß': 34, ':': 35, 'q': 36, '"': 37, '?': 38, '!': 39, "'": 40, '/': 41
+        'a': 2, 'u': 3, 't': 4, 'h': 5, 'o': 6, 'r': 7, ' ': 8, 'f': 9, 'e': 10, 'd': 11, 'n': 12,
+        'g': 13, 'i': 14, 'l': 15, ',': 16, 'p': 17, 's': 18, 'c': 19, 'm': 20, 'z': 21, 'w': 22,
+        'v': 23, 'k': 24, 'b': 25, "'": 26, 'y': 27, 'j': 28, 'q': 29, 'x': 30, '-': 31, ';': 32
     }
 
-    dataset = PAVOQUEDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/PAVOQUE',
-                                   char_dict=init_char_dict,
-                                   fill_dict=False)
+    dataset = CMUDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/cmu_us_slt_arctic',
+                               char_dict=init_char_dict,
+                               fill_dict=False)
 
     ids, lens, paths = dataset.load()
+
+    # dataset.pre_compute_features(paths)
 
     # Print a small sample from the dataset.
     # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
     #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
-    # # Collect and print the decibel statistics for all the files.
+    # Collect and print the decibel statistics for all the files.
     # print("Collecting decibel statistics for {} files ...".format(len(paths)))
     # min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
-    # print("avg. min. linear magnitude (dB)", min_linear_db)
-    # print("avg. max. linear magnitude (dB)", max_linear_db)
-    # print("avg. min. mel magnitude (dB)", min_mel_db)
-    # print("avg. max. mel magnitude (dB)", max_mel_db)
+    # print("avg. min. linear magnitude (dB)", min_linear_db)  # -99.94
+    # print("avg. max. linear magnitude (dB)", max_linear_db)  # 36.50
+    # print("avg. min. mel magnitude (dB)", min_mel_db)        # -92.22
+    # print("avg. max. mel magnitude (dB)", max_mel_db)        # 9.33
 
     # Collect and print the duration statistics for all the files.
-    collect_duration_statistics("PAVOQUE", paths)
+    collect_duration_statistics("CMU US SLT Arctic", paths)

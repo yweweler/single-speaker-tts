@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from datasets.cmu_slt import CMUDatasetHelper
 from datasets.lj_speech import LJSpeechDatasetHelper
 
 # Default hyper-parameters:

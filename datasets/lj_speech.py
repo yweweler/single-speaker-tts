@@ -8,6 +8,7 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
+from datasets.statistics import collect_duration_statistics
 from tacotron.params.model import model_params
 
 
@@ -68,7 +69,7 @@ class LJSpeechDatasetHelper(DatasetHelper):
             '?': '',
         }
 
-    def load(self, max_samples=None, min_len=30, max_len=90, listing_file_name='metadata.csv'):
+    def load(self, max_samples=None, min_len=None, max_len=None, listing_file_name='metadata.csv'):
         data_file = os.path.join(self._dataset_folder, listing_file_name)
         wav_folder = os.path.join(self._dataset_folder, 'wavs')
 
@@ -198,9 +199,9 @@ if __name__ == '__main__':
         'q': 28,
     }
 
-    dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/downloads/LJSpeech-1.1',
+    dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/LJSpeech-1.1',
                                     char_dict=init_char_dict,
-                                    fill_dict=False)
+                                    fill_dict=True)
 
     ids, lens, paths = dataset.load()
 
@@ -215,3 +216,8 @@ if __name__ == '__main__':
     # print("avg. max. linear magnitude (dB)", max_linear_db)
     # print("avg. min. mel magnitude (dB)", min_mel_db)
     # print("avg. max. mel magnitude (dB)", max_mel_db)
+
+    # Collect and print the duration statistics for all the files.
+    # collect_duration_statistics("LJSpeech v1.1", paths)
+
+    # print(dataset._statistics)

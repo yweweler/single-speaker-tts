@@ -5,10 +5,10 @@ from datasets.lj_speech import LJSpeechDatasetHelper
 # Default hyper-parameters:
 training_params = tf.contrib.training.HParams(
     # Number of training epochs.
-    n_epochs=5000,
+    n_epochs=5000000,
 
     # Batch size used for training.
-    batch_size=32,
+    batch_size=40,
 
     # Number of threads used to load data during training.
     n_threads=4,
@@ -71,7 +71,7 @@ training_params = tf.contrib.training.HParams(
     minimum_lr=1e-5,
 
     # Number of global steps after which the learning rate should be decayed.
-    lr_decay_steps=25000,
+    lr_decay_steps=40000,
 
     # Learning rate decay rate.
     lr_decay_rate=0.9,

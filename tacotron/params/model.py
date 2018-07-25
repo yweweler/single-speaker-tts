@@ -115,7 +115,7 @@ model_params = tf.contrib.training.HParams(
         luong_local_score=AttentionScore.DOT,
 
         # Luong local style attention mode.
-        luong_local_mode=AttentionMode.PREDICTIVE,
+        luong_local_mode=AttentionMode.MONOTONIC,
 
         # Luong local: Force a gaussian distribution onto the scores in the attention window.
         luong_force_gaussian=True,

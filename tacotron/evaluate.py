@@ -150,7 +150,7 @@ def batched_placeholders(dataset, max_samples, batch_size):
     return placeholder_dict, n_samples
 
 
-def evaluate(model, n_samples):
+def evaluate(model, checkpoint_file):
     """
     Evaluates a Tacotron model.
 
@@ -158,8 +158,8 @@ def evaluate(model, n_samples):
         model (Tacotron):
             The Tacotron model instance to be evaluated.
 
-        n_samples (int):
-            Number of samples used for evaluation.
+        checkpoint_file (string):
+            Absolute path to the checkpoint file to be evaluated.
     """
     # Get the models loss function.
     loss_op = model.get_loss_op()
@@ -170,7 +170,6 @@ def evaluate(model, n_samples):
         evaluation_params.checkpoint_load_run
     )
 
-    checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
     print('checkpoint_file', checkpoint_file)
 
     # Checkpoint folder to save the evaluation summaries into.
@@ -181,62 +180,81 @@ def evaluate(model, n_samples):
 
     # Get the checkpoints global step from the checkpoints file name.
     global_step = int(checkpoint_file.split('-')[-1])
+    print('[checkpoint_file] step: {}, file: "{}"'.format(global_step, checkpoint_file))
+
     saver = tf.train.Saver()
 
-    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
-    summary_op = tacotron_model.summary()
+    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph(), flush_secs=10)
+    summary_op = model.summary()
+
+    # ========================================================
+
+    session_config = tf.ConfigProto(
+        gpu_options=tf.GPUOptions(
+            allow_growth=True,
+        )
+    )
+
+    with tf.Session(config=session_config) as session:
+
+        init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+        session.run(init_op)
+
+        tf.train.start_queue_runners(sess=session)
+
+    # ========================================================
 
     # Create the evaluation session.
-    session = start_session()
+    # with start_session() as session:
+        print('Restoring model...')
+        saver.restore(session, checkpoint_file)
+        print('Restoring finished')
 
-    print('Restoring model...')
-    saver.restore(session, checkpoint_file)
-    print('Restoring finished')
+        sum_loss = 0
+        sum_loss_decoder = 0
+        sum_loss_post_processing = 0
 
-    sum_loss = 0
-    sum_loss_decoder = 0
-    sum_loss_post_processing = 0
+        batch_count = 0
+        summary = None
 
-    batch_count = 0
-    summary = None
+        # Start evaluation.
+        while True:
+            try:
+                # Evaluate loss functions for the current batch.
+                summary, loss, loss_decoder, loss_post_processing = session.run([
+                    summary_op,
+                    model.loss_op,
+                    model.loss_op_decoder,
+                    model.loss_op_post_processing,
+                ])
 
-    # Start evaluation.
-    while True:
-        try:
-            # Evaluate loss functions for the current batch.
-            summary, loss, loss_decoder, loss_post_processing = session.run([
-                summary_op,
-                tacotron_model.loss_op,
-                tacotron_model.loss_op_decoder,
-                tacotron_model.loss_op_post_processing,
-            ])
+                # Accumulate loss values.
+                sum_loss += loss
+                sum_loss_decoder += loss_decoder
+                sum_loss_post_processing += loss_post_processing
 
-            # Accumulate loss values.
-            sum_loss += loss
-            sum_loss_decoder += loss_decoder
-            sum_loss_post_processing += loss_post_processing
+                # Increment batch counter.
+                batch_count += 1
 
-            # Increment batch counter.
-            batch_count += 1
+            except tf.errors.OutOfRangeError:
+                if batch_count == 0:
+                    raise Exception("Error: No batches were processed!")
+                    exit(1)
+                break
 
-        except tf.errors.OutOfRangeError:
-            break
+        avg_loss = sum_loss / batch_count
+        avg_loss_decoder = sum_loss_decoder / batch_count
+        avg_loss_post_processing = sum_loss_post_processing / batch_count
 
-    avg_loss = sum_loss / batch_count
-    avg_loss_decoder = sum_loss_decoder / batch_count
-    avg_loss_post_processing = sum_loss_post_processing / batch_count
+        # Create evaluation summaries.
+        eval_summary = tf.Summary()
 
-    # Create evaluation summaries.
-    eval_summary = tf.Summary()
+        eval_summary.ParseFromString(summary)
+        eval_summary.value.add(tag='loss/loss', simple_value=avg_loss)
+        eval_summary.value.add(tag='loss/loss_decoder', simple_value=avg_loss_decoder)
+        eval_summary.value.add(tag='loss/loss_post_processing', simple_value=avg_loss_post_processing)
 
-    eval_summary.ParseFromString(summary)
-    eval_summary.value.add(tag='loss/loss', simple_value=avg_loss)
-    eval_summary.value.add(tag='loss/loss_decoder', simple_value=avg_loss_decoder)
-    eval_summary.value.add(tag='loss/loss_post_processing', simple_value=avg_loss_post_processing)
-
-    summary_writer.add_summary(eval_summary, global_step=global_step)
-
-    session.close()
+        summary_writer.add_summary(eval_summary, global_step=global_step)
 
 
 def start_session():
@@ -331,6 +349,7 @@ if __name__ == '__main__':
 
         # Evaluate the model.
         evaluate(tacotron_model, _checkpoint_file)
+        tf.reset_default_graph()
 
     if evaluation_params.evaluate_all_checkpoints is False:
         # Get the latest checkpoint for evaluation.
@@ -339,5 +358,7 @@ if __name__ == '__main__':
     else:
         # Get all checkpoints and evaluate the sequentially.
         checkpoint_files = collect_checkpoint_paths(checkpoint_load_dir)
+        print("Found #{} checkpoints to evalue.".format(len(checkpoint_files)))
         for checkpoint_file in checkpoint_files:
+            print(checkpoint_file)
             __eval_cycle(checkpoint_file)
