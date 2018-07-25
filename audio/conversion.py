@@ -74,7 +74,8 @@ def normalize_decibel(db, ref_db, max_db):
             Calculation: clip((db - ref_db + max_db) / max_db, 0.0, 1.0)
     """
     # np.clip(1.0 - (db - max_db) / (ref_db - max_db), 0.0, 1.0)
-    return np.clip((db - ref_db + max_db) / max_db, 1e-8, 1.0)
+    # return np.clip((db - ref_db + max_db) / max_db, 1e-8, 1.0)
+    return np.clip(1.0 + (db - ref_db) / (abs(ref_db) + abs(max_db)), 0.0, 1.0)
 
 
 def inv_normalize_decibel(norm_db, ref_db, max_db):
@@ -97,7 +98,8 @@ def inv_normalize_decibel(norm_db, ref_db, max_db):
 
             Calculation: (clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
     """
-    return (np.clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
+    # return (np.clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
+    return ((np.clip(norm_db, 0.0, 1.0) - 1.0) * (abs(ref_db) + abs(max_db))) + ref_db
 
 
 def samples_to_ms(samples, sampling_rate):
