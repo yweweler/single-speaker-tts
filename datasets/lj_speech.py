@@ -168,9 +168,11 @@ if __name__ == '__main__':
 
     dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/LJSpeech-1.1',
                                     char_dict=init_char_dict,
-                                    fill_dict=True)
+                                    fill_dict=False)
 
     ids, lens, paths = dataset.load()
+
+    dataset.pre_compute_features(paths)
 
     # Print a small sample from the dataset.
     # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
