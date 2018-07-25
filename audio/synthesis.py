@@ -32,10 +32,10 @@ def spectrogram_to_wav(mag, win_length, hop_length, n_fft, n_iter):
         - In future implementations we can drop Griffin-Lim based reconstruction.
         - Faster techniques or even implementations may be preferable.
     """
-    wav = griffin_lim_v2(mag, win_length=win_length,
-                         hop_length=hop_length,
-                         n_fft=n_fft,
-                         n_iter=n_iter)
+    wav, _ = griffin_lim_v2(mag, win_length=win_length,
+                            hop_length=hop_length,
+                            n_fft=n_fft,
+                            n_iter=n_iter)
 
     return wav.astype(np.float32)
 
@@ -62,15 +62,20 @@ def griffin_lim_v2(spectrogram, win_length, hop_length, n_fft, n_iter):
             Number of reconstruction iterations to be used.
 
     Returns:
-        (np.ndarray):
-            Audio time series.
-            The shape of the returned array is shape=(n,) and the arrays dtype is np.float32.
+        (audio, mse):
+            audio (np.ndarray):
+                Audio time series.
+                The shape of the returned array is shape=(n,) and the arrays dtype is np.float32.
+            mse (float):
+                Mean-squared reconstruction error.
 
     Notes:
         This implementation is derived from:
             - https://github.com/librosa/librosa/issues/434
     """
     # Based on: https://github.com/librosa/librosa/issues/434
+
+    mse = None
 
     # TODO: The code is extremely slow. We should try to implement a faster version.
     # TODO: Another approach to speed this up could be to implement it on the gpu using tf.signal.
@@ -89,7 +94,6 @@ def griffin_lim_v2(spectrogram, win_length, hop_length, n_fft, n_iter):
 
         # Revert the estimated STFT back into a time domain signal.
         estimated_signal = librosa.istft(full,
-                                         n_fft=n_fft,
                                          win_length=win_length,
                                          hop_length=hop_length,
                                          window=window)
@@ -104,19 +108,18 @@ def griffin_lim_v2(spectrogram, win_length, hop_length, n_fft, n_iter):
         # Extract the phase components from the estimated STFT.
         angles = np.exp(1j * np.angle(estimated_stft))
 
-        # Reconstruction quality measurement for debugging purposes.
-        # if False:
-        #     diff = np.abs(spectrogram) - np.abs(estimated_stft)
-        #     print("loss:", np.linalg.norm(diff, 'fro'))
+        # Reconstruction quality measurement.
+        mse = np.square(np.abs(spectrogram) - np.abs(estimated_stft)).mean()
+        # For debugging purposes only.
+        # print("iter: {}, mse: {}".format(i + 1, mse))
 
     # Calculate the final estimate STFT.
     full = np.abs(spectrogram).astype(np.complex) * angles
 
     # Revert the estimated STFT back into a time domain signal.
     estimated_signal = librosa.istft(full,
-                                     n_fft=n_fft,
                                      win_length=win_length,
                                      hop_length=hop_length,
                                      window=window)
 
-    return estimated_signal
+    return estimated_signal, mse
