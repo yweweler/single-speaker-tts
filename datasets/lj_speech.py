@@ -8,7 +8,7 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
-from datasets.statistics import collect_duration_statistics
+from datasets.statistics import collect_duration_statistics, collect_decibel_statistics
 from tacotron.params.model import model_params
 
 
@@ -17,13 +17,13 @@ class LJSpeechDatasetHelper(DatasetHelper):
     Dataset loading helper for the LJSpeech v1.1 dataset.
     """
     # Mel. scale spectrogram reference dB over the entire dataset.
-    mel_mag_ref_db = 20
+    mel_mag_ref_db = 6.02
 
     # Mel. scale spectrogram maximum dB over the entire dataset.
-    mel_mag_max_db = 100.0
+    mel_mag_max_db = 99.89
 
     # Linear scale spectrogram reference dB over the entire dataset.
-    linear_ref_db = 20
+    linear_ref_db = 35.66
 
     # Linear scale spectrogram maximum dB over the entire dataset.
     linear_mag_max_db = 100.0
@@ -54,19 +54,9 @@ class LJSpeechDatasetHelper(DatasetHelper):
             'ltd.': 'limited',
             'col.': 'colonel',
             'ft.': 'fort',
-            ':': '',
-            ';': '',
-            '(': '',
-            ')': '',
             '[': '',
             ']': '',
-            '-': '',
-            ',': '',
             '.': '',
-            '"': '',
-            '\'': '',
-            '!': '',
-            '?': '',
         }
 
     def load(self, max_samples=None, min_len=None, max_len=None, listing_file_name='metadata.csv'):
@@ -170,33 +160,10 @@ if __name__ == '__main__':
     init_char_dict = {
         'pad': 0,  # padding
         'eos': 1,  # end of sequence
-        'p': 2,
-        'r': 3,
-        'i': 4,
-        'n': 5,
-        't': 6,
-        'g': 7,
-        ' ': 8,
-        'h': 9,
-        'e': 10,
-        'o': 11,
-        'l': 12,
-        'y': 13,
-        's': 14,
-        'w': 15,
-        'c': 16,
-        'a': 17,
-        'd': 18,
-        'f': 19,
-        'm': 20,
-        'x': 21,
-        'b': 22,
-        'v': 23,
-        'u': 24,
-        'k': 25,
-        'j': 26,
-        'z': 27,
-        'q': 28,
+        'p': 2, 'r': 3, 'i': 4, 'n': 5, 't': 6, 'g': 7, ' ': 8, 'h': 9, 'e': 10, 'o': 11, 'l': 12,
+        'y': 13, 's': 14, 'w': 15, 'c': 16, 'a': 17, 'd': 18, 'f': 19, 'm': 20, 'x': 21, 'b': 22,
+        'v': 23, 'u': 24, 'k': 25, 'j': 26, 'z': 27, 'q': 28, ',': 29, '"': 30, '-': 31, ';': 32,
+        '(': 33, ')': 34, ':': 35, "'": 36, '!': 37, '?': 38
     }
 
     dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/LJSpeech-1.1',
@@ -212,10 +179,10 @@ if __name__ == '__main__':
     # Collect and print the decibel statistics for all the files.
     # print("Collecting decibel statistics for {} files ...".format(len(paths)))
     # min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
-    # print("avg. min. linear magnitude (dB)", min_linear_db)
-    # print("avg. max. linear magnitude (dB)", max_linear_db)
-    # print("avg. min. mel magnitude (dB)", min_mel_db)
-    # print("avg. max. mel magnitude (dB)", max_mel_db)
+    # print("avg. min. linear magnitude (dB)", min_linear_db)     # -100 dB
+    # print("avg. max. linear magnitude (dB)", max_linear_db)     # 35.66 dB
+    # print("avg. min. mel magnitude (dB)", min_mel_db)           # -99.89 dB
+    # print("avg. max. mel magnitude (dB)", max_mel_db)           # 6.02 dB
 
     # Collect and print the duration statistics for all the files.
     # collect_duration_statistics("LJSpeech v1.1", paths)
