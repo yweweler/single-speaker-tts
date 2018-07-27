@@ -43,6 +43,7 @@ def plot_spectrogram(spec_db, sampling_rate, hop_length, fmin, fmax, y_axis, tit
         title (str):
             Title of the plot.
     """
+    fig = plt.figure(figsize=(1.5 * 14.0 / 2.54, 7.7 / 2.54), dpi=100)
     librosa.display.specshow(spec_db,
                              sr=sampling_rate,
                              hop_length=hop_length,
@@ -52,8 +53,11 @@ def plot_spectrogram(spec_db, sampling_rate, hop_length, fmin, fmax, y_axis, tit
                              x_axis='time')
     plt.title(title)
     plt.colorbar(format='%+2.0f dB')
+    plt.xlabel("Time (s)")
     plt.tight_layout()
     plt.show()
+
+    return fig
 
 
 def plot_feature_frames(features, sampling_rate, hop_length, title):

@@ -176,6 +176,8 @@ def evaluate(model, checkpoint_file):
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph(), flush_secs=10)
     summary_op = model.summary()
 
+    # ========================================================
+
     session_config = tf.ConfigProto(
         gpu_options=tf.GPUOptions(
             allow_growth=True,
@@ -345,6 +347,6 @@ if __name__ == '__main__':
     else:
         # Get all checkpoints and evaluate the sequentially.
         checkpoint_files = collect_checkpoint_paths(checkpoint_load_dir)
-
+        print("Found #{} checkpoints to evalue.".format(len(checkpoint_files)))
         for checkpoint_file in checkpoint_files:
             __eval_cycle(checkpoint_file)

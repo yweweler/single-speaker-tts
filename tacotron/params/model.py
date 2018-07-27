@@ -41,8 +41,11 @@ model_params = tf.contrib.training.HParams(
     # Flag that controls application of the post-processing network.
     apply_post_processing=True,
 
+    # Linear scale magnitudes are raise to the power of `magnitude_power` before reconstruction.
+    magnitude_power=1.3,
+
     # The number of Griffin-Lim reconstruction iterations.
-    reconstruction_iterations=75,
+    reconstruction_iterations=50,
 
     # Flag allowing to force the use accelerated RNN implementation from CUDNN.
     force_cudnn=True,

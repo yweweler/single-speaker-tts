@@ -40,6 +40,9 @@ class DatasetHelper:
         self._fill_dict = fill_dict
         self._abbreviations = dict()
 
+        # Dataset statistics.
+        self._statistics = dict()
+
         # Initialize idx_dict in case a user defined dictionary was passed.
         self._idx2char_dict = dict()
         for char, _id in self._char2idx_dict.items():
@@ -168,6 +171,48 @@ class DatasetHelper:
         """
         id_sequences = list()
         sequence_lengths = list()
+
+        # Reset word statistics.
+        self._statistics['n_words_total'] = 0
+        self._statistics['n_words_unique'] = 0
+        self._statistics['n_words_clip_avg'] = 0
+
+        # Reset character statistics.
+        self._statistics['n_chars_total'] = 0
+        self._statistics['n_chars_unique'] = 0
+        self._statistics['n_chars_clip_avg'] = 0
+
+        # Unique word lookup set.
+        word_set = set()
+
+        # Unique character lookup set.
+        character_set = set()
+
+        # TODO: Refactor.
+        def __update_word_statistics(sentence):
+            words = sentence.split(' ')
+            self._statistics['n_words_total'] += len(words)
+            word_set.update(words)
+
+        # TODO: Refactor.
+        def __update_character_statistics(sentence):
+            self._statistics['n_chars_total'] += len(sentence)
+            character_set.update(list(sentence))
+
+        for sentence in sentences:
+            # Make sentence lowercase.
+            sentence = sentence.lower()
+
+            # Collect word statistics.
+            __update_word_statistics(sentence)
+
+            # Collect character statistics.
+            __update_character_statistics(sentence)
+
+        self._statistics['n_words_unique'] = len(word_set)
+        self._statistics['n_chars_unique'] = len(character_set)
+        self._statistics['n_words_clip_avg'] = self._statistics['n_words_total'] / len(sentences)
+        self._statistics['n_chars_clip_avg'] = self._statistics['n_chars_total'] / len(sentences)
 
         eos_token = self._char2idx_dict['eos']
 

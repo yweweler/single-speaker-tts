@@ -7,7 +7,8 @@ from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_deci
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.dataset_helper import DatasetHelper
-from datasets.statistics import collect_decibel_statistics
+from datasets.statistics import collect_decibel_statistics, collect_duration_statistics, \
+    collect_reconstruction_error, plot_iterate_reconstruction_error
 from tacotron.params.model import model_params
 
 
@@ -152,6 +153,7 @@ if __name__ == '__main__':
         char_dict=init_char_dict,
         fill_dict=False)
 
+    print("Loading dataset ...")
     ids, lens, paths = dataset.load()
 
     dataset.pre_compute_features(paths)
@@ -167,3 +169,11 @@ if __name__ == '__main__':
     # print("avg. max. linear magnitude (dB)", max_linear_db)     # +36.50 dB
     # print("avg. min. mel magnitude (dB)", min_mel_db)           # -99.87 dB
     # print("avg. max. mel magnitude (dB)", max_mel_db)           # +09.55 dB
+
+    # Collect and print the duration statistics for all the files.
+    # collect_duration_statistics("Blizzard Nancy", paths)
+
+    # Collect and print the reconstruction MSE statistics.
+    # plot_iterate_reconstruction_error("Blizzard Nancy", paths, 100)
+
+    # print(dataset._statistics)
