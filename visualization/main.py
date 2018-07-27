@@ -83,100 +83,98 @@ if __name__ == '__main__':
     eval_loss_decoder = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_decoder.json')
     eval_loss_post = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_post_processing.json')
 
-    print(min(train_loss_post['value']))
-    print(max(train_loss_post['value']))
-
     # ==============================================================================================
     # Blizzard Nancy Train Loss (total)
     # ==============================================================================================
-    __plot_scalar_data([train_loss_loss['step']],
-                       [train_loss_loss['value']],
-                       settings={
-                           'color': [
-                               "#F8CECC",  # red
-                           ],
-                           'color_smooth': [
-                               "#B85450",  # dark red
-                           ],
-                           'title': 'Blizzard Nancy Train Loss',
-                           'xlabel': 'Steps',
-                           'ylabel': 'Loss',
-                           'ylim': (4e-2, 1.5e-1),
-                           'yticks': [4e-2, 7e-2, 8e-2, 1e-1, 1.5e-1],
-                           'yaxis_formatter': ticker.FuncFormatter(
-                               lambda y, pos: '{:.1e}'.format(y)
-                           ),
-                           'xaxis_formatter': ticker.FuncFormatter(
-                               lambda x, pos: '{:.0f}k'.format(x / 1000.0)
-                           ),
-                           'labels': ['loss', 'avg. loss']
-                       })
+    fig = __plot_scalar_data([train_loss_loss['step']],
+                             [train_loss_loss['value']],
+                             settings={
+                                 'color': [
+                                     "#F8CECC",  # red
+                                 ],
+                                 'color_smooth': [
+                                     "#B85450",  # dark red
+                                 ],
+                                 'title': 'Blizzard Nancy Train Loss',
+                                 'xlabel': 'Steps',
+                                 'ylabel': 'Loss',
+                                 'ylim': (4e-2, 1.5e-1),
+                                 'yticks': [4e-2, 7e-2, 8e-2, 1e-1, 1.5e-1],
+                                 'yaxis_formatter': ticker.FuncFormatter(
+                                     lambda y, pos: '{:.1e}'.format(y)
+                                 ),
+                                 'xaxis_formatter': ticker.FuncFormatter(
+                                     lambda x, pos: '{:.0f}k'.format(x / 1000.0)
+                                 ),
+                                 'labels': ['loss', 'avg. loss']
+                             })
     plt.show()
+    fig.savefig("data/blizzard/nancy/loss_loss.pdf", bbox_inches='tight')
 
     # ==============================================================================================
     # Blizzard Nancy Train Loss (decoder)
     # ==============================================================================================
-    __plot_scalar_data([train_loss_decoder['step']],
-                       [train_loss_decoder['value']],
-                       settings={
-                           'color': [
-                               "#F8CECC",  # red
-                           ],
-                           'color_smooth': [
-                               "#B85450",  # dark red
-                           ],
-                           'title': 'Blizzard Nancy Train Loss (decoder)',
-                           'xlabel': 'Steps',
-                           'ylabel': 'Loss',
-                           'ylim': (2e-2, 1e-1),
-                           'yticks': [2e-2, 3e-2, 4e-2, 1e-1],
-                           'yaxis_formatter': ticker.FuncFormatter(
-                               lambda y, pos: '{:.1e}'.format(y)
-                           ),
-                           'xaxis_formatter': ticker.FuncFormatter(
-                               lambda x, pos: '{:.0f}k'.format(x / 1000.0)
-                           ),
-                           'labels': ['loss', 'avg. loss']
-                       })
+    fig = __plot_scalar_data([train_loss_decoder['step']],
+                             [train_loss_decoder['value']],
+                             settings={
+                                 'color': [
+                                     "#F8CECC",  # red
+                                 ],
+                                 'color_smooth': [
+                                     "#B85450",  # dark red
+                                 ],
+                                 'title': 'Blizzard Nancy Train Loss (decoder)',
+                                 'xlabel': 'Steps',
+                                 'ylabel': 'Loss',
+                                 'ylim': (2e-2, 1e-1),
+                                 'yticks': [2e-2, 3e-2, 4e-2, 1e-1],
+                                 'yaxis_formatter': ticker.FuncFormatter(
+                                     lambda y, pos: '{:.1e}'.format(y)
+                                 ),
+                                 'xaxis_formatter': ticker.FuncFormatter(
+                                     lambda x, pos: '{:.0f}k'.format(x / 1000.0)
+                                 ),
+                                 'labels': ['loss', 'avg. loss']
+                             })
     plt.show()
+    fig.savefig("data/blizzard/nancy/loss_loss_decoder.pdf", bbox_inches='tight')
 
     # ==============================================================================================
     # Blizzard Nancy Train Loss (post-processing)
     # ==============================================================================================
-    __plot_scalar_data([train_loss_post['step']],
-                       [train_loss_post['value']],
-                       settings={
-                           'color': [
-                               "#F8CECC",  # red
-                           ],
-                           'color_smooth': [
-                               "#B85450",  # dark red
-                           ],
-                           'title': 'Blizzard Nancy Train Loss (post-processing)',
-                           'xlabel': 'Steps',
-                           'ylabel': 'Loss',
-                           'ylim': (2e-2, 6e-2),
-                           'yticks': [2e-2, 3e-2, 4e-2, 6e-2],
-                           'yaxis_formatter': ticker.FuncFormatter(
-                               lambda y, pos: '{:.1e}'.format(y)
-                           ),
-                           'xaxis_formatter': ticker.FuncFormatter(
-                               lambda x, pos: '{:.0f}k'.format(x / 1000.0)
-                           ),
-                           'labels': ['loss', 'avg. loss']
-                       })
+    fig = __plot_scalar_data([train_loss_post['step']],
+                             [train_loss_post['value']],
+                             settings={
+                                 'color': [
+                                     "#F8CECC",  # red
+                                 ],
+                                 'color_smooth': [
+                                     "#B85450",  # dark red
+                                 ],
+                                 'title': 'Blizzard Nancy Train Loss (post-processing)',
+                                 'xlabel': 'Steps',
+                                 'ylabel': 'Loss',
+                                 'ylim': (2e-2, 6e-2),
+                                 'yticks': [2e-2, 3e-2, 4e-2, 6e-2],
+                                 'yaxis_formatter': ticker.FuncFormatter(
+                                     lambda y, pos: '{:.1e}'.format(y)
+                                 ),
+                                 'xaxis_formatter': ticker.FuncFormatter(
+                                     lambda x, pos: '{:.0f}k'.format(x / 1000.0)
+                                 ),
+                                 'labels': ['loss', 'avg. loss']
+                             })
     plt.show()
+    fig.savefig("data/blizzard/nancy/loss_loss_post_processing.pdf", bbox_inches='tight')
 
     # ==============================================================================================
     # Blizzard Nancy Train and Evaluate Loss (total)
     # ==============================================================================================
-    __plot_scalar_data([
-        train_loss_loss['step'],
-        eval_loss_loss['step']
-    ], [
-        train_loss_loss['value'],
-        eval_loss_loss['value']
-    ],
+    fig = __plot_scalar_data([
+            train_loss_loss['step'], eval_loss_loss['step']
+        ], [
+            train_loss_loss['value'], eval_loss_loss['value']
+        ],
         settings={
             'figsize': (1.5 * 14.0 / 2.54, 2.0 * (7.7 / 2.54)),
             'color': [
@@ -205,3 +203,4 @@ if __name__ == '__main__':
                 'eva. evaluate loss']
         })
     plt.show()
+    fig.savefig("data/blizzard/nancy/loss_loss_train_eval.pdf", bbox_inches='tight')
