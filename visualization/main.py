@@ -57,12 +57,13 @@ def __plot_scalar_data(steps, values, win_len=12, settings=None):
 
     if _display['yaxis_formatter'] is not None:
         ax.yaxis.set_major_formatter(_display['yaxis_formatter'])
+        ax.yaxis.set_minor_formatter(ticker.NullFormatter())
 
     if _display['xaxis_formatter'] is not None:
         ax.xaxis.set_major_formatter(_display['xaxis_formatter'])
 
     # Render grid above the lines.
-    plt.rcParams['axes.axisbelow'] = False
+    ax.set_axisbelow(False)
 
     return fig
 
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     eval_loss_post = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_post_processing.json')
 
     print(min(train_loss_loss['value']))
-    print(max(eval_loss_loss['value']))
+    print(max(train_loss_loss['value']))
 
     __plot_scalar_data([train_loss_loss['step']],
                        [train_loss_loss['value']],
@@ -95,10 +96,18 @@ if __name__ == '__main__':
                            ],
                            'title': 'unknown title',
                            'xlabel': 'Steps',
-                           'ylabel': 'unknown',
+                           'ylabel': 'Loss',
+                           'ylim': (4e-2, 1.5e-1),
+                           'yticks': [4e-2, 7e-2, 1e-1, 1.5e-1],
+                           'yaxis_formatter': ticker.FuncFormatter(
+                               lambda y, pos: '{:.1e}'.format(y)
+                           ),
+                           'xaxis_formatter': ticker.FuncFormatter(
+                               lambda x, pos: '{:.0f}k'.format(x / 1000.0)
+                           )
                        })
     plt.show()
-
+    exit()
     __plot_scalar_data([
         train_loss_loss['step'],
         eval_loss_loss['step']
