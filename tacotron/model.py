@@ -10,6 +10,7 @@ from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net, wrapped_dense
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
+from tacotron.params.inference import inference_params
 from tacotron.wrappers import PrenetWrapper
 
 
@@ -543,6 +544,18 @@ class Tacotron:
             # Reduced decoder outputs.
             tf.summary.image("reduced_decoder_outputs",
                              tf.expand_dims(self.reduced_output_mel_spec, -1))
+
+        # Inference only ===========================================================================
+        if self._mode == Mode.PREDICT:
+            def __dump_attention_alignments(align):
+                print('dumping alignments ...', align.shape)
+                # TODO: Implement dumping.
+
+            # Dump alignments to file.
+            if inference_params.dump_alignments:
+                alignments = tf.transpose(self.alignment_history, [1, 2, 0])
+                tf.py_func(__dump_attention_alignments, [alignments], [tf.float32])
+
         # Always ===================================================================================
         # Attention alignment plot.
         alignments = tf.transpose(self.alignment_history, [1, 2, 0])
