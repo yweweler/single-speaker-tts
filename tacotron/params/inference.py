@@ -13,4 +13,8 @@ inference_params = tf.contrib.training.HParams(
 
     # The path were to save the inference results.
     synthesis_dir='/tmp/inference/ljspeech'
+
+    # Flag controlling if the alignments should be dumped as .npz files.
+    # Dumps are written into `synthesis_dir`.
+    dump_alignments=True
 )
