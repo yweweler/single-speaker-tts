@@ -1,15 +1,16 @@
 import tensorflow as tf
 
+from datasets.cmu_slt import CMUDatasetHelper
 from datasets.lj_speech import LJSpeechDatasetHelper
 from datasets.pavoque import PAVOQUEDatasetHelper
 
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/home/st/y/yw132854/workspace/pavoque/PAVOQUE',
+    dataset_folder='/tmp/datasets_tmpfs/cmu_us_slt_arctic',
 
     # Dataset load helper.
-    dataset_loader=PAVOQUEDatasetHelper,
+    dataset_loader=CMUDatasetHelper,
 
     # Vocabulary definition.
     # This definition has to include the padding and end of sequence tokens.
@@ -18,13 +19,12 @@ dataset_params = tf.contrib.training.HParams(
         'pad': 0,  # padding
         'eos': 1,  # end of sequence
         # --------------------------
-        'i': 2, 'n': 3, ' ': 4, 's': 5, 'e': 6, 'r': 7, 'j': 8, 'u': 9, 'g': 10, 'd': 11, 'a': 12,
-        'b': 13, 't': 14, 'c': 15, 'h': 16, 'l': 17, 'ä': 18, '.': 19, 'ü': 20, 'm': 21, 'p': 22,
-        'w': 23, 'z': 24, ',': 25, 'ö': 26, 'o': 27, 'f': 28, 'k': 29, ';': 30, 'y': 31, 'v': 32,
-        'x': 33, 'ß': 34, ':': 35, 'q': 36, '"': 37, '?': 38, '!': 39, "'": 40, '/': 41
+        'a': 2, 'u': 3, 't': 4, 'h': 5, 'o': 6, 'r': 7, ' ': 8, 'f': 9, 'e': 10, 'd': 11, 'n': 12,
+        'g': 13, 'i': 14, 'l': 15, ',': 16, 'p': 17, 's': 18, 'c': 19, 'm': 20, 'z': 21, 'w': 22,
+        'v': 23, 'k': 24, 'b': 25, "'": 26, 'y': 27, 'j': 28, 'q': 29, 'x': 30, '-': 31, ';': 32
         # --------------------------
     },
 
     # Number of unique characters in the vocabulary.
-    vocabulary_size=42,
+    vocabulary_size=33,
 )

@@ -7,7 +7,7 @@ from tacotron.attention import AttentionMode, AttentionScore, LocalLuongAttentio
 
 model_params = tf.contrib.training.HParams(
     # Number of unique characters in the vocabulary.
-    vocabulary_size=42,
+    vocabulary_size=33,
 
     # Target sampling rate.
     sampling_rate=16000,
@@ -41,8 +41,11 @@ model_params = tf.contrib.training.HParams(
     # Flag that controls application of the post-processing network.
     apply_post_processing=True,
 
+    # Linear scale magnitudes are raise to the power of `magnitude_power` before reconstruction.
+    magnitude_power=1.3,
+
     # The number of Griffin-Lim reconstruction iterations.
-    reconstruction_iterations=75,
+    reconstruction_iterations=50,
 
     # Flag allowing to force the use accelerated RNN implementation from CUDNN.
     force_cudnn=True,
@@ -108,14 +111,14 @@ model_params = tf.contrib.training.HParams(
     # Attention parameters.
     attention=tf.contrib.training.HParams(
         # mechanism=BahdanauAttention,
-        mechanism=LuongAttention,
-        # mechanism=LocalLuongAttention,
+        # mechanism=LuongAttention,
+        mechanism=LocalLuongAttention,
 
         # Luong local style content based scoring function.
         luong_local_score=AttentionScore.DOT,
 
         # Luong local style attention mode.
-        luong_local_mode=AttentionMode.PREDICTIVE,
+        luong_local_mode=AttentionMode.MONOTONIC,
 
         # Luong local: Force a gaussian distribution onto the scores in the attention window.
         luong_force_gaussian=True,

@@ -3,7 +3,7 @@ import tensorflow as tf
 # Default hyper-parameters:
 inference_params = tf.contrib.training.HParams(
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/pavoque/PAVOQUE',
+    checkpoint_dir='/tmp/tacotron/cmu/slt',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',
@@ -12,5 +12,9 @@ inference_params = tf.contrib.training.HParams(
     checkpoint_save_run='inference',
 
     # The path were to save the inference results.
-    synthesis_dir='/tmp/inference'
+    synthesis_dir='/tmp/inference',
+
+    # Flag controlling if the alignments should be dumped as .npz files.
+    # Dumps are written into `synthesis_dir`.
+    dump_alignments=True
 )

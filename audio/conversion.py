@@ -1,4 +1,5 @@
 import numpy as np
+import librosa
 
 
 def magnitude_to_decibel(mag):
@@ -73,7 +74,8 @@ def normalize_decibel(db, ref_db, max_db):
             Calculation: clip((db - ref_db + max_db) / max_db, 0.0, 1.0)
     """
     # np.clip(1.0 - (db - max_db) / (ref_db - max_db), 0.0, 1.0)
-    return np.clip((db - ref_db + max_db) / max_db, 1e-8, 1.0)
+    # return np.clip((db - ref_db + max_db) / max_db, 1e-8, 1.0)
+    return np.clip(1.0 + (db - ref_db) / (abs(ref_db) + abs(max_db)), 0.0, 1.0)
 
 
 def inv_normalize_decibel(norm_db, ref_db, max_db):
@@ -96,7 +98,8 @@ def inv_normalize_decibel(norm_db, ref_db, max_db):
 
             Calculation: (clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
     """
-    return (np.clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
+    # return (np.clip(norm_db, 0.0, 1.0) * max_db) + ref_db - max_db
+    return ((np.clip(norm_db, 0.0, 1.0) - 1.0) * (abs(ref_db) + abs(max_db))) + ref_db
 
 
 def samples_to_ms(samples, sampling_rate):
@@ -131,3 +134,20 @@ def ms_to_samples(ms, sampling_rate):
         int: Duration in samples.
     """
     return int((ms / 1000) * sampling_rate)
+
+
+def get_duration(wav, sr):
+    """
+    Compute the duration (in seconds) of an audio time series.
+
+    Arguments:
+        wav (np.ndarray):
+            Audio time series to get the duration of.
+
+        sampling_rate (int):
+            Sampling rate of `wav`.
+
+    Returns:
+        float: Duration in seconds.
+    """
+    return librosa.core.get_duration(y=wav, sr=sr)

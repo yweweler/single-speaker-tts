@@ -10,6 +10,7 @@ from tacotron.helpers import TacotronInferenceHelper, TacotronTrainingHelper
 from tacotron.layers import cbhg, pre_net, wrapped_dense
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
+from tacotron.params.inference import inference_params
 from tacotron.wrappers import PrenetWrapper
 
 
@@ -272,9 +273,6 @@ class Tacotron:
                 # activation=tf.nn.sigmoid
             )
 
-            # TODO: Experiment with the encoder state as the initial state:
-            # ".clone(cell_state=encoder_state)"
-            # Derived from: https://github.com/tensorflow/nmt/blob/365e7386e6659526f00fa4ad17eefb13d52e3706/nmt/attention_model.py#L131
             decoder_initial_state = output_cell.zero_state(
                 batch_size=batch_size,
                 dtype=tf.float32
@@ -492,7 +490,7 @@ class Tacotron:
                     tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # Evaluation only ==========================================================================
-        if self._mode == Mode.EVAL:
+        if self._mode == Mode.EVAL and False:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len, self.hparams.sampling_rate)
                 win_hop = ms_to_samples(self.hparams.win_hop, self.hparams.sampling_rate)
@@ -546,6 +544,18 @@ class Tacotron:
             # Reduced decoder outputs.
             tf.summary.image("reduced_decoder_outputs",
                              tf.expand_dims(self.reduced_output_mel_spec, -1))
+
+        # Inference only ===========================================================================
+        if self._mode == Mode.PREDICT:
+            def __dump_attention_alignments(align):
+                print('dumping alignments ...', align.shape)
+                # TODO: Implement dumping.
+
+            # Dump alignments to file.
+            if inference_params.dump_alignments:
+                alignments = tf.transpose(self.alignment_history, [1, 2, 0])
+                tf.py_func(__dump_attention_alignments, [alignments], [tf.float32])
+
         # Always ===================================================================================
         # Attention alignment plot.
         alignments = tf.transpose(self.alignment_history, [1, 2, 0])

@@ -1,4 +1,5 @@
 import abc
+import os
 
 import numpy as np
 
@@ -38,6 +39,9 @@ class DatasetHelper:
         self._char2idx_dict = char_dict
         self._fill_dict = fill_dict
         self._abbreviations = dict()
+
+        # Dataset statistics.
+        self._statistics = dict()
 
         # Initialize idx_dict in case a user defined dictionary was passed.
         self._idx2char_dict = dict()
@@ -168,6 +172,48 @@ class DatasetHelper:
         id_sequences = list()
         sequence_lengths = list()
 
+        # Reset word statistics.
+        self._statistics['n_words_total'] = 0
+        self._statistics['n_words_unique'] = 0
+        self._statistics['n_words_clip_avg'] = 0
+
+        # Reset character statistics.
+        self._statistics['n_chars_total'] = 0
+        self._statistics['n_chars_unique'] = 0
+        self._statistics['n_chars_clip_avg'] = 0
+
+        # Unique word lookup set.
+        word_set = set()
+
+        # Unique character lookup set.
+        character_set = set()
+
+        # TODO: Refactor.
+        def __update_word_statistics(sentence):
+            words = sentence.split(' ')
+            self._statistics['n_words_total'] += len(words)
+            word_set.update(words)
+
+        # TODO: Refactor.
+        def __update_character_statistics(sentence):
+            self._statistics['n_chars_total'] += len(sentence)
+            character_set.update(list(sentence))
+
+        for sentence in sentences:
+            # Make sentence lowercase.
+            sentence = sentence.lower()
+
+            # Collect word statistics.
+            __update_word_statistics(sentence)
+
+            # Collect character statistics.
+            __update_character_statistics(sentence)
+
+        self._statistics['n_words_unique'] = len(word_set)
+        self._statistics['n_chars_unique'] = len(character_set)
+        self._statistics['n_words_clip_avg'] = self._statistics['n_words_total'] / len(sentences)
+        self._statistics['n_chars_clip_avg'] = self._statistics['n_chars_total'] / len(sentences)
+
         eos_token = self._char2idx_dict['eos']
 
         for sentence in sentences:
@@ -255,6 +301,37 @@ class DatasetHelper:
                     shape is shape=(T_spec, 1 + n_fft // 2).
         """
         raise NotImplementedError
+
+    def pre_compute_features(self, paths):
+        """
+        Loads all audio files from the dataset, computes features and saves these pre-computed
+        features as numpy .npz files to disk.
+
+        For example: The features of an audio file <path>/<filename>.wav are saved next to the
+        audio file in <path>/<filename>.npz.
+
+        Arguments:
+            paths (:obj:`list` of :obj:`str`):
+                File paths for all audio files of the dataset to pre-compute features for.
+        """
+        # Get the total number of samples in the dataset.
+        n_samples = len(paths)
+
+        print('Loaded {} dataset entries.'.format(n_samples))
+
+        for wav_path in paths:
+            # Load and process the audio file.
+            mel_mag_db, linear_mag_db = self.load_audio(wav_path.encode())
+
+            # Extract the file path and file name without the extension.
+            file_path = os.path.splitext(wav_path)[0]
+
+            # Create the target file path.
+            out_path = '{}.npz'.format(file_path)
+            print('Writing: "{}"'.format(out_path))
+
+            # Save the audio file as a numpy .npz file.
+            np.savez(out_path, mel_mag_db=mel_mag_db, linear_mag_db=linear_mag_db)
 
     @staticmethod
     def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):

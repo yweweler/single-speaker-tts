@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import tensorflow as tf
+from multiprocessing import Pool as ThreadPool
 
 from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.io import save_wav
@@ -36,8 +37,8 @@ def inference(model, sentences):
             The padded sentences in id representation to feed to the network.
 
     Returns:
-        wavs (:obj:`list` of :obj:`np.ndarray`):
-            The synthesised waveforms.
+        spectrograms (:obj:`list` of :obj:`np.ndarray`):
+            The generated linear scale magnitude spectrograms.
     """
     # Checkpoint folder to load the inference checkpoint from.
     checkpoint_load_dir = os.path.join(
@@ -84,12 +85,8 @@ def inference(model, sentences):
     inference_summary.ParseFromString(summary)
     summary_writer.add_summary(inference_summary)
 
-    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
-    win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
-    n_fft = model_params.n_fft
-
     # Apply Griffin-Lim to all spectrogram's to get the waveforms.
-    wavs = list()
+    spectrograms = list()
     for spectrogram in spectrograms:
         print('Reverse spectrogram normalization ...', spectrogram.shape)
         linear_mag_db = inv_normalize_decibel(spectrogram.T,
@@ -97,19 +94,11 @@ def inference(model, sentences):
                                               dataset_params.dataset_loader.mel_mag_max_db)
 
         linear_mag = decibel_to_magnitude(linear_mag_db)
-
-        print('Spectrogram inversion ...')
-        wav = spectrogram_to_wav(linear_mag,
-                                 win_len,
-                                 win_hop,
-                                 n_fft,
-                                 model_params.reconstruction_iterations)
-
-        wavs.append(wav)
+        spectrograms.append(linear_mag)
 
     session.close()
 
-    return wavs
+    return spectrograms
 
 
 def start_session():
@@ -172,16 +161,33 @@ if __name__ == '__main__':
     # Create the Tacotron model.
     tacotron_model = Tacotron(inputs=placeholders, mode=Mode.PREDICT)
 
-    # Train the model.
-    wavs = inference(tacotron_model, sentences)
+    # generate linear scale magnitude spectrograms.
+    specs = inference(tacotron_model, sentences)
+
+    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
+    win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
+    n_fft = model_params.n_fft
+
+    def synthesize(linear_mag):
+        linear_mag = np.power(linear_mag, model_params.magnitude_power)
+
+        print('Spectrogram inversion ...')
+        return spectrogram_to_wav(linear_mag,
+                                  win_len,
+                                  win_hop,
+                                  n_fft,
+                                  model_params.reconstruction_iterations)
+
+    # Synthesize waveforms from the spectrograms.
+    pool = ThreadPool(6)
+    wavs = pool.map(synthesize, specs)
+    pool.close()
+    pool.join()
 
     # Write all generated waveforms to disk.
-    for sentence, wav in zip(raw_sentences, wavs):
-        # Make sentence lowercase and remove all non alphabetic characters.
-        sentence = ''.join(filter(str.isalnum, sentence.lower()))
-
-        # Append ".wav" to the sentence get the filename.
-        file_name = '{}.wav'.format(sentence)
+    for i, (sentence, wav) in enumerate(zip(raw_sentences, wavs)):
+        # Append ".wav" to the sentence line number to get the filename.
+        file_name = '{}.wav'.format(i + 1)
 
         # Generate the full path under which to save the wav.
         save_path = os.path.join(inference_params.synthesis_dir, file_name)

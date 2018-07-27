@@ -1,58 +1,41 @@
 import librosa
 import numpy as np
-import pysptk
 
-from audio.conversion import ms_to_samples, decibel_to_magnitude, magnitude_to_decibel, \
+from audio.conversion import ms_to_samples, magnitude_to_decibel, \
     normalize_decibel, inv_normalize_decibel
-from audio.effects import trim_silence
-from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs, \
-    calculate_mceps
-from audio.io import load_wav, save_wav
-from audio.synthesis import spectrogram_to_wav
+from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs
+from audio.io import load_wav
 from audio.visualization import plot_spectrogram, plot_feature_frames
 from tacotron.params.model import model_params
 
 
-def resynth_wav_using_mcep(wav, hop_len, n_mceps, mcep_alpha):
-    from pysptk.synthesis import MLSADF, Synthesizer
+def test_db_normalization(wav, hop_len, win_len):
+    linear_spec = linear_scale_spectrogram(wav=wav,
+                                           n_fft=model_params.n_fft,
+                                           hop_length=hop_len,
+                                           win_length=win_len).T
 
-    # Calculate mceps.
-    mceps, mc = calculate_mceps(wav, n_fft=model_params.n_fft, hop_length=hop_len,
-                                n_mceps=n_mceps, alpha=mcep_alpha)
+    linear_mag = np.abs(linear_spec)
+    linear_mag_db = magnitude_to_decibel(linear_mag)
 
-    # Calculate source excitation.
-    pitch = pysptk.swipe(wav.astype(np.float64),
-                         fs=sr, hopsize=hop_len, min=80, max=260, otype="pitch")
+    # Plot the original magnitude spectrogram in dB representation.
+    plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
+                     'linear',
+                     'raw linear scale magnitude spectrogram (dB)')
 
-    source_excitation = pysptk.excite(pitch, hop_len)
+    linear_mag_db = normalize_decibel(linear_mag_db, 36.50, 100)
 
-    # print("pitch.shape", pitch.shape)
-    # plt.plot(pitch, label="Source pitch")
-    # plt.show()
+    # Plot the normalized magnitude spectrogram in dB representation.
+    plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
+                     'linear',
+                     'normalized linear scale magnitude spectrogram (dB)')
 
-    # print("source_excitation.shape", source_excitation.shape)
-    # plt.plot(source_excitation, label="Source excitation")
-    # plt.show()
+    linear_mag_db = inv_normalize_decibel(linear_mag_db, 36.50, 100)
 
-    # Convert Mel-cepsrum to MLSA filter coefficients.
-    b = pysptk.mc2b(mc, alpha=mcep_alpha)
-
-    # Re-synthesize wav.
-    synthesizer = Synthesizer(MLSADF(order=n_mceps, alpha=mcep_alpha), hop_len)
-    wav_synth = synthesizer.synthesis(source_excitation, b)
-
-    # save_wav('/tmp/synthesized.wav', wav_synth, sr, norm=True)
-    # plot_feature_frames(mc.T, sampling_rate=sr, hop_length=hop_len, title='MCEP')
-
-    # plot_spectrogram(mc,
-    #                  sampling_rate=sr,
-    #                  hop_length=hop_len,
-    #                  fmin=model_params.mel_fmin,
-    #                  fmax=model_params.mel_fmax,
-    #                  y_axis='linear',
-    #                  title='Spectral envelope estimate from mel-cepstrum')
-
-    return mc, wav_synth
+    # Plot the restored magnitude spectrogram in dB representation.
+    plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
+                     'linear',
+                     'restored linear scale magnitude spectrogram (dB)')
 
 
 def calculate_mfccs_and_deltas(wav, hop_len, win_len):
@@ -118,49 +101,97 @@ def calculate_linear_spec(wav, hop_len, win_len):
                      title='Linear-scale log spectrogram')
 
 
-wav_path = '/home/yves-noel/documents/master/projects/datasets/timit/TIMIT/TRAIN/DR1/FCJF0/SA1.WAV'
+wav_path = '/home/yves-noel/documents/master/thesis/datasets/blizzard_nancy/wav/APDC2-008-03.wav'
 wav, sr = load_wav(wav_path)
 
 win_len = ms_to_samples(model_params.win_len, sampling_rate=sr)
 hop_len = ms_to_samples(model_params.win_hop, sampling_rate=sr)
 
+# --------------------------------------------------------------------------------------------------
 # Pitch shifting.
+# --------------------------------------------------------------------------------------------------
 # wav_ps = pitch_shift(wav, sr, 1/12)
 # save_wav('/tmp/ps.wav', wav_ps, sr, True)
 
-# Experimental silence trim.
+# --------------------------------------------------------------------------------------------------
+# Silence trimming.
+# --------------------------------------------------------------------------------------------------
 # wav_trim, indices = trim_silence(wav, 40)
 # print(indices)
 # save_wav('/tmp/trim.wav', wav_trim, sr, True)
 
-# plot_waveform(wav, model_params.sampling_rate, title="Mega original")
-# calculate_linear_spec(wav, hop_len, win_len)
-calculate_mfccs_and_deltas(wav, hop_len, win_len)
-exit()
-# resynth_wav_using_mcep(wav, hop_len, 25, 0.35)
+# --------------------------------------------------------------------------------------------------
+# Spectrogram normalization and reconstruction.
+# --------------------------------------------------------------------------------------------------
+# test_db_normalization(wav, hop_len, win_len)
 
-
-wav, _ = trim_silence(wav)
+# --------------------------------------------------------------------------------------------------
+# Plot waveform
+# --------------------------------------------------------------------------------------------------
+# plot_waveform(wav, model_params.sampling_rate, title="Blizzard Nancy; APDC2-008-03.wav")
 
 linear_spec = linear_scale_spectrogram(wav, model_params.n_fft, hop_len, win_len).T
 
-# dev = 1e-4 / 2
-# mel_spec_noisy = mel_spec + np.random.uniform(low=0.0,
-#                                               high=dev,
-#                                               size=np.prod(mel_spec.shape)).reshape(mel_spec.shape)
-# mel_spec = mel_spec_noisy
+mel_spec = mel_scale_spectrogram(wav,
+                                 n_fft=model_params.n_fft,
+                                 sampling_rate=sr,
+                                 n_mels=80,
+                                 fmin=0,
+                                 fmax=sr // 2,
+                                 hop_length=hop_len,
+                                 win_length=win_len,
+                                 power=1).T
 
+# ==================================================================================================
 # Convert the linear spectrogram into decibel representation.
+# ==================================================================================================
 linear_mag = np.abs(linear_spec)
 linear_mag_db = magnitude_to_decibel(linear_mag)
-linear_mag_db = normalize_decibel(linear_mag_db, 20, 100)
-linear_mag_db = inv_normalize_decibel(linear_mag_db, 20, 100)
-linear_mag = decibel_to_magnitude(linear_mag_db)
 
-reconst_wav = spectrogram_to_wav(linear_mag.T,
-                                 win_len,
-                                 hop_len,
-                                 model_params.n_fft,
-                                 50)
+# ==================================================================================================
+# Convert the mel spectrogram into decibel representation.
+# ==================================================================================================
+mel_mag = np.abs(mel_spec)
+mel_mag_db = magnitude_to_decibel(mel_mag)
 
-save_wav('/tmp/reconstr.wav', reconst_wav, sr, True)
+# ==================================================================================================
+# Spectrogram plotting.
+# ==================================================================================================
+fig = plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
+                       'linear', 'APDC2-008-03.wav;      linear scale magnitude spectrogram (dB)')
+
+# DEBUG: Dump plot into a pdf file.
+fig.savefig("/tmp/linear_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
+
+fig = plot_spectrogram(mel_mag_db.T, sr, hop_len, 0.0, 8192.0,
+                       'linear', 'APDC2-008-03.wav;      mel scale magnitude spectrogram (dB)')
+
+# DEBUG: Dump plot into a pdf file.
+fig.savefig("/tmp/mel_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
+
+# ==================================================================================================
+# Spectrogram normalization.
+# ==================================================================================================
+print("min mag. (dB): {}".format(np.min(linear_mag_db)))
+print("max mag. (dB): {}".format(np.max(linear_mag_db)))
+
+linear_mag_db = normalize_decibel(linear_mag_db, 36.50, 100)
+
+print("min norm. mag. (dB): {}".format(np.min(linear_mag_db)))
+print("max norm. mag. (dB): {}".format(np.max(linear_mag_db)))
+
+fig = plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
+                       'linear', 'APDC2-008-03.wav; norm. linear scale magnitude spectrogram (dB)')
+
+# DEBUG: Dump plot into a pdf file.
+fig.savefig("/tmp/linear_spectrogram_norm_mag_db.pdf", bbox_inches='tight')
+
+# ==================================================================================================
+# Spectrogram raised by to a power.
+# ==================================================================================================
+fig = plot_spectrogram(np.power(linear_mag_db.T, 1.4), sr, hop_len, 0.0, 8192.0,
+                       'linear',
+                       'APDC2-008-03.wav; norm. linear scale magnitude spectrogram (dB) ** 1.4')
+
+# DEBUG: Dump plot into a pdf file.
+fig.savefig("/tmp/linear_spectrogram_norm_mag_db_pow.pdf", bbox_inches='tight')
