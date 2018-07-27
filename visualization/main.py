@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import ticker
 
 from visualization.helpers import moving_avg
-from visualization.tensorboard import load_scalar
+from visualization.tensorboard import load_scalar, load_attention_alignments
 
 
 def __plot_scalar_data(steps, values, win_len=12, settings=None):
@@ -74,6 +74,36 @@ def __plot_scalar_data(steps, values, win_len=12, settings=None):
     return fig
 
 
+def __plot_alignments(alignments, settings=None):
+    _display = {
+        'figsize': None,
+        'title': 'unknown title',
+        'xlabel': 'Decoder states',
+        'ylabel': 'Encoder states',
+    }
+
+    if settings is not None:
+        _display.update(settings)
+
+    fig = plt.figure(figsize=_display['figsize'], dpi=100)
+
+    # Remove unused dimension and flip the array.
+    alignments = alignments.squeeze(axis=0)
+    alignments = np.flip(alignments, axis=0)
+
+    img = plt.imshow(alignments, interpolation='nearest', cmap='viridis')
+
+    # Set the color bar tick step.
+    step = 0.1
+    fig.colorbar(img, ticks=np.arange(0, 1.0 / step) * step, orientation='horizontal')
+
+    plt.title(_display['title'])
+    plt.xlabel(_display['xlabel'])
+    plt.ylabel(_display['ylabel'])
+
+    return fig
+
+
 if __name__ == '__main__':
     train_loss_loss = load_scalar('data/blizzard/nancy/train-tag-loss_loss.json')
     train_loss_decoder = load_scalar('data/blizzard/nancy/train-tag-loss_loss_decoder.json')
@@ -82,6 +112,14 @@ if __name__ == '__main__':
     eval_loss_loss = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss.json')
     eval_loss_decoder = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_decoder.json')
     eval_loss_post = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_post_processing.json')
+
+    alignments = load_attention_alignments('data/blizzard/nancy/alignments.npz')
+
+    fig = __plot_alignments(alignments, settings={
+        'title': 'Attention alignment history'
+    })
+    plt.show()
+    fig.savefig("data/blizzard/nancy/alignments.pdf", bbox_inches='tight')
 
     # ==============================================================================================
     # Blizzard Nancy Train Loss (total)
@@ -171,10 +209,10 @@ if __name__ == '__main__':
     # Blizzard Nancy Train and Evaluate Loss (total)
     # ==============================================================================================
     fig = __plot_scalar_data([
-            train_loss_loss['step'], eval_loss_loss['step']
-        ], [
-            train_loss_loss['value'], eval_loss_loss['value']
-        ],
+        train_loss_loss['step'], eval_loss_loss['step']
+    ], [
+        train_loss_loss['value'], eval_loss_loss['value']
+    ],
         settings={
             'figsize': (1.5 * 14.0 / 2.54, 2.0 * (7.7 / 2.54)),
             'color': [

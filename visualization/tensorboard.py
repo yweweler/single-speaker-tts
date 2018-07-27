@@ -27,6 +27,7 @@ def load_scalar(path):
     Arguments:
         path (str):
             Path to a JSON file containing scalar values exported from tensorboard.
+
     Returns:
         data (dict):
             Dictionary containing the parsed scalar data columns.
@@ -40,3 +41,21 @@ def load_scalar(path):
         'step':  _data[:, [1]].flatten(),
         'value': _data[:, [2]].flatten()
     }
+
+
+def load_attention_alignments(path):
+    """
+    Load attention alignments exported from an model.
+
+    Arguments:
+        path (str):
+            Path to a .npz file containing alignments.
+
+    Returns:
+        alignments (np.ndarray):
+            Copy of the attention alignments.
+            The alignment history was already transposed like following:
+            `alignments = tf.transpose(self.alignment_history, [1, 2, 0])`
+    """
+    data = np.load(path)
+    return data['alignments']
