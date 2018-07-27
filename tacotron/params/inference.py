@@ -12,7 +12,7 @@ inference_params = tf.contrib.training.HParams(
     checkpoint_save_run='inference',
 
     # The path were to save the inference results.
-    synthesis_dir='/tmp/inference/nancy'
+    synthesis_dir='/tmp/inference/nancy',
 
     # Path to a file containing sentences to synthesize.
     # On sentence per line is expected.
