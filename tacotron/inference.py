@@ -133,14 +133,13 @@ if __name__ == '__main__':
                                             char_dict=dataset_params.vocabulary_dict,
                                             fill_dict=False)
 
-    raw_sentences = [
-        'A short sentence.',
-        'I can\'t dance, I can\'t talk. Only thing about me is the way I walk.',
-        'We are the borg, lower your shields and surrender your ships, we will add your '
-        'biological and technological distinctiveness to our own.',
-        'We are the borg resistance is futile.',
-        'This sentence           contains many spaces.'
-    ]
+    raw_sentences = []
+    with open(inference_params.synthesis_file, 'r') as f_sent:
+        for line in f_sent:
+            sent = line.replace('\n', '')
+            raw_sentences.append(sent)
+
+    print("{} sentences were loaded for inference.".format(len(raw_sentences)))
 
     # Pre-process sentence and convert it into ids.
     id_sequences, sequence_lengths = dataset.process_sentences(raw_sentences)
