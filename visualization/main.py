@@ -1,6 +1,10 @@
+import math
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import ticker
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from visualization.helpers import moving_avg
 from visualization.tensorboard import load_scalar, load_attention_alignments
@@ -104,6 +108,50 @@ def __plot_alignments(alignments, settings=None):
     return fig
 
 
+def __plot_alignment_progress(steps, alignments):
+    _columns = 4
+
+    n_alignments = len(alignments)
+
+    n_rows = int(math.ceil(n_alignments / _columns))
+    n_cols = int(_columns)
+
+    fig, axes = plt.subplots(figsize=(
+            (1.5 * 14.0 / 2.54) * 2.5,
+            (1.5 * 14.0 / 2.54) * 3
+        ),
+        nrows=n_rows,
+        ncols=n_cols
+    )
+
+    # Deactivate unused subplot.
+    for ax in axes.flat[-n_alignments:]:
+        ax.axis('off')
+
+    for i, ax in enumerate(axes.flat[:n_alignments]):
+        step = steps[i]
+        alignment = alignments[i]
+
+        # Remove unused dimension and flip the array.
+        alignment = alignment.squeeze(axis=0)
+
+        # Flip yaxis in order to make alignments readable.
+        alignment = np.flip(alignment, axis=0)
+
+        # Drop empty frames.
+        alignment = alignment[:, :125]
+
+        ax.set_title('{} steps'.format(step))
+        img = ax.imshow(alignment, interpolation='nearest', cmap='viridis')
+
+        # Set the color bar tick step.
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='4%', pad=0.075)
+        plt.colorbar(img, cax=cax)
+
+    return fig
+
+
 if __name__ == '__main__':
     train_loss_loss = load_scalar('data/blizzard/nancy/train-tag-loss_loss.json')
     train_loss_decoder = load_scalar('data/blizzard/nancy/train-tag-loss_loss_decoder.json')
@@ -113,8 +161,64 @@ if __name__ == '__main__':
     eval_loss_decoder = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_decoder.json')
     eval_loss_post = load_scalar('data/blizzard/nancy/evaluate-tag-loss_loss_post_processing.json')
 
-    alignments = load_attention_alignments('data/blizzard/nancy/alignments.npz')
+    alignments_base_path = 'data/blizzard/nancy/alignments'
 
+    alignment_progress = [
+        'alignments-1.npz',
+        # 'alignments-101.npz',
+        # 'alignments-201.npz',
+        'alignments-501.npz',
+        'alignments-1001.npz',
+        'alignments-1501.npz',
+        'alignments-2001.npz',
+        'alignments-2501.npz',
+        'alignments-3001.npz',
+        'alignments-3501.npz',
+        'alignments-4001.npz',
+        'alignments-4501.npz',
+        'alignments-5001.npz',
+        'alignments-5501.npz',
+        'alignments-6001.npz',
+        'alignments-6501.npz',
+        'alignments-7001.npz',
+        'alignments-7501.npz',
+        'alignments-8001.npz',
+        'alignments-8501.npz',
+        'alignments-9001.npz',
+        'alignments-9501.npz',
+        'alignments-10001.npz',
+        'alignments-10501.npz',
+        'alignments-11001.npz',
+        'alignments-11501.npz',
+        'alignments-12001.npz',
+        'alignments-12501.npz',
+        'alignments-13001.npz',
+        'alignments-13501.npz',
+        'alignments-14001.npz',
+        'alignments-14501.npz',
+        'alignments-15001.npz',
+    ]
+
+    steps = []
+    alignments = []
+
+    for path in alignment_progress:
+        step = path.split('-')[1].split('.')[0]
+        alignment = load_attention_alignments(os.path.join(alignments_base_path, path))
+
+        steps.append(step)
+        alignments.append(alignment)
+
+    fig = __plot_alignment_progress(steps, alignments)
+    plt.show()
+    fig.savefig("data/blizzard/nancy/alignments_collage.pdf", bbox_inches='tight')
+
+    exit()
+
+    # ==============================================================================================
+    # A single attention alignment history plot.
+    # ==============================================================================================
+    alignments = load_attention_alignments('data/blizzard/nancy/alignments.npz')
     fig = __plot_alignments(alignments, settings={
         'title': 'Attention alignment history'
     })
