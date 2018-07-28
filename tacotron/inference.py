@@ -46,8 +46,12 @@ def inference(model, sentences):
         inference_params.checkpoint_load_run
     )
 
-    # Get the path to the latest checkpoint file.
-    checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+    if inference_params.checkpoint_file is None:
+        # Get the path to the latest checkpoint file.
+        checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+    else:
+        checkpoint_file = inference_params.checkpoint_file
+
     saver = tf.train.Saver()
 
     # Checkpoint folder to save the evaluation summaries into.
@@ -178,7 +182,7 @@ if __name__ == '__main__':
                                   model_params.reconstruction_iterations)
 
     # Synthesize waveforms from the spectrograms.
-    pool = ThreadPool(6)
+    pool = ThreadPool(inference_params.n_synthesis_threads)
     wavs = pool.map(synthesize, specs)
     pool.close()
     pool.join()
