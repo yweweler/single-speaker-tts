@@ -238,7 +238,7 @@ if __name__ == '__main__':
                 'train loss',
                 'avg. train loss',
                 'evaluate loss',
-                'eva. evaluate loss']
+                'avg. evaluate loss']
         })
     plt.show()
     fig.savefig("data/blizzard/nancy/loss_loss_train_eval.pdf", bbox_inches='tight')
