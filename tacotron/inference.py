@@ -90,7 +90,7 @@ def inference(model, sentences):
     summary_writer.add_summary(inference_summary)
 
     # Apply Griffin-Lim to all spectrogram's to get the waveforms.
-    spectrograms = list()
+    normalized = list()
     for spectrogram in spectrograms:
         print('Reverse spectrogram normalization ...', spectrogram.shape)
         linear_mag_db = inv_normalize_decibel(spectrogram.T,
@@ -98,11 +98,11 @@ def inference(model, sentences):
                                               dataset_params.dataset_loader.mel_mag_max_db)
 
         linear_mag = decibel_to_magnitude(linear_mag_db)
-        spectrograms.append(linear_mag)
+        normalized.append(linear_mag)
 
     session.close()
 
-    return spectrograms
+    return normalized
 
 
 def start_session():
