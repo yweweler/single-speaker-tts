@@ -4,6 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import ticker
+from matplotlib.ticker import FormatStrFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from visualization.helpers import moving_avg
@@ -91,9 +92,10 @@ def __plot_alignments(alignments, settings=None):
 
     fig = plt.figure(figsize=_display['figsize'], dpi=100)
 
-    # Remove unused dimension and flip the array.
+    # Remove unused dimension.
     alignments = alignments.squeeze(axis=0)
-    alignments = np.flip(alignments, axis=0)
+    # alignments = np.flip(alignments, axis=0)
+    # alignments = alignments[:, :125]
 
     img = plt.imshow(alignments, interpolation='nearest', cmap='viridis')
 
@@ -105,11 +107,14 @@ def __plot_alignments(alignments, settings=None):
     plt.xlabel(_display['xlabel'])
     plt.ylabel(_display['ylabel'])
 
+    # Flip the y axis for better readability.
+    plt.gca().invert_yaxis()
+
     return fig
 
 
 def __plot_alignment_progress(steps, alignments):
-    _columns = 4
+    _columns = 2
 
     n_alignments = len(alignments)
 
@@ -117,11 +122,13 @@ def __plot_alignment_progress(steps, alignments):
     n_cols = int(_columns)
 
     fig, axes = plt.subplots(figsize=(
-            (1.5 * 14.0 / 2.54) * 2.5,
-            (1.5 * 14.0 / 2.54) * 3
+            (1.5 * 14.0 / 2.54) * 1.3,
+            (1.5 * 14.0 / 2.54) * 1.3
         ),
         nrows=n_rows,
-        ncols=n_cols
+        ncols=n_cols,
+        sharex='none',
+        sharey='none'
     )
 
     # Deactivate unused subplot.
@@ -136,10 +143,10 @@ def __plot_alignment_progress(steps, alignments):
         alignment = alignment.squeeze(axis=0)
 
         # Flip yaxis in order to make alignments readable.
-        alignment = np.flip(alignment, axis=0)
+        # alignment = np.flip(alignment, axis=0)
 
         # Drop empty frames.
-        alignment = alignment[:, :125]
+        alignment = alignment[:, :120]
 
         ax.set_title('{} steps'.format(step))
         img = ax.imshow(alignment, interpolation='nearest', cmap='viridis')
@@ -148,6 +155,13 @@ def __plot_alignment_progress(steps, alignments):
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='4%', pad=0.075)
         plt.colorbar(img, cax=cax)
+
+        # Flip the y axis for better readability.
+        ax.invert_yaxis()
+        plt.setp(ax.get_xticklabels(), visible=True)
+
+        # Activate a separate axis for each subplot.
+        ax.axis('on')
 
     return fig
 
@@ -165,40 +179,53 @@ if __name__ == '__main__':
 
     alignment_progress = [
         'alignments-1.npz',
-        # 'alignments-101.npz',
-        # 'alignments-201.npz',
-        'alignments-501.npz',
-        'alignments-1001.npz',
-        'alignments-1501.npz',
-        'alignments-2001.npz',
-        'alignments-2501.npz',
-        'alignments-3001.npz',
-        'alignments-3501.npz',
-        'alignments-4001.npz',
-        'alignments-4501.npz',
-        'alignments-5001.npz',
-        'alignments-5501.npz',
-        'alignments-6001.npz',
-        'alignments-6501.npz',
-        'alignments-7001.npz',
-        'alignments-7501.npz',
-        'alignments-8001.npz',
-        'alignments-8501.npz',
-        'alignments-9001.npz',
-        'alignments-9501.npz',
-        'alignments-10001.npz',
-        'alignments-10501.npz',
-        'alignments-11001.npz',
+            # 'alignments-101.npz',
+            # 'alignments-201.npz',
+        # 'alignments-501.npz',
+        # 'alignments-1001.npz',
+        # 'alignments-1501.npz',
+        # 'alignments-2001.npz',
+        # 'alignments-2501.npz',
+        # 'alignments-3001.npz',
+        # 'alignments-3501.npz',
+        # 'alignments-4001.npz',
+        # 'alignments-4501.npz',
+        # 'alignments-5001.npz',
+        # 'alignments-5501.npz',
+        # 'alignments-6001.npz',
+        # 'alignments-6501.npz',
+        # 'alignments-7001.npz',
+        # 'alignments-7501.npz',
+        # 'alignments-8001.npz',
+        # 'alignments-8501.npz',
+        # 'alignments-9001.npz',
+        # 'alignments-9501.npz',
+        # 'alignments-10001.npz',
+        # 'alignments-10501.npz',
+        # 'alignments-11001.npz',
         'alignments-11501.npz',
-        'alignments-12001.npz',
-        'alignments-12501.npz',
+        # 'alignments-12001.npz',
+        # 'alignments-12501.npz',
         'alignments-13001.npz',
-        'alignments-13501.npz',
+        # 'alignments-13501.npz',
         'alignments-14001.npz',
-        'alignments-14501.npz',
+        # 'alignments-14501.npz',
         'alignments-15001.npz',
     ]
 
+    # ==============================================================================================
+    # A single attention alignment history plot.
+    # ==============================================================================================
+    alignments = load_attention_alignments('data/blizzard/nancy/alignments.npz')
+    fig = __plot_alignments(alignments, settings={
+        'title': 'Attention alignment history'
+    })
+    plt.show()
+    fig.savefig("data/blizzard/nancy/alignments.pdf", bbox_inches='tight')
+
+    # ==============================================================================================
+    # Plot attention alignment progress in a grid.
+    # ==============================================================================================
     steps = []
     alignments = []
 
@@ -214,16 +241,6 @@ if __name__ == '__main__':
     fig.savefig("data/blizzard/nancy/alignments_collage.pdf", bbox_inches='tight')
 
     exit()
-
-    # ==============================================================================================
-    # A single attention alignment history plot.
-    # ==============================================================================================
-    alignments = load_attention_alignments('data/blizzard/nancy/alignments.npz')
-    fig = __plot_alignments(alignments, settings={
-        'title': 'Attention alignment history'
-    })
-    plt.show()
-    fig.savefig("data/blizzard/nancy/alignments.pdf", bbox_inches='tight')
 
     # ==============================================================================================
     # Blizzard Nancy Train Loss (total)
