@@ -74,7 +74,7 @@ def inference(model, sentences):
     # Infer data.
     summary, spectrograms = session.run(
         # TODO: implement automatic stopping after a certain amount of silence was generated.
-        # The we could set max_iterations much higher and only use it as a worst case fallback
+        # Then we could set max_iterations much higher and only use it as a worst case fallback
         # when the network does not stop by itself.
         [
             summary_op,
