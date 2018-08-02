@@ -282,6 +282,27 @@ class DatasetHelper:
         raise NotImplementedError
 
     @staticmethod
+    def cache_precalculated_features(wav_paths):
+        """
+        Loads pre-calculated feature from disk and holds them in RAM.
+
+        Arguments:
+            wav_paths (:obj:`list` of str):
+                Paths to the waveform files for which to load pre-processed features.
+
+        Returns:
+            cache (dict):
+                Dictionary containing the cached features with the file paths as keys for access.
+        """
+        __cache = dict()
+
+        for wav_path in wav_paths:
+            file_path = os.path.splitext(wav_path)[0]
+            __cache[file_path] = np.load('{}.npz'.format(file_path))
+
+        return __cache
+
+    @staticmethod
     @abc.abstractstaticmethod
     def load_audio(file_path):
         """

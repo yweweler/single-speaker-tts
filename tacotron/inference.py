@@ -46,8 +46,12 @@ def inference(model, sentences):
         inference_params.checkpoint_load_run
     )
 
-    # Get the path to the latest checkpoint file.
-    checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+    if inference_params.checkpoint_file is None:
+        # Get the path to the latest checkpoint file.
+        checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+    else:
+        checkpoint_file = inference_params.checkpoint_file
+
     saver = tf.train.Saver()
 
     # Checkpoint folder to save the evaluation summaries into.
@@ -70,7 +74,7 @@ def inference(model, sentences):
     # Infer data.
     summary, spectrograms = session.run(
         # TODO: implement automatic stopping after a certain amount of silence was generated.
-        # The we could set max_iterations much higher and only use it as a worst case fallback
+        # Then we could set max_iterations much higher and only use it as a worst case fallback
         # when the network does not stop by itself.
         [
             summary_op,
@@ -86,7 +90,7 @@ def inference(model, sentences):
     summary_writer.add_summary(inference_summary)
 
     # Apply Griffin-Lim to all spectrogram's to get the waveforms.
-    spectrograms = list()
+    normalized = list()
     for spectrogram in spectrograms:
         print('Reverse spectrogram normalization ...', spectrogram.shape)
         linear_mag_db = inv_normalize_decibel(spectrogram.T,
@@ -94,11 +98,11 @@ def inference(model, sentences):
                                               dataset_params.dataset_loader.mel_mag_max_db)
 
         linear_mag = decibel_to_magnitude(linear_mag_db)
-        spectrograms.append(linear_mag)
+        normalized.append(linear_mag)
 
     session.close()
 
-    return spectrograms
+    return normalized
 
 
 def start_session():
@@ -178,7 +182,7 @@ if __name__ == '__main__':
                                   model_params.reconstruction_iterations)
 
     # Synthesize waveforms from the spectrograms.
-    pool = ThreadPool(6)
+    pool = ThreadPool(inference_params.n_synthesis_threads)
     wavs = pool.map(synthesize, specs)
     pool.close()
     pool.join()

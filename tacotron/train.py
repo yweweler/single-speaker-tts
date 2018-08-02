@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 import numpy as np
 
+from datasets.dataset_helper import DatasetHelper
 from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
@@ -66,12 +67,17 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     """
     n_threads = training_params.n_threads
 
-    # Load alĺ sentences and the corresponding audio file paths.
+    # Load all sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset.load(max_samples=max_samples)
+    print('Loaded {} dataset sentences.'.format(len(sentences)))
+
+    # Pre-cache all audio features.
+    feature_cache = DatasetHelper.cache_precalculated_features(wav_paths)
+    print('Cached {} waveforms.'.format(len(wav_paths)))
 
     # Get the total number of samples in the dataset.
     n_samples = len(sentence_lengths)
-    print('Loaded {} dataset entries.'.format(n_samples))
+    print('Finished loading {} dataset entries.'.format(n_samples))
 
     # Sort sequence lengths in order to slice them into buckets that contain sequences of roughly
     # equal length.
@@ -119,7 +125,13 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
 
         def _load_processed(wav_path):
             file_path = os.path.splitext(wav_path.decode())[0]
-            data = np.load('{}.npz'.format(file_path))
+
+            # Either load features from the cache or from disk.
+            if training_params.cache_preprocessed:
+                data = feature_cache[file_path]
+            else:
+                data = np.load('{}.npz'.format(file_path))
+
             return data['mel_mag_db'], data['linear_mag_db']
 
         mel_spec, lin_spec = tf.py_func(_load_processed, [wav_path], [tf.float32, tf.float32])

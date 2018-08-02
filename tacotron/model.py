@@ -1,3 +1,6 @@
+import os
+import numpy as np
+
 import tensorflow as tf
 import tensorflow.contrib as tfc
 from tensorflow.contrib import seq2seq
@@ -545,20 +548,30 @@ class Tacotron:
             tf.summary.image("reduced_decoder_outputs",
                              tf.expand_dims(self.reduced_output_mel_spec, -1))
 
+        # Attention alignment plot.
+        alignments = tf.transpose(self.alignment_history, [1, 2, 0])
+
         # Inference only ===========================================================================
         if self._mode == Mode.PREDICT:
             def __dump_attention_alignments(align):
-                print('dumping alignments ...', align.shape)
-                # TODO: Implement dumping.
+                # Create the target file path.
+                out_path = os.path.join(inference_params.synthesis_dir, 'alignments.npz')
+                print('Dumping alignments: {} to "{}" ...'.format(align.shape, out_path))
+
+                # Save the audio file as a numpy .npz file.
+                np.savez(out_path, alignments=align)
+
+                return align
 
             # Dump alignments to file.
             if inference_params.dump_alignments:
                 alignments = tf.transpose(self.alignment_history, [1, 2, 0])
-                tf.py_func(__dump_attention_alignments, [alignments], [tf.float32])
+                tmp = tf.py_func(__dump_attention_alignments, [alignments], [tf.float32])
+                # Force execution py printing the `tmp` object.
+                alignments = tf.Print(alignments, [tmp], 'Alignments: ')
 
         # Always ===================================================================================
         # Attention alignment plot.
-        alignments = tf.transpose(self.alignment_history, [1, 2, 0])
         tf.summary.image("stacked_alignments", tf.expand_dims(alignments, -1))
 
         return tf.summary.merge_all()
