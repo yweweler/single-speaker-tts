@@ -582,6 +582,16 @@ class Tacotron:
 
             # Dump the linear spectrogram to file.
             if inference_params.dump_linear_spectrogram:
+                # Convert thew linear spectrogram into an image that can be displayed.
+                # => shape=(1, T_spec, (1 + n_fft // 2), 1)
+                linear_spec_image = tf.expand_dims(
+                    tf.reshape(self.output_linear_spec[0],
+                               (1, -1, (1 + self.hparams.n_fft // 2))), -1)
+
+                # => shape=(1, (1 + n_fft // 2), T_spec, 1)
+                linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
+                linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+
                 __spec = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
                 tmp = tf.py_func(__dump_linear_spectrogram, [__spec], [tf.float32])
                 # Force execution py printing the `tmp` object.
