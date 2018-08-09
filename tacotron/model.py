@@ -558,7 +558,7 @@ class Tacotron:
                 out_path = os.path.join(inference_params.synthesis_dir, 'alignments.npz')
                 print('Dumping alignments: {} to "{}" ...'.format(align.shape, out_path))
 
-                # Save the audio file as a numpy .npz file.
+                # Save the alignment history file as a numpy .npz file.
                 np.savez(out_path, alignments=align)
 
                 return align
@@ -567,6 +567,23 @@ class Tacotron:
             if inference_params.dump_alignments:
                 alignments = tf.transpose(self.alignment_history, [1, 2, 0])
                 tmp = tf.py_func(__dump_attention_alignments, [alignments], [tf.float32])
+                # Force execution py printing the `tmp` object.
+                alignments = tf.Print(alignments, [tmp], 'Alignments: ')
+
+            def __dump_linear_spectrogram(spec):
+                # Create the target file path.
+                out_path = os.path.join(inference_params.synthesis_dir, 'linear-spectrogram.npz')
+                print('Dumping linear spectrogram: {} to "{}" ...'.format(spec.shape, out_path))
+
+                # Save the linear spectrogram as a numpy .npz file.
+                np.savez(out_path, linear_spec=spec)
+
+                return spec
+
+            # Dump the linear spectrogram to file.
+            if inference_params.dump_linear_spectrogram:
+                __spec = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+                tmp = tf.py_func(__dump_linear_spectrogram, [__spec], [tf.float32])
                 # Force execution py printing the `tmp` object.
                 alignments = tf.Print(alignments, [tmp], 'Alignments: ')
 
