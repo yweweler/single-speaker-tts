@@ -157,7 +157,22 @@ To calculate the statistics run:
 
 ```
 $ python tacotron/dataset_statistics.py
+
 ```
+
+Take the following example output:
+```
+# Dataset: /exmaple-dataset
+# Loading dataset ...
+# Collecting decibel statistics for 243 files ...
+# mel_mag_ref_db = 9.554028542124794
+# mel_mag_max_db = -99.8760138753366
+# linear_ref_db = 36.5140945917124
+# linear_mag_max_db = -99.9965083885114
+```
+
+Each loader derived from `DatasetHelper` has to define these variables in order to be able to 
+normalize the audio files.
 
 ### Feature Pre-Calculation
 
@@ -166,9 +181,10 @@ Instead of calculating features on demand during training or evaluation, the cod
 To pre-calculate features run:
 
 ```
-$ python tacotron/precalc_features.py
+$ python tacotron/dataset_precalc_features.py
 ```
 
+The pre-computed features are stored as `.npz` files next to the actual audio files.
 Note that independent from pre-calculation, features can also be cached in RAM to accelerate throughput.
 
 
