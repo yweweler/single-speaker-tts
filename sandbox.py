@@ -1,8 +1,9 @@
 import librosa
 import numpy as np
+from matplotlib import ticker
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, \
-    normalize_decibel, inv_normalize_decibel
+    normalize_decibel, inv_normalize_decibel, decibel_to_magnitude
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram, calculate_mfccs
 from audio.io import load_wav
 from audio.visualization import plot_spectrogram, plot_feature_frames
@@ -102,6 +103,7 @@ def calculate_linear_spec(wav, hop_len, win_len):
 
 
 wav_path = '/home/yves-noel/documents/master/thesis/datasets/blizzard_nancy/wav/APDC2-008-03.wav'
+# wav_path = '/home/yves-noel/documents/master/thesis/datasets/blizzard_nancy/wav/RURAL-02198.wav'
 wav, sr = load_wav(wav_path)
 
 win_len = ms_to_samples(model_params.win_len, sampling_rate=sr)
@@ -154,20 +156,33 @@ linear_mag_db = magnitude_to_decibel(linear_mag)
 mel_mag = np.abs(mel_spec)
 mel_mag_db = magnitude_to_decibel(mel_mag)
 
+
+
 # ==================================================================================================
 # Spectrogram plotting.
 # ==================================================================================================
-fig = plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
-                       'linear', 'APDC2-008-03.wav;      linear scale magnitude spectrogram (dB)')
+from matplotlib import rc
 
-# DEBUG: Dump plot into a pdf file.
-fig.savefig("/tmp/linear_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
+rc('font', **{'family': 'serif',
+              'serif': ['Computer Modern'],
+              'size': 13.75})
+rc('text', usetex=True)
 
-fig = plot_spectrogram(mel_mag_db.T, sr, hop_len, 0.0, 8192.0,
-                       'linear', 'APDC2-008-03.wav;      mel scale magnitude spectrogram (dB)')
+# linear_mag_db = linear_mag_db[int((0.20 * sr) / hop_len):int((1.85 * sr) / hop_len), :]
+# fig = plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
+#                        'linear', 'APDC2-008-03.wav;      linear scale magnitude spectrogram (dB)',
+#                         figsize=((1.0 / 1.35) * (14.0 / 2.54), 7.7 / 2.54))
+#
+# # DEBUG: Dump plot into a pdf file.
+# fig.savefig("/tmp/linear_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
 
-# DEBUG: Dump plot into a pdf file.
-fig.savefig("/tmp/mel_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
+# mel_mag_db = mel_mag_db[int((0.20 * sr) / hop_len):int((1.85 * sr) / hop_len), :]
+# fig = plot_spectrogram(mel_mag_db.T, sr, hop_len, 0.0, 8192.0,
+#                        'linear', 'APDC2-008-03.wav;      mel scale magnitude spectrogram (dB)',
+#                         figsize=((1.0 / 1.35) * (14.0 / 2.54), 7.7 / 2.54))
+#
+# # DEBUG: Dump plot into a pdf file.
+# fig.savefig("/tmp/mel_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
 
 # ==================================================================================================
 # Spectrogram normalization.
@@ -175,13 +190,25 @@ fig.savefig("/tmp/mel_spectrogram_raw_mag_db.pdf", bbox_inches='tight')
 print("min mag. (dB): {}".format(np.min(linear_mag_db)))
 print("max mag. (dB): {}".format(np.max(linear_mag_db)))
 
-linear_mag_db = normalize_decibel(linear_mag_db, 36.50, 100)
+# linear_mag_db = normalize_decibel(linear_mag_db, 36.50, 100)
+# print("min norm. mag. (dB): {}".format(np.min(linear_mag_db)))
+# print("max norm. mag. (dB): {}".format(np.max(linear_mag_db)))
 
-print("min norm. mag. (dB): {}".format(np.min(linear_mag_db)))
-print("max norm. mag. (dB): {}".format(np.max(linear_mag_db)))
+# Crop the file to the range [4.5s -- 6.2s]
+linear_mag_db_raw = linear_mag_db[int((4.5 * sr) / hop_len):int((6.2 * sr) / hop_len), :]
+#fraction = ((7.1 / 100) * 4.5) * 2.0
+#fraction = 1.0 / 1.35
 
+y_formater = ticker.FuncFormatter(
+        lambda x, pos: '{:.0f}'.format(x / 1000.0)
+    )
+
+linear_mag_db = linear_mag_db_raw
 fig = plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
-                       'linear', 'APDC2-008-03.wav; norm. linear scale magnitude spectrogram (dB)')
+                       'linear', 'APDC2-008-03.wav; norm. linear scale magnitude spectrogram (dB)',
+                       #figsize=(fraction * (1.5 * 14.0 / 2.54), 7.7 / 2.54),
+                       figsize=((1.0 / 1.35) * (14.0 / 2.54), 7.7 / 2.54),
+                       _formater=y_formater)
 
 # DEBUG: Dump plot into a pdf file.
 fig.savefig("/tmp/linear_spectrogram_norm_mag_db.pdf", bbox_inches='tight')
@@ -189,9 +216,17 @@ fig.savefig("/tmp/linear_spectrogram_norm_mag_db.pdf", bbox_inches='tight')
 # ==================================================================================================
 # Spectrogram raised by to a power.
 # ==================================================================================================
-fig = plot_spectrogram(np.power(linear_mag_db.T, 1.4), sr, hop_len, 0.0, 8192.0,
+
+linear_mag_db = decibel_to_magnitude(linear_mag_db_raw)
+linear_mag_db = np.power(linear_mag_db, 1.4)
+linear_mag_db = magnitude_to_decibel(linear_mag_db)
+
+fig = plot_spectrogram(linear_mag_db.T, sr, hop_len, 0.0, 8192.0,
                        'linear',
-                       'APDC2-008-03.wav; norm. linear scale magnitude spectrogram (dB) ** 1.4')
+                       'APDC2-008-03.wav; norm. linear scale magnitude spectrogram (dB) ** 1.3',
+                       #figsize=(fraction * (1.5 * 14.0 / 2.54), 7.7 / 2.54),
+                       figsize=((1.0 / 1.35) * (14.0 / 2.54), 7.7 / 2.54),
+                       _formater=y_formater)
 
 # DEBUG: Dump plot into a pdf file.
 fig.savefig("/tmp/linear_spectrogram_norm_mag_db_pow.pdf", bbox_inches='tight')
