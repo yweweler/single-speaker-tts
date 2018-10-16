@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 
+
 def moving_avg(values, win_len, mode='same'):
     """
     Calculate the moving average over a data series.
@@ -124,7 +125,7 @@ def plot_scalar_data(steps, values, skip=None, settings=None):
         axes.set_ylim(_display['ylim'])
 
     if _display['yticks'] is not None:
-        axes.set_yticks(_display['yticks'])
+        axes.set_yticks(_display['yticks'], minor=False)
 
     if _display['title'] is not None:
         plt.title(_display['title'])
