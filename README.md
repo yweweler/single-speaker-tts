@@ -74,8 +74,8 @@ training.
 
 The CBHG (1-D convolution bank + highway network + bidirectional GRU) module is adopted from the Tacotron architecture.
 It is used both in the encoder and the post-processing.
-Take a look at the implementation for more details on how it works ([tacotron/layers.py]
-(tacotron/layers.py#L448))
+Take a look at the implementation for more details on how it works 
+[tacotron/layers.py](tacotron/layers.py#L448).
 
 ![CBHG](readme/images/cbhg.png)
 
@@ -91,8 +91,8 @@ Like in Tacotron, these embeddings are then further processed by a `pre-net` and
 The decoder decodes `r` subsequent Mel-spectrogram frames with each decoding iteration.
 The `r-1`'th frame is used as the input for the next iteration.
 The hidden states and the first input are initialized using zero vectors.
-Currently decoding is stopped after a set number of iterations, see [tacotron/params/model.py]
-(tacotron/params/model.py#L105).
+Currently decoding is stopped after a set number of iterations, see 
+[tacotron/params/model.py](tacotron/params/model.py#L108).
 However, the code is generally capable of stopping if a certain condition is met during decoding.
 Just take a look at [tacotron/helpers.py](tacotron/helpers.py#L134).
 
