@@ -11,7 +11,7 @@ The implementation is based on [Tensorflow](https://tensorflow.org/).
 
 ## Examples
 
-* Blizzard Challenge 2011 (Nancy Corpus)
+* After 500k steps on the the Blizzard Challenge 2011 dataset (Nancy Corpus):
   - ![WAV17](readme/audio/nancy/17.wav)
   - ![WAV24](readme/audio/nancy/24.wav)
   - ![WAV25](readme/audio/nancy/25.wav)
@@ -21,11 +21,13 @@ The implementation is based on [Tensorflow](https://tensorflow.org/).
   - ![WAV47](readme/audio/nancy/47.wav)
   - ![WAV50](readme/audio/nancy/50.wav)
 
+
 ## Architecture
 
 
-The architecture is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) archicture and takes unaligned text-audio pairs as input to learn from.
-Based on entered text it produces linear-scale frequency spectrograms and an alignment between text and audio.
+The architecture is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) archicture and takes unaligned text-audio pairs as input.
+Based on entered text it produces linear-scale frequency magnitude spectrograms and an alignment 
+between text and audio.
 
 The architecture is constructed from four main stages:
 
@@ -38,8 +40,7 @@ The encoder takes written sentences and generates variable length embeddings for
 The subsequent decoder decodes the variable length embedding into a Mel-spectrogram.
 With each decoding iteration the decoder predicts `r` spectrogram frames at once.
 The frames predicted with each iteration are concatenated to form the complete Mel-spectrogram.
-To predict the spectrogram the decoder's attention mechanism selects the character embeddings (memory) it deems most important for decoding.
-In turn giving the attention alignments.
+To predict the spectrogram the decoder's attention mechanism selects the character embeddings (`memory`) it deems most important for decoding.
 The post-processing stage upgrades the Mel-spectrogram into a linear-scale spectrogram.
 It's job is to improve the spectrograms and pull up the Mel-spectrogram to linear-scale.
 Finally, the Griffin-Lim algorithm is used for the synthesis stage to retrieve the final waveform.
@@ -47,9 +48,13 @@ Finally, the Griffin-Lim algorithm is used for the synthesis stage to retrieve t
 ![Overview](readme/images/architecture.png)
 
 ### Attention
-Instead ofthe [Bahdanau](https://arxiv.org/abs/1409.0473v7) style attention mechanism Tacotron uses, the architecture employs [Luong](https://arxiv.org/abs/1508.04025v5) style attention.
+Instead of the [Bahdanau](https://arxiv.org/abs/1409.0473v7) style attention mechanism Tacotron 
+uses, the architecture employs [Luong](https://arxiv.org/abs/1508.04025v5) style attention.
 We implemented the global as well as local attention approaches as described by Luong.
 Note however, that the local attention approach is somewhat basic and experimental.
+
+As the encoder CBHG is bidirectional the concatenated forward and backward hidden states are fed 
+to the attention mechanism.
 
 ![Attention](readme/images/attention.png)
 
@@ -59,14 +64,14 @@ The attention mechanism predicts an probability distribution over the the encode
 with each decoder step.
 Concatenating these leads to the actual alignments for the encoder and the decoder sequence.
 
-As an example take a look at the progress of the alignment predicted at different amounts of 
+As an example take a look at the progress of the alignment predicted after different amounts of 
 training.
 ![Alignments](readme/images/alignments.png)
 
 ### CBHG
 
 The CBHG (1-D convolution bank + highway network + bidirectional GRU) module is adopted from the Tacotron architecture.
-It is used both in the encoder and the decoder.
+It is used both in the encoder and the post-processing.
 Take a look at the implementation for more details on how it works ([tacotron/layers.py]
 (tacotron/layers.py#L448))
 
@@ -81,10 +86,11 @@ Like in Tacotron, these embeddings are then further processed by a `pre-net` and
 
 ### Decoder
 
-The decoder decodes `r` subsequent Mel spectrogram frames with each decoding iteration.
+The decoder decodes `r` subsequent Mel-spectrogram frames with each decoding iteration.
 The `r-1`'th frame is used as the input for the next iteration.
 The hidden states and the first input are initialized using zero vectors.
-Currently decoding is stopped after a set number of iterations.
+Currently decoding is stopped after a set number of iterations (see [tacotron/params/model.py]
+(tacotron/params/model.py#L105)).
 However, the code is generally capable of stopping if a certain condition is met during decoding.
 Just take a look at [tacotron/helpers.py](tacotron/helpers.py#L134).
 
@@ -97,9 +103,9 @@ alignments robustness.
 ### Post-Processing
 
 The post-processing stage is supposed to remove artifacts and produce a linear scale spectrogram.
-The Mel spectrogram is first transformed into a intermediate representation by a `CBHG` module.
+The Mel-spectrogram is first transformed into a intermediate representation by a `CBHG` module.
 Note that this intermediate representation is not enforced to be a spectrogram.
-Finally, a simple dense layer is used to produce the linear scale spectrogram.
+Finally, a simple dense layer is used to produce the linear-scale spectrogram.
 
 ![Post-Processing](readme/images/post-processing.png)
 
@@ -222,9 +228,10 @@ Configure the desired parameters for the model:
 
 1. Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
 2. Prepare the training dataset:
-  1. Calculate dataset signal statistics.
-  2. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
-  3. **Optional**: Pre-calculate the features for the dataset.
+  1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
+  2. Calculate dataset signal statistics.
+  3. Set the signal statistics in the dataset loader used.
+  4. **Optional**: Pre-calculate the features for the dataset.
 3. Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
 
 Start the training process:
@@ -244,9 +251,10 @@ Configure the desired evaluation parameters:
 
 1. Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py)
 2. Prepare the evaluation dataset:
-  1. Calculate dataset signal statistics.
-  2. Setup the dataset parameters in [tacotron/params/dataset.py](master/tacotron/params/model.py)
-  3. **Optional**: Pre-calculate the features for the dataset.
+  1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
+  2. Calculate dataset signal statistics.
+  3. Set the signal statistics in the dataset loader used.
+  4. **Optional**: Pre-calculate the features for the dataset.
 
 Start the evaluation process:
 ```bash
