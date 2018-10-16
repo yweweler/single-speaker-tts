@@ -256,23 +256,3 @@ def plot_iterate_reconstruction_error(dataset_name, path_listing, n_iters):
 
     # DEBUG: Dump plot into a pdf file.
     fig.savefig("/tmp/griffin_lim_mse_durations.pdf", bbox_inches='tight')
-
-
-if __name__ == '__main__':
-    base_folder = '/tmp/TIMIT/'
-    listing_file = 'train_all.txt'
-
-    # Read all lines from the TIMIT file listing.
-    with open(base_folder + listing_file, 'r') as f:
-        lines = f.readlines()
-
-    # Extract only the wav file paths.
-    wav_paths = [base_folder + line.split(',')[0] for line in lines]
-
-    # Collect and print the decibel statistics for all the files.
-    print("Collecting decibel statistics for {} files ...".format(len(wav_paths)))
-    min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(wav_paths)
-    print("avg. min. linear magnitude (dB)", min_linear_db)  # -99.99 dB
-    print("avg. max. linear magnitude (dB)", max_linear_db)  # +20.08 dB
-    print("avg. min. mel magnitude (dB)", min_mel_db)  # -95.73 dB
-    print("avg. max. mel magnitude (dB)", max_mel_db)  # -07.74 dB
