@@ -228,13 +228,13 @@ Note that independent from pre-calculation, features can also be cached in RAM t
 
 Configure the desired parameters for the model:
 
-1. Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
-2. Prepare the training dataset:
+- Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
+- Prepare the training dataset:
   1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
   2. Calculate dataset signal statistics.
   3. Set the signal statistics in the dataset loader used.
   4. **Optional**: Pre-calculate the features for the dataset.
-3. Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
+- Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
 
 Start the training process:
 ```bash
@@ -251,8 +251,8 @@ The training code will then look for the most recent checkpoint in the checkpoin
 
 Configure the desired evaluation parameters:
 
-1. Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py)
-2. Prepare the evaluation dataset:
+- Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py)
+- Prepare the evaluation dataset:
   1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
   2. Calculate dataset signal statistics.
   3. Set the signal statistics in the dataset loader used.
