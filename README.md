@@ -36,7 +36,7 @@ The architecture is constructed from four main stages:
 
 The encoder takes written sentences and generates variable length embeddings for each sentence.
 The subsequent decoder decodes the variable length embedding into a Mel-spectrogram.
-With each decoding iteration the deocder predicts `r` spectrogram frames at once.
+With each decoding iteration the decoder predicts `r` spectrogram frames at once.
 The frames predicted with each iteration are concatenated to form the complete Mel-spectrogram.
 To predict the spectrogram the decoder's attention mechanism selects the character embeddings (memory) it deems most important for decoding.
 In turn giving the attention alignments.
@@ -73,12 +73,34 @@ Take a look at the implementation for more details on how it works ([tacotron/la
 ![CBHG](readme/images/cbhg.png)
 
 ### Encoder
+
+First the encoder converts the characters of entered sentences into character embeddings.
+Like in Tacotron, these embeddings are then further processed by a `pre-net` and a `CBHG` module.
+
 ![Encoder](readme/images/encoder.png)
 
 ### Decoder
+
+The decoder decodes `r` subsequent Mel spectrogram frames with each decoding iteration.
+The `r-1`'th frame is used as the input for the next iteration.
+The hidden states and the first input are initialized using zero vectors.
+Currently decoding is stopped after a set number of iterations.
+However, the code is generally capable of stopping if a certain condition is met during decoding.
+Just take a look at [tacotron/helpers.py](tacotron/helpers.py#L134).
+
+Most of the models trained during development used `r = 5`.
+Note that using reduction factors of `8` and greater lead to an massive decrease in the attention 
+alignments robustness.
+
 ![Decoder](readme/images/decoder.png)
 
 ### Post-Processing
+
+The post-processing stage is supposed to remove artifacts and produce a linear scale spectrogram.
+The Mel spectrogram is first transformed into a intermediate representation by a `CBHG` module.
+Note that this intermediate representation is not enforced to be a spectrogram.
+Finally, a simple dense layer is used to produce the linear scale spectrogram.
+
 ![Post-Processing](readme/images/post-processing.png)
 
 
@@ -103,10 +125,10 @@ sudo pip install -r requirements.txt
 
 ## Dataset Preparation
 
-Datasets are loaded using datset loaders.
+Datasets are loaded using dataset loaders.
 Currently each dataset requires a custom dataset loader to be written.
 Depending on how the loader does its job. the datasets can be stored in nearly any form and file-format.
-If you want to use a custom dataset, you curretnly have to write a custom loading helper.
+If you want to use a custom dataset, you currently have to write a custom loading helper.
 A few custom loaders for datasets exist already.
 
 ```bash
@@ -134,7 +156,7 @@ blizzard-nancy
     └── ...
 ```
 The `train.txt` and the `eval.txt` files contain filenames and corresponding transcriptions.
-The `listing.txt` file is a symlink pointing to `train.txt` or `eval.txt` depending on wether we want to train or to evaluate.
+The `listing.txt` file is a symlink pointing to `train.txt` or `eval.txt` depending on whether we want to train or to evaluate.
 Audio files are contained in the `wav` folder
 
 The blizzard nancy loader loads transcriptions from a `txt` file were each line is of the form:
@@ -151,7 +173,7 @@ file wav/APDC2-023-10.wav
 ```
 It expects all file to have a 16 kHz sampling rate.
 
-The `listing.txt` symlink has to be created manually depending on wether you are currently doing training or evaluation with the model.
+The `listing.txt` symlink has to be created manually depending on whether you are currently doing training or evaluation with the model.
 instead of using symlinks you can alternatively just copy and rename the transcription file as needed.
 The code is not optimal when it comes to dataset loading (pull requests are welcome though).
 
@@ -198,12 +220,12 @@ Note that independent from pre-calculation, features can also be cached in RAM t
 
 Configure the desired parameters for the model:
 
-1. Setup the architecture parameters in [tacotron/params/model.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/model.py)
+1. Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
 2. Prepare the training dataset:
   1. Calculate dataset signal statistics.
-  2. Setup the dataset parameters in [tacotron/params/dataset.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/model.py)
+  2. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
   3. **Optional**: Pre-calculate the features for the dataset.
-3. Setup the training parameters in [tacotron/params/training.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/training.py)
+3. Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
 
 Start the training process:
 ```bash
@@ -220,10 +242,10 @@ The training code will then look for the most recent checkpoint in the checkpoin
 
 Configure the desired evaluation parameters:
 
-1. Setup the evaluation parameters in [tacotron/params/evaluation.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/evaluation.py)
+1. Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py)
 2. Prepare the evaluation dataset:
   1. Calculate dataset signal statistics.
-  2. Setup the dataset parameters in [tacotron/params/dataset.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/model.py)
+  2. Setup the dataset parameters in [tacotron/params/dataset.py](master/tacotron/params/model.py)
   3. **Optional**: Pre-calculate the features for the dataset.
 
 Start the evaluation process:
@@ -238,7 +260,7 @@ If configured, the evaluation code will sequentially load all training checkpoin
 
 Configure the desired inference parameters:
 
-1. Setup the inference parameters in [tacotron/params/inference.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/inference.py)
+1. Setup the inference parameters in [tacotron/params/inference.py](tacotron/params/inference.py)
 2. Place a file with all the sentences to synthezise at the location configured. This is supposed to be a simple text file with one sentence per line.
 
 Start the inference process:
@@ -246,7 +268,7 @@ Start the inference process:
 python tacotron/inference.py
 ```
 
-Your synthezised files (and debug outputs) are dropped into the configured folder.
+Your synthesized files (and debug outputs) are dropped into the configured folder.
 
 ### Spectrogram Power
 
@@ -274,10 +296,10 @@ All contributions are warmly welcomed. Below are a few hints to the entry points
 Just open a pull request with your proposed changes.
 
 ### Entry Points
-* The model architecture is implemented in [tacotron/model.py](https://github.com/yweweler/speech-synthesis/master/tacotron/model.py).
-* The model architecture parameters are defined in [tacotron/params/model.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/model.py).
-* The train code is defined [tacotron/train.py](https://github.com/yweweler/speech-synthesis/master/tacotron/train.py).
-* Take a look at [datasets/blizzard_nancy.py](https://github.com/yweweler/speech-synthesis/master/datasets/blizzard_nancy.py) to see how a dataset loading helper has to implemented.
+* The model architecture is implemented in [tacotron/model.py](tacotron/model.py).
+* The model architecture parameters are defined in [tacotron/params/model.py](tacotron/params/model.py).
+* The train code is defined [tacotron/train.py](tacotron/train.py).
+* Take a look at [datasets/blizzard_nancy.py](datasets/blizzard_nancy.py) to see how a dataset loading helper has to implemented.
 
 ### Todo
 See [Issues](https://github.com/yweweler/speech-synthesis/issues)
@@ -295,4 +317,4 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-See [LICENSE.txt](https://github.com/yweweler/speech-synthesis/master/LICENSE.txt)
+See [LICENSE.txt](LICENSE.txt)
