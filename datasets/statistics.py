@@ -120,12 +120,18 @@ def collect_duration_statistics(dataset_name, path_listing):
     print("durations_min: {} sec.".format(durations_min))
     print("durations_max: {} sec.".format(durations_max))
 
+    from matplotlib import rc
+    rc('font', **{'family': 'serif',
+                  'serif': ['Computer Modern'],
+                  'size': 13})
+    rc('text', usetex=True)
+
     # Create a histogram of the individual file durations.
     fig = plt.figure(figsize=(1.5 * 14.0 / 2.54, 7.7 / 2.54), dpi=100)
-    plt.hist(durations, bins=100, normed=False, color="#E1D5E7")
+    plt.hist(durations, bins=100, normed=False, color="#6C8EBF")
     plt.grid(linestyle='dashed')
-    plt.xlim([0, 11])
-    plt.title('"{}" file duration distribution'.format(dataset_name))
+    plt.xlim([0, 21])
+    # plt.title('"{}" file duration distribution'.format(dataset_name))
     plt.xlabel("Duration (seconds)")
     plt.ylabel("Count")
     plt.show()
@@ -213,57 +219,40 @@ def plot_iterate_reconstruction_error(dataset_name, path_listing, n_iters):
     avg_durations = avg_durations[:75]
 
     x_iters = np.arange(1, len(mse_errors) + 1)
-    # _skip = 2
-    # x_iters = [1] + list(range(0, len(mse_errors)+1, _skip))[1:]
-    # mse_errors = [mse_errors[0]] + mse_errors[1::_skip]
-    # avg_durations = [avg_durations[0]] + avg_durations[1::_skip]
+
+    from matplotlib import rc
+    rc('font', **{'family': 'serif',
+                  'serif': ['Computer Modern'],
+                  'size': 13})
+    rc('text', usetex=True)
 
     # Create a plot of the MSE related to the number of reconstruction iterations.
-    fig = plt.figure(figsize=((1.5 * 14.0 / 2.54)/1.0, 7.7 / 2.54), dpi=100)
-    plt.plot(x_iters, mse_errors, color="#E1D5E7")#, marker="x")
+    # fig = plt.figure(figsize=((1.5 * 14.0 / 2.54)/1.0, 7.7 / 2.54), dpi=100)
+    fig = plt.figure(figsize=((14.0 / 2.54) / 1.35, 7.7 / 2.54), dpi=100)
+    plt.plot(x_iters, mse_errors, color="#B85450")#, marker="x")
     # plt.scatter(x_iters, mse_errors, color="#E1D5E7", marker="x")
     plt.grid(linestyle='dashed')
     plt.xlim([1, x_iters[-1]])
     plt.ylim([1e-3, 1.7])
-    plt.title('Griffin-Lim MSE progression')
+    # plt.title('Griffin-Lim MSE progression')
     plt.xlabel("Iteration")
-    plt.ylabel("MSE (dB^2)")
-    #plt.yscale('log')
+    plt.ylabel("MSE (dB$^2$)")
+    plt.yscale('log')
     plt.show()
 
     # DEBUG: Dump plot into a pdf file.
     fig.savefig("/tmp/griffin_lim_mse.pdf", bbox_inches='tight')
 
     # Create a plot of the number of reconstruction iterations related to execution time.
-    fig = plt.figure(figsize=((1.5 * 14.0 / 2.54)/1.0, 7.7 / 2.54), dpi=100)
-    plt.plot(x_iters, avg_durations, color="#E1D5E7")#, marker="x")
+    fig = plt.figure(figsize=((14.0 / 2.54) / 1.25, 7.7 / 2.54), dpi=100)
+    plt.plot(x_iters, avg_durations, color="#B85450")#, marker="x")
     plt.grid(linestyle='dashed')
     plt.xlim([1, x_iters[-1]])
     plt.ylim([0, 7])
-    plt.title('Griffin-Lim computation time')
+    # plt.title('Griffin-Lim computation time')
     plt.xlabel("Iteration")
     plt.ylabel("Duration (s)")
     plt.show()
 
     # DEBUG: Dump plot into a pdf file.
     fig.savefig("/tmp/griffin_lim_mse_durations.pdf", bbox_inches='tight')
-
-
-if __name__ == '__main__':
-    base_folder = '/tmp/TIMIT/'
-    listing_file = 'train_all.txt'
-
-    # Read all lines from the TIMIT file listing.
-    with open(base_folder + listing_file, 'r') as f:
-        lines = f.readlines()
-
-    # Extract only the wav file paths.
-    wav_paths = [base_folder + line.split(',')[0] for line in lines]
-
-    # Collect and print the decibel statistics for all the files.
-    print("Collecting decibel statistics for {} files ...".format(len(wav_paths)))
-    min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(wav_paths)
-    print("avg. min. linear magnitude (dB)", min_linear_db)  # -99.99 dB
-    print("avg. max. linear magnitude (dB)", max_linear_db)  # +20.08 dB
-    print("avg. min. mel magnitude (dB)", min_mel_db)  # -95.73 dB
-    print("avg. max. mel magnitude (dB)", max_mel_db)  # -07.74 dB

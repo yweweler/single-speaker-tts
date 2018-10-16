@@ -1,5 +1,4 @@
-tensorflow
-librosa
-numpy
-matplotlib
-tqdm
+tensorflow >= 1.8.0
+librosa    >= 0.6.1
+numpy      >= 1.15.0
+matplotlib >= 2.2.2

@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from datasets.blizzard_nancy import BlizzardNancyDatasetHelper
 from datasets.cmu_slt import CMUDatasetHelper
 from datasets.lj_speech import LJSpeechDatasetHelper
 from datasets.pavoque import PAVOQUEDatasetHelper
@@ -7,7 +8,7 @@ from datasets.pavoque import PAVOQUEDatasetHelper
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/tmp/datasets_tmpfs/cmu_us_slt_arctic',
+    dataset_folder='/thesis/datasets/cmu_us_slt_arctic',
 
     # Dataset load helper.
     dataset_loader=CMUDatasetHelper,

@@ -2,10 +2,19 @@ import librosa
 import numpy as np
 from librosa import display
 from matplotlib import pyplot as plt
+from matplotlib import ticker
 from matplotlib.ticker import ScalarFormatter
 
 
-def plot_spectrogram(spec_db, sampling_rate, hop_length, fmin, fmax, y_axis, title):
+def plot_spectrogram(spec_db,
+                     sampling_rate,
+                     hop_length,
+                     fmin,
+                     fmax,
+                     y_axis,
+                     title='',
+                     figsize=(1.5 * 14.0 / 2.54, 7.7 / 2.54),
+                     _formater=None):
     """
     Plots a spectrogram given a Short-time Fourier transform matrix.
 
@@ -43,17 +52,26 @@ def plot_spectrogram(spec_db, sampling_rate, hop_length, fmin, fmax, y_axis, tit
         title (str):
             Title of the plot.
     """
-    fig = plt.figure(figsize=(1.5 * 14.0 / 2.54, 7.7 / 2.54), dpi=100)
+    fig = plt.figure(figsize=figsize, dpi=100)
     librosa.display.specshow(spec_db,
+                             # x_coords=np.arange(0, 150) + 160,
                              sr=sampling_rate,
                              hop_length=hop_length,
                              fmin=fmin,
                              fmax=fmax,
                              y_axis=y_axis,
                              x_axis='time')
-    plt.title(title)
+    # plt.title(title)
+    plt.set_cmap('viridis')
     plt.colorbar(format='%+2.0f dB')
     plt.xlabel("Time (s)")
+
+    if _formater is not None:
+        ax = plt.gca()
+        plt.ylabel('kHz')
+        ax.yaxis.set_major_formatter(_formater)
+        ax.yaxis.set_minor_formatter(ticker.NullFormatter())
+
     plt.tight_layout()
     plt.show()
 
