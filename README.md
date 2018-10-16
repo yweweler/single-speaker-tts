@@ -32,9 +32,9 @@ The architecture is constructed from four main stages:
 1. Encoder
 2. Decoder
 3. Post-Processing
-4. Wavform synthesis
+4. Waveform synthesis
 
-The enoder takes written sentences and generates variable length embeddings for each sentence.
+The encoder takes written sentences and generates variable length embeddings for each sentence.
 The subsequent decoder decodes the variable length embedding into a Mel-spectrogram.
 With each decoding iteration the deocder predicts `r` spectrogram frames at once.
 The frames predicted with each iteration are concatenated to form the complete Mel-spectrogram.
@@ -55,13 +55,20 @@ Note however, that the local attention approach is somewhat basic and experiment
 
 #### Alignments
 
+The attention mechanism predicts an probability distribution over the the encoder hidden states 
+with each decoder step.
+Concatenating these leads to the actual alignments for the encoder and the decoder sequence.
+
+As an example take a look at the progress of the alignment predicted at different amounts of 
+training.
 ![Alignments](readme/images/alignments.png)
 
 ### CBHG
 
 The CBHG (1-D convolution bank + highway network + bidirectional GRU) module is adopted from the Tacotron architecture.
 It is used both in the encoder and the decoder.
-Take a look at the implementation for more details on how it works ([tacotron/layers.py](tacotron/layers.py:L448))
+Take a look at the implementation for more details on how it works ([tacotron/layers.py]
+(tacotron/layers.py#L448))
 
 ![CBHG](readme/images/cbhg.png)
 
@@ -80,17 +87,17 @@ Take a look at the implementation for more details on how it works ([tacotron/la
 
 On machines where Python 3 is not the default Python runtime, you should use ``pip3`` instead of ``pip``.
 
-```
-$ sudo apt-get install python3 python3-pip
+```bash
+sudo apt-get install python3 python3-pip
 ```
 
 
 ## Installation
 
-```
-$ git clone https://github.com/yweweler/speech-synthesis.git
-$ cd speech-synthesis
-$ sudo pip install -r requirements.txt
+```bash
+git clone https://github.com/yweweler/speech-synthesis.git
+cd speech-synthesis
+sudo pip install -r requirements.txt
 ```
 
 
@@ -102,7 +109,7 @@ Depending on how the loader does its job. the datasets can be stored in nearly a
 If you want to use a custom dataset, you curretnly have to write a custom loading helper.
 A few custom loaders for datasets exist already.
 
-```
+```bash
 datasets
 ├── blizzard_nancy.py
 ├── cmu_slt.py
@@ -116,7 +123,7 @@ Note that this loading procedure will change in the future, so that no custom lo
 
 Lets see how preparation is performed using the Blizzard Nancy ([Blizzard Challenge 2011](https://www.synsig.org/index.php/Blizzard_Challenge_2011)) dataset as an example.
 The prepared dataset the loader would be able to load looks like this.
-```
+```bash
 blizzard-nancy
 ├── listing.txt -> train.txt
 ├── train.txt
@@ -132,13 +139,13 @@ Audio files are contained in the `wav` folder
 
 The blizzard nancy loader loads transcriptions from a `txt` file were each line is of the form:
 
-```
+```bash
 <wav-filename-without-extension> <transcription>\r\n
 ```
 
 For each transcription the loader loads a 16 Bit WAVE audio file from the `wav` folder based on the filename.
-```
-$ file wav/APDC2-023-10.wav
+```bash
+file wav/APDC2-023-10.wav
 
 # wav/APDC2-023-10.wav: RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 16000 Hz
 ```
@@ -155,13 +162,12 @@ Currently these statistics have to be extracted before training or evaluation an
 
 To calculate the statistics run:
 
-```
-$ python tacotron/dataset_statistics.py
-
+```bash
+python tacotron/dataset_statistics.py
 ```
 
 Take the following example output:
-```
+```bash
 # Dataset: /exmaple-dataset
 # Loading dataset ...
 # Collecting decibel statistics for 243 files ...
@@ -180,8 +186,8 @@ Instead of calculating features on demand during training or evaluation, the cod
 
 To pre-calculate features run:
 
-```
-$ python tacotron/dataset_precalc_features.py
+```bash
+python tacotron/dataset_precalc_features.py
 ```
 
 The pre-computed features are stored as `.npz` files next to the actual audio files.
@@ -200,8 +206,8 @@ Configure the desired parameters for the model:
 3. Setup the training parameters in [tacotron/params/training.py](https://github.com/yweweler/speech-synthesis/master/tacotron/params/training.py)
 
 Start the training process:
-```
-$ python tacotron/training.py
+```bash
+python tacotron/training.py
 ```
 
 You can stop the training process any time by killing the training process using ``CTRL+C`` on the terminal for example.
@@ -221,8 +227,8 @@ Configure the desired evaluation parameters:
   3. **Optional**: Pre-calculate the features for the dataset.
 
 Start the evaluation process:
-```
-$ python tacotron/evaluate.py
+```bash
+python tacotron/evaluate.py
 ```
 
 If configured, the evaluation code will sequentially load all training checkpoints from a folder and evaluate each of them.
@@ -236,8 +242,8 @@ Configure the desired inference parameters:
 2. Place a file with all the sentences to synthezise at the location configured. This is supposed to be a simple text file with one sentence per line.
 
 Start the inference process:
-```
-$ python tacotron/inference.py
+```bash
+python tacotron/inference.py
 ```
 
 Your synthezised files (and debug outputs) are dropped into the configured folder.
