@@ -199,7 +199,7 @@ if __name__ == '__main__':
         'q': 28,
     }
 
-    dataset = LJSpeechDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/LJSpeech-1.1',
+    dataset = LJSpeechDatasetHelper(dataset_folder='/thesis/datasets/LJSpeech-1.1',
                                     char_dict=init_char_dict,
                                     fill_dict=True)
 

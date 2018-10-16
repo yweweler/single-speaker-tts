@@ -149,7 +149,7 @@ if __name__ == '__main__':
     }
 
     dataset = BlizzardNancyDatasetHelper(
-        dataset_folder='/home/yves-noel/documents/master/thesis/datasets/blizzard_nancy',
+        dataset_folder='/thesis/datasets/blizzard_nancy',
         char_dict=init_char_dict,
         fill_dict=False)
 

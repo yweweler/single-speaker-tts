@@ -146,7 +146,7 @@ if __name__ == '__main__':
         'v': 23, 'k': 24, 'b': 25, "'": 26, 'y': 27, 'j': 28, 'q': 29, 'x': 30, '-': 31, ';': 32
     }
 
-    dataset = CMUDatasetHelper(dataset_folder='/home/yves-noel/documents/master/thesis/datasets/cmu_us_slt_arctic',
+    dataset = CMUDatasetHelper(dataset_folder='/thesis/datasets/cmu_us_slt_arctic',
                                char_dict=init_char_dict,
                                fill_dict=False)
 
@@ -158,13 +158,5 @@ if __name__ == '__main__':
     # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
     #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
-    # Collect and print the decibel statistics for all the files.
-    # print("Collecting decibel statistics for {} files ...".format(len(paths)))
-    # min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
-    # print("avg. min. linear magnitude (dB)", min_linear_db)  # -99.94
-    # print("avg. max. linear magnitude (dB)", max_linear_db)  # 36.50
-    # print("avg. min. mel magnitude (dB)", min_mel_db)        # -92.22
-    # print("avg. max. mel magnitude (dB)", max_mel_db)        # 9.33
-
     # Collect and print the duration statistics for all the files.
-    collect_duration_statistics("CMU US SLT Arctic", paths)
+    # collect_duration_statistics("CMU US SLT Arctic", paths)

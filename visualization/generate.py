@@ -463,7 +463,7 @@ def plot_liner_mel_spec_comparasion():
     ms_win_len = 50.0
     ms_win_hop = 12.5
     n_fft = 1024
-    wav_path = '/home/yves-noel/documents/master/thesis/datasets/blizzard_nancy/wav/RURAL-02198.wav'
+    wav_path = '/thesis/datasets/blizzard_nancy/wav/RURAL-02198.wav'
 
     wav, sr = load_wav(wav_path)
     win_len = ms_to_samples(ms_win_len, sampling_rate=sr)

@@ -37,7 +37,7 @@ training_params = tf.contrib.training.HParams(
     allow_smaller_batches=False,
 
     # Checkpoint folder used for training.
-    checkpoint_dir='/tmp/tacotron/cmu/slt',
+    checkpoint_dir='/thesis/checkpoints/cmu/slt',
 
     # Run folder to load data from and save data in to the checkpoint folder.
     checkpoint_run='train',
