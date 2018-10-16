@@ -3,7 +3,7 @@ import pytest
 
 from datasets.lj_speech import LJSpeechDatasetHelper
 
-DATASET_PATH = '/home/yves-noel/downloads/LJSpeech-1.1'
+DATASET_PATH = '/thesis/datasets/LJSpeech-1.1'
 
 INIT_CHAR_DICT = vocabulary_dict = {
     'pad': 0,  # padding
