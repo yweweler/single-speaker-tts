@@ -14,7 +14,7 @@ if __name__ == '__main__':
     print("Collecting decibel statistics for {} files ...".format(len(paths)))
     min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
 
-    print("avg. max. mel magnitude (dB): mel_mag_ref_db = ", max_mel_db)
-    print("avg. min. mel magnitude (dB): mel_mag_max_db = ", min_mel_db)
-    print("avg. max. linear magnitude (dB): linear_ref_db = ", max_linear_db)
-    print("avg. min. linear magnitude (dB): linear_mag_max_db = ", min_linear_db)
+    print("mel_mag_ref_db = ", max_mel_db)
+    print("mel_mag_max_db = ", min_mel_db)
+    print("linear_ref_db = ", max_linear_db)
+    print("linear_mag_max_db = ", min_linear_db)
