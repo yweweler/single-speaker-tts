@@ -162,18 +162,5 @@ if __name__ == '__main__':
     # for p, s, l in zip(paths[:10], ids[:10], lens[:10]):
     #     print(p, np.fromstring(s, dtype=np.int32)[:10], l)
 
-    # Collect and print the decibel statistics for all the files.
-    # print("Collecting decibel statistics for {} files ...".format(len(paths)))
-    # min_linear_db, max_linear_db, min_mel_db, max_mel_db = collect_decibel_statistics(paths)
-    # print("avg. min. linear magnitude (dB)", min_linear_db)     # -99.99 dB
-    # print("avg. max. linear magnitude (dB)", max_linear_db)     # +36.50 dB
-    # print("avg. min. mel magnitude (dB)", min_mel_db)           # -99.87 dB
-    # print("avg. max. mel magnitude (dB)", max_mel_db)           # +09.55 dB
-
     # Collect and print the duration statistics for all the files.
     # collect_duration_statistics("Blizzard Nancy", paths)
-
-    # Collect and print the reconstruction MSE statistics.
-    # plot_iterate_reconstruction_error("Blizzard Nancy", paths, 100)
-
-    # print(dataset._statistics)
