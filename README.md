@@ -1,10 +1,11 @@
 # Single-Speaker End-to-End Neural Text-to-Speech Synthesis
 
 <!-- [![Build status](https://circleci.com/gh/)](https://circleci.com/gh/) -->
-[![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/yweweler/speech-synthesis/master/LICENSE.txt)
+[![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/yweweler/single-speaker-tts/blob/master/LICENSE)
 
 This is a single-speaker neural text-to-speech (TTS) system capable of training in a end-to-end fashion.
-It is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) archicture and able to train based on unaligned text-audio pairs.
+It is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) architecture and able to train
+ based on unaligned text-audio pairs.
 The implementation is based on [Tensorflow](https://tensorflow.org/).
 
 ![Header](readme/images/header.png)
@@ -25,7 +26,7 @@ The implementation is based on [Tensorflow](https://tensorflow.org/).
 ## Architecture
 
 
-The architecture is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) archicture and takes unaligned text-audio pairs as input.
+The architecture is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) architecture and takes unaligned text-audio pairs as input.
 Based on entered text it produces linear-scale frequency magnitude spectrograms and an alignment 
 between text and audio.
 
@@ -66,6 +67,7 @@ Concatenating these leads to the actual alignments for the encoder and the decod
 
 As an example take a look at the progress of the alignment predicted after different amounts of 
 training.
+
 ![Alignments](readme/images/alignments.png)
 
 ### CBHG
@@ -89,8 +91,8 @@ Like in Tacotron, these embeddings are then further processed by a `pre-net` and
 The decoder decodes `r` subsequent Mel-spectrogram frames with each decoding iteration.
 The `r-1`'th frame is used as the input for the next iteration.
 The hidden states and the first input are initialized using zero vectors.
-Currently decoding is stopped after a set number of iterations (see [tacotron/params/model.py]
-(tacotron/params/model.py#L105)).
+Currently decoding is stopped after a set number of iterations, see [tacotron/params/model.py]
+(tacotron/params/model.py#L105).
 However, the code is generally capable of stopping if a certain condition is met during decoding.
 Just take a look at [tacotron/helpers.py](tacotron/helpers.py#L134).
 
@@ -280,7 +282,8 @@ Your synthesized files (and debug outputs) are dropped into the configured folde
 
 ### Spectrogram Power
 
-The magnitudes of the produced linear spectrogram are rised to a power (default is `1.3`) to reduce perceived noise.
+The magnitudes of the produced linear spectrogram are raised to a power (default is `1.3`) to 
+reduce perceived noise.
 
 ![spectrogram_raised_to_a_power](readme/images/power.png)
 
@@ -292,7 +295,8 @@ Usually a value greater `1.0` and bellow `1.6` works best (depending on the amou
 
 ## Pre-Trained Models
 
-Currently I do not plan to deliver pre-trained models as their distribution might interfer with the licenses of the datasets used.
+Currently I do not plan to deliver pre-trained models as their distribution might interfere with 
+the licenses of the datasets used.
 If you are interested in pre-trained models please feel free to message me.
 
 If you are willing to provide pre-trained checkpoints for the model on your own, feel free to open a pull-request.
@@ -310,7 +314,7 @@ Just open a pull request with your proposed changes.
 * Take a look at [datasets/blizzard_nancy.py](datasets/blizzard_nancy.py) to see how a dataset loading helper has to implemented.
 
 ### Todo
-See [Issues](https://github.com/yweweler/speech-synthesis/issues)
+See [Issues](https://github.com/yweweler/single-speaker-tts/issues)
 
 
 ## License
@@ -325,4 +329,4 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-See [LICENSE.txt](LICENSE.txt)
+See [LICENSE.txt](https://github.com/yweweler/single-speaker-tts/blob/master/LICENSE)
