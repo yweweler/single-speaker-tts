@@ -210,7 +210,7 @@ Take the following example output:
 Each loader derived from `DatasetHelper` has to define these variables in order to be able to 
 normalize the audio files.
 
-### <a name="some-text">My header with a lot of words, and punctuation</a>
+### <a name="feature-pre-calc">Feature Pre-Calculation</a>
 
 Instead of calculating features on demand during training or evaluation, the code also allows to pre-calculate and store them on disk.
 
@@ -233,7 +233,7 @@ Configure the desired parameters for the model:
   1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
   2. Calculate dataset signal statistics.
   3. Set the signal statistics in the dataset loader used.
-  4. **Optional**: Pre-calculate the features for the dataset. [123](#some-text)
+  4. **Optional**: [Pre-calculate the features](#feature-pre-calc) for the architecture.
 - Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
 
 Start the training process:
