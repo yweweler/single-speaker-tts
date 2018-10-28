@@ -72,8 +72,10 @@ def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
     print('Loaded {} dataset sentences.'.format(len(sentences)))
 
     # Pre-cache all audio features.
-    feature_cache = DatasetHelper.cache_precalculated_features(wav_paths)
-    print('Cached {} waveforms.'.format(len(wav_paths)))
+    feature_cache = None
+    if training_params.cache_preprocessed:
+        feature_cache =DatasetHelper.cache_precalculated_features(wav_paths)
+        print('Cached {} waveforms.'.format(len(wav_paths)))
 
     # Get the total number of samples in the dataset.
     n_samples = len(sentence_lengths)
