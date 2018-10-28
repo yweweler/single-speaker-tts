@@ -184,7 +184,6 @@ def evaluate(model, checkpoint_file):
 
     saver = tf.train.Saver()
 
-    
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph(), flush_secs=10)
     summary_op = model.summary()
 

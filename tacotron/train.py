@@ -9,8 +9,8 @@ from tacotron.params.model import model_params
 from tacotron.params.training import training_params
 
 # Hack to force tensorflow to run on the CPU.
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
