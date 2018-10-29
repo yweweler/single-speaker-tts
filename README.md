@@ -27,7 +27,7 @@ The implementation is based on [Tensorflow](https://tensorflow.org/).
 
 
 The architecture is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) architecture and takes unaligned text-audio pairs as input.
-Based on entered text it produces linear-scale frequency magnitude spectrograms and an alignment
+Based on entered text it produces linear-scale frequency magnitude spectrograms and an alignment 
 between text and audio.
 
 The architecture is constructed from four main stages:
@@ -49,23 +49,23 @@ Finally, the Griffin-Lim algorithm is used for the synthesis stage to retrieve t
 ![Overview](readme/images/architecture.png)
 
 ### Attention
-Instead of the [Bahdanau](https://arxiv.org/abs/1409.0473v7) style attention mechanism Tacotron
+Instead of the [Bahdanau](https://arxiv.org/abs/1409.0473v7) style attention mechanism Tacotron 
 uses, the architecture employs [Luong](https://arxiv.org/abs/1508.04025v5) style attention.
 We implemented the global as well as local attention approaches as described by Luong.
 Note however, that the local attention approach is somewhat basic and experimental.
 
-As the encoder CBHG is bidirectional the concatenated forward and backward hidden states are fed
+As the encoder CBHG is bidirectional the concatenated forward and backward hidden states are fed 
 to the attention mechanism.
 
 ![Attention](readme/images/attention.png)
 
 #### Alignments
 
-The attention mechanism predicts an probability distribution over the the encoder hidden states
+The attention mechanism predicts an probability distribution over the the encoder hidden states 
 with each decoder step.
 Concatenating these leads to the actual alignments for the encoder and the decoder sequence.
 
-As an example take a look at the progress of the alignment predicted after different amounts of
+As an example take a look at the progress of the alignment predicted after different amounts of 
 training.
 
 ![Alignments](readme/images/alignments.png)
@@ -74,7 +74,7 @@ training.
 
 The CBHG (1-D convolution bank + highway network + bidirectional GRU) module is adopted from the Tacotron architecture.
 It is used both in the encoder and the post-processing.
-Take a look at the implementation for more details on how it works
+Take a look at the implementation for more details on how it works 
 [tacotron/layers.py](tacotron/layers.py#L448).
 
 ![CBHG](readme/images/cbhg.png)
@@ -91,13 +91,13 @@ Like in Tacotron, these embeddings are then further processed by a `pre-net` and
 The decoder decodes `r` subsequent Mel-spectrogram frames with each decoding iteration.
 The `r-1`'th frame is used as the input for the next iteration.
 The hidden states and the first input are initialized using zero vectors.
-Currently decoding is stopped after a set number of iterations, see
+Currently decoding is stopped after a set number of iterations, see 
 [tacotron/params/model.py](tacotron/params/model.py#L108).
 However, the code is generally capable of stopping if a certain condition is met during decoding.
 Just take a look at [tacotron/helpers.py](tacotron/helpers.py#L134).
 
 Most of the models trained during development used `r = 5`.
-Note that using reduction factors of `8` and greater lead to an massive decrease in the attention
+Note that using reduction factors of `8` and greater lead to an massive decrease in the attention 
 alignments robustness.
 
 ![Decoder](readme/images/decoder.png)
@@ -224,7 +224,7 @@ Take the following example output:
 # linear_mag_max_db = -99.9965083885114
 ```
 
-Each loader derived from `DatasetHelper` has to define these variables in order to be able to
+Each loader derived from `DatasetHelper` has to define these variables in order to be able to 
 normalize the audio files.
 
 ### <a name="feature-pre-calc">Feature Pre-Calculation</a>
