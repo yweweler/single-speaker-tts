@@ -63,7 +63,7 @@ sudo pip3 install virtualenv
 
 ```bash
 # Create a virtual environment using python3.
-virtualenv <my-venv-name> -p /usr/bin/python3
+virtualenv <my-venv-name> -p python3
 
 # Activate the virtual environment.
 source <my-env-name>/bin/activate
@@ -73,7 +73,7 @@ git clone https://github.com/yweweler/single-speaker-tts.git
 
 # Install the requirements.
 cd single-speaker-tts
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 # Set up the PYTHONPATH environment variable to include the project.
 export PWD=$(pwd)
@@ -86,86 +86,92 @@ export PYTHONPATH=$PYTHONPATH:$PWD/tacotron:$PWD
 Datasets are loaded using dataset loaders.
 Currently each dataset requires a custom dataset loader to be written.
 Depending on how the loader does its job the datasets can be stored in nearly any form and file-format.
-If you want to use a custom dataset, you currently have to write a custom loading helper.
-A few custom loaders for datasets exist already.
+If you want to use a custom dataset you have to write a custom loading helper.
+However, a few custom loaders for datasets exist already.
 
+See: [datasets/](datasets/)
 ```bash
-datasets
+datasets/
 ├── blizzard_nancy.py
 ├── cmu_slt.py
 ├── lj_speech.py
 ...
 ```
 
-Note that this loading procedure will change in the future, so that no custom loader code will be required anymore.
-
----
-
-Lets see how preparation is performed using the Blizzard Nancy ([Blizzard Challenge 2011](https://www.synsig.org/index.php/Blizzard_Challenge_2011)) dataset as an example.
-The prepared dataset the loader would be able to load looks like this.
-```bash
-blizzard-nancy
-├── listing.txt -> train.txt
-├── train.txt
-├── eval.txt
-└── wav
-    ├── APDC2-023-10.wav
-    ├── APDC2-024-04.wav
-    └── ...
-```
-The `train.txt` and the `eval.txt` files contain filenames and corresponding transcriptions.
-The `listing.txt` file is a symlink pointing to `train.txt` or `eval.txt` depending on whether we want to train or to evaluate.
-Audio files are contained in the `wav` folder
-
-The blizzard nancy loader loads transcriptions from a `txt` file were each line is of the form:
-
-```bash
-<wav-filename-without-extension> <transcription>\r\n
-```
-
-For each transcription the loader loads a 16 Bit WAVE audio file from the `wav` folder based on the filename.
-```bash
-file wav/APDC2-023-10.wav
-
-# wav/APDC2-023-10.wav: RIFF (little-endian) data, WAVE audio, Microsoft PCM, 16 bit, mono 16000 Hz
-```
-It expects all file to have a 16 kHz sampling rate.
-
-The `listing.txt` symlink has to be created manually depending on whether you are currently doing training or evaluation with the model.
-instead of using symlinks you can alternatively just copy and rename the transcription file as needed.
-The code is not optimal when it comes to dataset loading (pull requests are welcome though).
+Please take a look at [LJSPEECH.md](LJSPEECH.md) for a full step by step tutorial on how to train
+ a model on the LJ Speech v1.1 dataset.
 
 ### <a name="toc-preparation-signal-stats">Signal Statistics</a>
 
-The spectrograms used are scaled linearly to fit the range `(0.0, 1.0)` using global minimum and maximum dB values calculated on the training corpus.
-Currently these statistics have to be extracted before training or evaluation and the values have to be inserted into the dataset lader manually.
+In order to create a model the exact character vocabulary and certain signal boundaries have to 
+be calculated for normalization.
+The model uses linear scale as well as Mel scale spectrograms for synthesis.
+All spectrograms are scaled linearly to fit the range `(0.0, 1.0)` using global minimum and 
+maximum dB values calculated on the training corpus.
 
-To calculate the statistics run:
+First we have to configure the dataset in [tacotron/params/dataset.py](tacotron/params/dataset.py).
+Enter the path to the dataset (`dataset_folder`) and set the `dataset_loader` variable to te 
+loader required for your dataset.
 
+Then calculate the vocabulary and the signal boundaries using:
 ```bash
 python tacotron/dataset_statistics.py
+
+Dataset: /my-dataset-path/LJSpeech-1.1
+Loading dataset ...
+Dataset vocabulary:
+vocabulary_dict={
+    'pad': 0,
+    'eos': 1,
+    'p': 2,
+    'r': 3,
+    'i': 4,
+    'n': 5,
+    't': 6,
+    'g': 7,
+    ' ': 8,
+    'h': 9,
+    'e': 10,
+    'o': 11,
+    'l': 12,
+    'y': 13,
+    's': 14,
+    'w': 15,
+    'c': 16,
+    'a': 17,
+    'd': 18,
+    'f': 19,
+    'm': 20,
+    'x': 21,
+    'b': 22,
+    'v': 23,
+    'u': 24,
+    'k': 25,
+    'j': 26,
+    'z': 27,
+    'q': 28,
+},
+vocabulary_size=29
+
+
+Collecting decibel statistics for 13100 files ...
+mel_mag_ref_db =  6.026512479977281
+mel_mag_max_db =  -99.89414986824931
+linear_ref_db =  35.65918850818663
+linear_mag_max_db =  -100.0
 ```
 
-Take the following example output:
-```bash
-# Dataset: /exmaple-dataset
-# Loading dataset ...
-# Collecting decibel statistics for 243 files ...
-# mel_mag_ref_db = 9.554028542124794
-# mel_mag_max_db = -99.8760138753366
-# linear_ref_db = 36.5140945917124
-# linear_mag_max_db = -99.9965083885114
-```
-
+Now complement `vocabulary_dict` and `vocabulary_size` in [tacotron/params/dataset.py](tacotron/params/dataset.py) and transfer the decibel boundaries (`mel_mag_ref_db`, 
+`mel_mag_max_db`, `linear_ref_db`, `linear_mag_max_db`) to your loader.
 Each loader derived from `DatasetHelper` has to define these variables in order to be able to 
 normalize the audio files.
 
 ### <a name="toc-preparation-feature-pre-calc">Feature Pre-Calculation</a>
 
-Instead of calculating features on demand during training or evaluation, the code also allows to pre-calculate and store them on disk.
+Instead of calculating features on demand during training or evaluation, the code also allows to 
+pre-calculate features and store them on disk.
 
 To pre-calculate features run:
-
 ```bash
 python tacotron/dataset_precalc_features.py
 ```
@@ -179,19 +185,15 @@ And in case you have enough RAM consider also setting `cache_preprocessed=True` 
 features in RAM.
 
 
-
 ## <a name="toc-training">Training</a>
 
 Configure the desired parameters for the model:
 
-- Setup the dataset path and the loader in [tacotron/params/dataset.py](tacotron/params/model.py)
-- Prepare the training dataset:
-  1. [Calculate dataset signal statistics.](#toc-preparation-signal-stats)
-  2. Set the vocabulary and the vocabulary size in [tacotron/params/dataset.py](tacotron/params/model.py).
-  3. Set the signal decibel statistics in the dataset loader.
-- Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
+- Setup the dataset path and the loader in [tacotron/params/dataset.py](tacotron/params/model.py).
+- [Calculate and set the signal statistics.](#toc-preparation-signal-stats)
+- Setup the architecture parameters in [tacotron/params/architecture.py](tacotron/params/architecture.py).
 - **Optional**: [Pre-calculate the features for the architecture.](#toc-preparation-feature-pre-calc)
-- Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
+- Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py).
 
 Start the training process:
 ```bash
@@ -208,17 +210,24 @@ Keep this in mind in case you are planning to restore checkpoints later on diffe
 For a in depth step by step example with the LJ Speech dataset take a look at [LJSPEECH.md](LJSPEECH.md).
 
 
+### Training Progress
+
+Progress of model can be observed through Tensorboard.
+```bash
+tensorboard --logdir <path-to-your-checkpoint-folder>
+```
+
+Now open `localhost:6006` with your browser to enter Tensorboard.
+
+
 ## <a name="toc-evaluation">Evaluation</a>
 
 Configure the desired evaluation parameters:
 
-- Setup the dataset path and the loader in [tacotron/params/dataset.py](tacotron/params/model.py)
-- Prepare the training dataset:
-  1. [Calculate dataset signal statistics.](#toc-preparation-signal-stats)
-  2. Set the vocabulary and the vocabulary size in [tacotron/params/dataset.py](tacotron/params/model.py).
-  3. Set the signal decibel statistics in the dataset loader.
+- Setup the dataset path and the loader in [tacotron/params/dataset.py](tacotron/params/model.py).
+- [Calculate and set the signal statistics.](#toc-preparation-signal-stats)
 - **Optional**: [Pre-calculate the features for the architecture.](#toc-preparation-feature-pre-calc)
-- Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py)
+- Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py).
 
 Start the evaluation process:
 ```bash
@@ -232,8 +241,9 @@ If configured, the evaluation code will sequentially load all training checkpoin
 
 Configure the desired inference parameters:
 
-1. Setup the inference parameters in [tacotron/params/inference.py](tacotron/params/inference.py)
-2. Place a file with all the sentences to synthesize at the location configured. This is supposed to be a simple text file with one sentence per line.
+1. Setup the inference parameters in [tacotron/params/inference.py](tacotron/params/inference.py).
+2. Place a file with all the sentences to synthesize at the location configured. (A simple text 
+file with one sentence per line)
 
 Start the inference process:
 ```bash
@@ -251,7 +261,7 @@ reduce perceived noise.
 
 This parameter is not learned by a model. It has to be determined for each dataset manually.
 There is no direct rule on what value is best.
-However, note that higher values tend to surpress the higher frequencies of the produced voice. This leads to a voice is muffled.
+However, note that higher values tend to suppress the higher frequencies of the produced voice. This leads to a voice is muffled.
 Usually a value greater `1.0` and bellow `1.6` works best (depending on the amount of noise perceived).
 
 
