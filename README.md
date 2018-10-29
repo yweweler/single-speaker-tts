@@ -110,7 +110,7 @@ All spectrograms are scaled linearly to fit the range `(0.0, 1.0)` using global 
 maximum dB values calculated on the training corpus.
 
 First we have to configure the dataset in [tacotron/params/dataset.py](tacotron/params/dataset.py).
-Enter the path to the dataset (`dataset_folder`) and set the `dataset_loader` variable to te 
+Enter the path to the dataset `dataset_folder` and set the `dataset_loader` variable to te 
 loader required for your dataset.
 
 Then calculate the vocabulary and the signal boundaries using:
