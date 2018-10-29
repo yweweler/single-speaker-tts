@@ -27,7 +27,7 @@ The implementation is based on [Tensorflow](https://tensorflow.org/).
 
 
 The architecture is inspired by the [Tacotron](https://arxiv.org/abs/1703.10135v2) architecture and takes unaligned text-audio pairs as input.
-Based on entered text it produces linear-scale frequency magnitude spectrograms and an alignment 
+Based on entered text it produces linear-scale frequency magnitude spectrograms and an alignment
 between text and audio.
 
 The architecture is constructed from four main stages:
@@ -49,23 +49,23 @@ Finally, the Griffin-Lim algorithm is used for the synthesis stage to retrieve t
 ![Overview](readme/images/architecture.png)
 
 ### Attention
-Instead of the [Bahdanau](https://arxiv.org/abs/1409.0473v7) style attention mechanism Tacotron 
+Instead of the [Bahdanau](https://arxiv.org/abs/1409.0473v7) style attention mechanism Tacotron
 uses, the architecture employs [Luong](https://arxiv.org/abs/1508.04025v5) style attention.
 We implemented the global as well as local attention approaches as described by Luong.
 Note however, that the local attention approach is somewhat basic and experimental.
 
-As the encoder CBHG is bidirectional the concatenated forward and backward hidden states are fed 
+As the encoder CBHG is bidirectional the concatenated forward and backward hidden states are fed
 to the attention mechanism.
 
 ![Attention](readme/images/attention.png)
 
 #### Alignments
 
-The attention mechanism predicts an probability distribution over the the encoder hidden states 
+The attention mechanism predicts an probability distribution over the the encoder hidden states
 with each decoder step.
 Concatenating these leads to the actual alignments for the encoder and the decoder sequence.
 
-As an example take a look at the progress of the alignment predicted after different amounts of 
+As an example take a look at the progress of the alignment predicted after different amounts of
 training.
 
 ![Alignments](readme/images/alignments.png)
@@ -74,7 +74,7 @@ training.
 
 The CBHG (1-D convolution bank + highway network + bidirectional GRU) module is adopted from the Tacotron architecture.
 It is used both in the encoder and the post-processing.
-Take a look at the implementation for more details on how it works 
+Take a look at the implementation for more details on how it works
 [tacotron/layers.py](tacotron/layers.py#L448).
 
 ![CBHG](readme/images/cbhg.png)
@@ -91,13 +91,13 @@ Like in Tacotron, these embeddings are then further processed by a `pre-net` and
 The decoder decodes `r` subsequent Mel-spectrogram frames with each decoding iteration.
 The `r-1`'th frame is used as the input for the next iteration.
 The hidden states and the first input are initialized using zero vectors.
-Currently decoding is stopped after a set number of iterations, see 
+Currently decoding is stopped after a set number of iterations, see
 [tacotron/params/model.py](tacotron/params/model.py#L108).
 However, the code is generally capable of stopping if a certain condition is met during decoding.
 Just take a look at [tacotron/helpers.py](tacotron/helpers.py#L134).
 
 Most of the models trained during development used `r = 5`.
-Note that using reduction factors of `8` and greater lead to an massive decrease in the attention 
+Note that using reduction factors of `8` and greater lead to an massive decrease in the attention
 alignments robustness.
 
 ![Decoder](readme/images/decoder.png)
@@ -118,16 +118,33 @@ Finally, a simple dense layer is used to produce the linear-scale spectrogram.
 On machines where Python 3 is not the default Python runtime, you should use ``pip3`` instead of ``pip``.
 
 ```bash
+# Make sure you have installed python3.
 sudo apt-get install python3 python3-pip
+
+# Make sure you have installed the python3 `virtualenv` module.
+sudo pip3 install virtualenv
 ```
 
 
 ## Installation
 
 ```bash
-git clone https://github.com/yweweler/speech-synthesis.git
-cd speech-synthesis
-sudo pip install -r requirements.txt
+# Create a virtual environment using python3.
+virtualenv <my-venv-name> -p /usr/bin/python3
+
+# Activate the virtual environment.
+source <my-env-name>/bin/activate
+
+# Clone the repository.
+git clone https://github.com/yweweler/single-speaker-tts.git
+
+# Install the requirements.
+cd single-speaker-tts
+pip install -r requirements.txt
+
+# Set up the PYTHONPATH environment variable to include the project.
+export PWD=$(pwd)
+export PYTHONPATH=$PYTHONPATH:$PWD/tacotron:$PWD
 ```
 
 
@@ -135,7 +152,7 @@ sudo pip install -r requirements.txt
 
 Datasets are loaded using dataset loaders.
 Currently each dataset requires a custom dataset loader to be written.
-Depending on how the loader does its job. the datasets can be stored in nearly any form and file-format.
+Depending on how the loader does its job the datasets can be stored in nearly any form and file-format.
 If you want to use a custom dataset, you currently have to write a custom loading helper.
 A few custom loaders for datasets exist already.
 
@@ -185,7 +202,7 @@ The `listing.txt` symlink has to be created manually depending on whether you ar
 instead of using symlinks you can alternatively just copy and rename the transcription file as needed.
 The code is not optimal when it comes to dataset loading (pull requests are welcome though).
 
-### Signal statistics
+### <a name="dataset-signal-stats">Signal Statistics</a>
 
 The spectrograms used are scaled linearly to fit the range `(0.0, 1.0)` using global minimum and maximum dB values calculated on the training corpus.
 Currently these statistics have to be extracted before training or evaluation and the values have to be inserted into the dataset lader manually.
@@ -207,10 +224,10 @@ Take the following example output:
 # linear_mag_max_db = -99.9965083885114
 ```
 
-Each loader derived from `DatasetHelper` has to define these variables in order to be able to 
+Each loader derived from `DatasetHelper` has to define these variables in order to be able to
 normalize the audio files.
 
-### Feature Pre-Calculation
+### <a name="feature-pre-calc">Feature Pre-Calculation</a>
 
 Instead of calculating features on demand during training or evaluation, the code also allows to pre-calculate and store them on disk.
 
@@ -223,40 +240,51 @@ python tacotron/dataset_precalc_features.py
 The pre-computed features are stored as `.npz` files next to the actual audio files.
 Note that independent from pre-calculation, features can also be cached in RAM to accelerate throughput.
 
+If you then want to use these features during training, just set `load_preprocessed=True` in 
+[tacotron/params/training.py](tacotron/params/training.py).
+And in case you have enough RAM consider also setting `cache_preprocessed=True` to cache all 
+features in RAM.
+
 
 ## Training
 
 Configure the desired parameters for the model:
 
-- Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
+- Setup the dataset path and the loader in [tacotron/params/dataset.py](tacotron/params/model.py)
 - Prepare the training dataset:
-  1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
-  2. Calculate dataset signal statistics.
-  3. Set the signal statistics in the dataset loader used.
-  4. **Optional**: Pre-calculate the features for the dataset.
+  1. [Calculate dataset signal statistics.](#dataset-signal-stats)
+  2. Set the vocabulary and the vocabulary size in [tacotron/params/dataset.py](tacotron/params/model.py).
+  3. Set the signal decibel statistics in the dataset loader.
+- Setup the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py)
+- **Optional**: [Pre-calculate the features for the architecture.](#feature-pre-calc)
 - Setup the training parameters in [tacotron/params/training.py](tacotron/params/training.py)
 
 Start the training process:
 ```bash
-python tacotron/training.py
+python tacotron/train.py
 ```
 
 You can stop the training process any time by killing the training process using ``CTRL+C`` on the terminal for example.
 
 Note that you can *resume training* at the last saved checkpoint by just starting the training process again.
 The training code will then look for the most recent checkpoint in the checkpoint folder configured.
+However, keep in mind that the architecture is configured to use CUDNN per default.
+Keep this in mind in case you are planning to restore checkpoints later on different machine.
+
+For a in depth step by step example with the LJ Speech dataset take a look at [LJSPEECH.md](LJSPEECH.md).
 
 
 ## Evaluation
 
 Configure the desired evaluation parameters:
 
+- Setup the dataset path and the loader in [tacotron/params/dataset.py](tacotron/params/model.py)
+- Prepare the training dataset:
+  1. [Calculate dataset signal statistics.](#dataset-signal-stats)
+  2. Set the vocabulary and the vocabulary size in [tacotron/params/dataset.py](tacotron/params/model.py).
+  3. Set the signal decibel statistics in the dataset loader.
+- **Optional**: [Pre-calculate the features for the architecture.](#feature-pre-calc)
 - Setup the evaluation parameters in [tacotron/params/evaluation.py](tacotron/params/evaluation.py)
-- Prepare the evaluation dataset:
-  1. Setup the dataset parameters in [tacotron/params/dataset.py](tacotron/params/model.py)
-  2. Calculate dataset signal statistics.
-  3. Set the signal statistics in the dataset loader used.
-  4. **Optional**: Pre-calculate the features for the dataset.
 
 Start the evaluation process:
 ```bash
@@ -271,7 +299,7 @@ If configured, the evaluation code will sequentially load all training checkpoin
 Configure the desired inference parameters:
 
 1. Setup the inference parameters in [tacotron/params/inference.py](tacotron/params/inference.py)
-2. Place a file with all the sentences to synthezise at the location configured. This is supposed to be a simple text file with one sentence per line.
+2. Place a file with all the sentences to synthesize at the location configured. This is supposed to be a simple text file with one sentence per line.
 
 Start the inference process:
 ```bash
@@ -282,7 +310,7 @@ Your synthesized files (and debug outputs) are dropped into the configured folde
 
 ### Spectrogram Power
 
-The magnitudes of the produced linear spectrogram are raised to a power (default is `1.3`) to 
+The magnitudes of the produced linear spectrogram are raised to a power (default is `1.3`) to
 reduce perceived noise.
 
 ![spectrogram_raised_to_a_power](readme/images/power.png)
@@ -295,7 +323,7 @@ Usually a value greater `1.0` and bellow `1.6` works best (depending on the amou
 
 ## Pre-Trained Models
 
-Currently I do not plan to deliver pre-trained models as their distribution might interfere with 
+Currently I do not plan to deliver pre-trained models as their distribution might interfere with
 the licenses of the datasets used.
 If you are interested in pre-trained models please feel free to message me.
 
