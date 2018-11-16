@@ -7,12 +7,12 @@ from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
+from tacotron.input.providers import train_input_fn
+import sys
 
 # Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
-tf.logging.set_verbosity(tf.logging.INFO)
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 
 def batched_placeholders(dataset, max_samples, n_epochs, batch_size):
@@ -308,21 +308,55 @@ def start_session(loss_op, summary_op):
     return session
 
 
-if __name__ == '__main__':
+# def main(_):
+#     # Create a dataset loader.
+#     train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
+#                                                   char_dict=dataset_params.vocabulary_dict,
+#                                                   fill_dict=False)
+#
+#     # Create batched placeholders from the dataset.
+#     with tf.device('/cpu:0'):
+#         placeholders, n_samples = batched_placeholders(dataset=train_dataset,
+#                                                        max_samples=training_params.max_samples,
+#                                                        n_epochs=training_params.n_epochs,
+#                                                        batch_size=training_params.batch_size)
+#
+#     # Create the Tacotron model.
+#     tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
+#                               training_summary=training_params.write_summary)
+#
+#     # Train the model.
+#     train(tacotron_model)
+
+
+def main(_):
     # Create a dataset loader.
     train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                                   char_dict=dataset_params.vocabulary_dict,
                                                   fill_dict=False)
 
-    # Create batched placeholders from the dataset.
-    with tf.device('/cpu:0'):
-        placeholders, n_samples = batched_placeholders(dataset=train_dataset,
-                                                   max_samples=training_params.max_samples,
-                                                   n_epochs=training_params.n_epochs,
-                                                   batch_size=training_params.batch_size)
+    # tf.enable_eager_execution()
 
-    # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN, training_summary=training_params.write_summary)
+    next_element = train_input_fn(
+        dataset_loader=train_dataset,
+        max_samples=training_params.max_samples
+    )
+    print('next_element', next_element)
 
-    # Train the model.
-    train(tacotron_model)
+    batch_iter = next_element.get_next()
+
+    with tf.Session() as session:
+        for i in range(5):
+            batch = session.run(batch_iter)
+            print('Dataset batch elements:', len(batch))
+            for elem_id, e in enumerate(batch):
+                print('batch.elem[{}]: type={}, shape={}, data={}'
+                      .format(elem_id, type(e), e.shape, None))
+            print('======================')
+
+    print('The End.')
+
+
+if __name__ == '__main__':
+    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.app.run()
