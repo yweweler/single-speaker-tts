@@ -14,6 +14,7 @@ from tacotron.layers import cbhg, pre_net, wrapped_dense
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.params.inference import inference_params
+from tacotron.params.training import training_params
 from tacotron.wrappers import PrenetWrapper
 
 
@@ -26,7 +27,7 @@ class Tacotron:
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, inputs=None, training_summary=True):
+    def __init__(self, training_summary=True):
         """
         Creates an instance of the Tacotron model.
 
@@ -448,11 +449,46 @@ class Tacotron:
         self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
         if self.is_training(mode):
+
+            # NOTE: The global step has to be created before the optimizer is created.
+            global_step = tf.train.get_global_step()
+
+            with tf.name_scope('optimizer'):
+                # Let the learning rate decay exponentially.
+                learning_rate = tf.train.exponential_decay(
+                    learning_rate=training_params.lr,
+                    global_step=global_step,
+                    decay_steps=training_params.lr_decay_steps,
+                    decay_rate=training_params.lr_decay_rate,
+                    staircase=training_params.lr_staircase)
+
+                # Force decrease to stop at a minimal learning rate.
+                learning_rate = tf.maximum(learning_rate, training_params.minimum_lr)
+
+                # Add a learning rate summary.
+                tf.summary.scalar('lr', learning_rate)
+
+                # Create a optimizer.
+                optimizer = tf.train.AdamOptimizer(learning_rate)
+
+                # Apply gradient clipping by global norm.
+                gradients, variables = zip(*optimizer.compute_gradients(self.loss_op))
+                clipped_gradients, _ = tf.clip_by_global_norm(gradients,
+                                                              training_params.gradient_clip_norm)
+
+                # Add dependency on UPDATE_OPS; otherwise batch normalization won't work correctly.
+                # See: https://github.com/tensorflow/tensorflow/issues/1122
+                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(update_ops):
+                    train_op = optimizer.apply_gradients(
+                        zip(clipped_gradients, variables),
+                        global_step
+                    )
+
             return tf.estimator.EstimatorSpec(
                 mode=mode,
                 loss=self.loss_op,
-                # TODO: Move the entire gradient clipping/batch-norm and optimizer into here.
-                train_op=self.train_op
+                train_op=train_op
             )
         elif mode == tf.estimator.ModeKeys.EVAL:
             eval_metrics_ops = {
