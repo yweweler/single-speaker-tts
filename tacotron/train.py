@@ -147,8 +147,7 @@ def main(_):
 
     # Create a dataset iterator for training.
     dataset_iter = train_input_fn(
-        dataset_loader=train_dataset,
-        max_samples=training_params.max_samples
+        dataset_loader=train_dataset
     )
 
     # Create placeholders from the dataset iterator.

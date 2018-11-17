@@ -4,11 +4,12 @@ from tensorflow.python.data.experimental.ops import grouping
 from tacotron.input.helpers import derive_bucket_boundaries
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
+from tacotron.params.evaluation import evaluation_params
 
 
-def train_input_fn(dataset_loader, max_samples):
+def train_input_fn(dataset_loader):
     return _input_fn(dataset_loader=dataset_loader,
-                     max_samples=max_samples,
+                     max_samples=training_params.max_samples,
                      batch_size=training_params.batch_size,
                      n_epochs=training_params.n_epochs,
                      n_threads=training_params.n_threads,
@@ -16,6 +17,21 @@ def train_input_fn(dataset_loader, max_samples):
                      shuffle_samples=training_params.shuffle_samples,
                      n_buckets=training_params.n_buckets,
                      n_pre_calc_batches=training_params.n_pre_calc_batches,
+                     model_n_mels=model_params.n_mels,
+                     model_reduction=model_params.reduction,
+                     model_n_fft=model_params.n_fft)
+
+
+def eval_input_fn(dataset_loader):
+    return _input_fn(dataset_loader=dataset_loader,
+                     max_samples=evaluation_params.max_samples,
+                     batch_size=evaluation_params.batch_size,
+                     n_epochs=1,
+                     n_threads=evaluation_params.n_threads,
+                     cache_preprocessed=False,
+                     shuffle_samples=evaluation_params.shuffle_samples,
+                     n_buckets=evaluation_params.n_buckets,
+                     n_pre_calc_batches=evaluation_params.n_pre_calc_batches,
                      model_n_mels=model_params.n_mels,
                      model_reduction=model_params.reduction,
                      model_n_fft=model_params.n_fft)
