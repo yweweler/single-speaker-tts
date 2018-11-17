@@ -131,6 +131,18 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
         # Create an iterator over the dataset.
         iterator = dataset.make_one_shot_iterator()
 
-        return iterator
+        # Get features from the iterator.
+        ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames =\
+            iterator.get_next()
+
+        features = {
+            'ph_sentences': ph_sentences,
+            'ph_sentence_lengths': ph_sentence_lengths,
+            'ph_mel_specs': ph_mel_specs,
+            'ph_lin_specs': ph_lin_specs,
+            'ph_time_frames': ph_time_frames
+        }
+
+        return features, None
 
     return __input_fn

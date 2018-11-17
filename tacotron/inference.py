@@ -51,7 +51,7 @@ def inference(model, sentences):
 
     # Prepare the summary writer.
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
-    summary_op = model.summary()
+    summary_op = model.summary(mode=tf.estimator.ModeKeys.PREDICT)
 
     # Create the inference session.
     session = start_session()

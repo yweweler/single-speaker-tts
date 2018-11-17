@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from tacotron.input.functions import train_input_fn
 from tacotron.input.helpers import placeholders_from_dataset_iter
-from tacotron.model import Tacotron, Mode
+from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
 from tacotron.params.training import training_params
 
@@ -57,7 +57,8 @@ def train(model):
             optimize = optimizer.apply_gradients(zip(clipped_gradients, variables), global_step)
 
     # Create the training session.
-    session = start_session(loss_op=loss_op, summary_op=model.summary())
+    session = start_session(loss_op=loss_op,
+                            summary_op=model.summary(mode=tf.estimator.ModeKeys.TRAIN))
 
     # Start training.
     while not session.should_stop():
@@ -69,6 +70,7 @@ def train(model):
     session.close()
 
 
+# TODO: Port the session functionality to the estimator.
 def start_session(loss_op, summary_op):
     """
     Creates a session that can be used for training.
@@ -146,19 +148,45 @@ def main(_):
                                                   fill_dict=False)
 
     # Create a dataset iterator for training.
-    dataset_iter = train_input_fn(
+    input_fn = train_input_fn(
         dataset_loader=train_dataset
     )
 
-    # Create placeholders from the dataset iterator.
-    placeholders = placeholders_from_dataset_iter(dataset_iter)
+    checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)
 
-    # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
-                              training_summary=training_params.write_summary)
+    session_config = tf.ConfigProto(
+        log_device_placement=True,
+        gpu_options=tf.GPUOptions(
+            allow_growth=True
+        )
+    )
+
+    config = tf.estimator.RunConfig(
+        model_dir=checkpoint_dir,
+        session_config=session_config
+    )
+
+    model = Tacotron(training_summary=training_params.write_summary)
+    model_fn = model.model_fn
+
+    estimator = tf.estimator.Estimator(
+        model_fn=model_fn,
+        model_dir=checkpoint_dir,
+        config=config
+    )
 
     # Train the model.
-    train(tacotron_model)
+    estimator.train(input_fn=input_fn, hooks=None, steps=None, max_steps=None)
+
+    # # Create placeholders from the dataset iterator.
+    # placeholders = placeholders_from_dataset_iter(dataset_iter)
+    #
+    # # Create the Tacotron model.
+    # tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
+    #                           training_summary=training_params.write_summary)
+    #
+    # # Train the model.
+    # train(tacotron_model)
 
 
 if __name__ == '__main__':

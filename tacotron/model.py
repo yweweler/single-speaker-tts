@@ -17,12 +17,6 @@ from tacotron.params.inference import inference_params
 from tacotron.wrappers import PrenetWrapper
 
 
-class Mode:
-    TRAIN = 'train'
-    EVAL = 'eval'
-    PREDICT = 'predict'
-
-
 class Tacotron:
     """
     Implementation of the Tacotron architecture as described in
@@ -32,7 +26,7 @@ class Tacotron:
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, inputs, mode, training_summary=True):
+    def __init__(self, inputs=None, training_summary=True):
         """
         Creates an instance of the Tacotron model.
 
@@ -64,11 +58,6 @@ class Tacotron:
                         Batched number of frames in the spectrogram's excluding the padding
                         frames. The shape is shape=(B), with B being the batch size.
 
-            mode (Mode):
-                Flag that controls the application of special architecture behaviour that only
-                has to be applied during training or evaluation.
-                Permitted modes are `TRAIN`, `EVAL` and `PREDICT`.
-
             training_summary (boolean):
                 Flag controlling if summaries should be written during training.
                 The only exceptions to this are attention summary plots and the train losses.
@@ -77,11 +66,11 @@ class Tacotron:
         self.hparams = model_params
 
         # Get the placeholders for the input data.
-        self.inp_sentences = inputs['ph_sentences']
-        self.seq_lengths = inputs['ph_sentence_length']
-        self.inp_mel_spec = inputs['ph_mel_specs']
-        self.inp_linear_spec = inputs['ph_lin_specs']
-        self.inp_time_steps = inputs['ph_time_frames']
+        self.inp_sentences = None
+        self.seq_lengths = None
+        self.inp_mel_spec = None
+        self.inp_linear_spec = None
+        self.inp_time_steps = None
 
         # Merged loss function.
         self.loss_op = None
@@ -102,33 +91,36 @@ class Tacotron:
         # Stacked attention alignment history.
         self.alignment_history = None
 
-        self._mode = mode
         self._training_summary = training_summary
 
-        # Construct the network.
-        self.model()
-
-    def is_training(self):
+    def is_training(self, mode):
         """
         Returns if the model is in training mode or not.
 
+        Arguments:
+            mode (tf.estimator.ModeKeys):
+                Current mode for the graph to build. Valid modes are TRAIN, EVAL, PREDICT.
+
         Returns:
             boolean:
-                True if Mode == TRAIN, False otherwise.
+                True if `mode` == TRAIN, False otherwise.
         """
-        if self._mode == Mode.TRAIN:
+        if mode == tf.estimator.ModeKeys.TRAIN:
             return True
         else:
             return False
 
-    def encoder(self, inputs):
+    def encoder(self, inputs, mode):
         """
         Implementation of the CBHG based Tacotron encoder network.
 
         Arguments:
             inputs (tf.Tensor):
-            The shape is expected to be shape=(B, T_sent, ) with B being the batch size, T_sent
-            being the number of tokens in the sentence including the EOS token.
+                The shape is expected to be shape=(B, T_sent, ) with B being the batch size, T_sent
+                being the number of tokens in the sentence including the EOS token.
+
+            mode (tf.estimator.ModeKeys):
+                Current mode for the graph to build. Valid modes are TRAIN, EVAL, PREDICT.
 
         Returns:
          (outputs, output_states):
@@ -156,7 +148,7 @@ class Tacotron:
             # shape => (B, T_sent, 128)
             network = pre_net(inputs=embedded_char_ids,
                               layers=self.hparams.encoder.pre_net_layers,
-                              training=self.is_training())
+                              training=self.is_training(mode))
 
             # network.shape => (B, T_sent, 2 * n_gru_units)
             # state.shape   => (2, n_gru_units)
@@ -167,12 +159,12 @@ class Tacotron:
                                   n_highway_units=self.hparams.encoder.n_highway_units,
                                   projections=self.hparams.encoder.projections,
                                   n_gru_units=self.hparams.encoder.n_gru_units,
-                                  training=self.is_training(),
+                                  training=self.is_training(mode),
                                   force_cudnn=model_params.force_cudnn)
 
         return network, state
 
-    def decoder(self, memory):
+    def decoder(self, memory, mode):
         """
         Implementation of the Tacotron decoder network.
 
@@ -182,13 +174,16 @@ class Tacotron:
                 expected to be shape=(B, T_sent, 2 * encoder.n_gru_units) with B being the batch
                 size, T_sent being the number of tokens in the sentence including the EOS token.
 
+            mode (tf.estimator.ModeKeys):
+                Current mode for the graph to build. Valid modes are TRAIN, EVAL, PREDICT.
+
         Returns:
             tf.tensor:
                 Generated reduced Mel. spectrogram. The shape is
                 shape=(B, T_spec // r, n_mels * r), with B being the batch size, T_spec being
                 the number of frames in the spectrogram and r being the reduction factor.
         """
-        with tf.variable_scope('decoder2'):
+        with tf.variable_scope('decoder'):
             # Query the current batch size.
             batch_size = tf.shape(memory)[0]
 
@@ -231,7 +226,7 @@ class Tacotron:
             # Apply the pre-net to each decoder input as show in [1], figure 1.
             attention_cell = PrenetWrapper(attention_cell,
                                            self.hparams.decoder.pre_net_layers,
-                                           self.is_training())
+                                           self.is_training(mode))
 
             # Select the attention wrapper needed for the current attention mechanism.
             if model_params.attention.mechanism == LocalLuongAttention:
@@ -281,7 +276,7 @@ class Tacotron:
                 dtype=tf.float32
             )
 
-            if self.is_training():
+            if self.is_training(mode):
                 # During training we do not stop decoding manually. The decoder automatically
                 # decodes as many time steps as are contained in the ground truth data.
                 maximum_iterations = None
@@ -296,7 +291,7 @@ class Tacotron:
                     input_size=self.hparams.decoder.target_size,
                     reduction_factor=self.hparams.reduction,
                 )
-            elif self._mode == Mode.EVAL:
+            elif mode == tf.estimator.ModeKeys.EVAL:
                 # During evaluation we stop decoding after the same number of frames the ground
                 # truth has.
                 maximum_iterations = tf.shape(self.inp_mel_spec)[1]
@@ -333,7 +328,7 @@ class Tacotron:
         # shape => (B, T_spec // r, n_mels * r)
         return decoder_outputs.rnn_output
 
-    def post_process(self, inputs):
+    def post_process(self, inputs, mode):
         """
         Apply the CBHG based post-processing network to the spectrogram.
 
@@ -341,6 +336,9 @@ class Tacotron:
             inputs (tf.Tensor):
                 The shape is expected to be shape=(B, T, n_mels) with B being the
                 batch size and T being the number of time frames.
+
+            mode (tf.estimator.ModeKeys):
+                Current mode for the graph to build. Valid modes are TRAIN, EVAL, PREDICT.
 
         Returns:
             tf.Tensor:
@@ -357,24 +355,32 @@ class Tacotron:
                                   n_highway_units=self.hparams.post.n_highway_units,
                                   projections=self.hparams.post.projections,
                                   n_gru_units=self.hparams.post.n_gru_units,
-                                  training=self.is_training(),
+                                  training=self.is_training(mode),
                                   force_cudnn=model_params.force_cudnn)
 
         return network
 
-    def model(self):
+    # TODO: Return `EstimatorSpec`.
+    def model_fn(self, features, labels, mode, params):
         """
         Builds the Tacotron model.
         """
+        # Get the placeholders for the input data.
+        self.inp_sentences = features['ph_sentences']
+        self.seq_lengths = features['ph_sentence_lengths']
+        self.inp_mel_spec = features['ph_mel_specs']
+        self.inp_linear_spec = features['ph_lin_specs']
+        self.inp_time_steps = features['ph_time_frames']
+
         # inp_sentences.shape = (B, T_sent, ?)
         batch_size = tf.shape(self.inp_sentences)[0]
 
         # network.shape => (B, T_sent, 256)
         # encoder_state.shape => (B, 2, 256)
-        encoder_outputs, encoder_state = self.encoder(self.inp_sentences)
+        encoder_outputs, encoder_state = self.encoder(self.inp_sentences, mode=mode)
 
         # shape => (B, T_spec // r, n_mels * r)
-        decoder_outputs = self.decoder(memory=encoder_outputs)
+        decoder_outputs = self.decoder(memory=encoder_outputs, mode=mode)
 
         # Remember the reduced decoder output for the summaries.
         self.reduced_output_mel_spec = decoder_outputs
@@ -388,7 +394,7 @@ class Tacotron:
         outputs = decoder_outputs
         if self.hparams.apply_post_processing:
             # shape => (B, T_spec, 256)
-            outputs = self.post_process(outputs)
+            outputs = self.post_process(outputs, mode=mode)
 
         # shape => (B, T_spec, (1 + n_fft // 2))
         outputs = wrapped_dense(inputs=outputs,
@@ -410,7 +416,7 @@ class Tacotron:
         output_mel_spec = self.output_mel_spec
         output_linear_spec = self.output_linear_spec
 
-        if self.is_training() and self._training_summary is True:
+        if self.is_training(mode) and self._training_summary is True:
             # ======================================================================================
             mel_spec_img = tf.expand_dims(
                 tf.reshape(inp_mel_spec[0], (1, -1, self.hparams.n_mels)), -1)
@@ -441,6 +447,30 @@ class Tacotron:
         # Combine the decoder and the post-processing losses.
         self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
+        if self.is_training(mode):
+            return tf.estimator.EstimatorSpec(
+                mode=mode,
+                loss=self.loss_op,
+                # TODO: Move the entire gradient clipping/batch-norm and optimizer into here.
+                train_op=self.train_op
+            )
+        elif mode == tf.estimator.ModeKeys.EVAL:
+            eval_metrics_ops = {
+                'decoder_loss': tf.metrics.mean(self.loss_op_decoder,
+                                                name='decoder_loss'),
+                'post_processing_loss': tf.metrics.mean(self.loss_op_post_processing,
+                                                        name='post_processing_loss')
+            }
+            return tf.estimator.EstimatorSpec(
+                mode=mode,
+                loss=self.loss_op,
+                eval_metric_ops=eval_metrics_ops
+            )
+        elif mode == tf.estimator.ModeKeys.PREDICT:
+            raise NotImplementedError('Prediction is not implemented.')
+        else:
+            raise Exception('Encountered an unknown mode.')
+
     def get_loss_op(self):
         """
         Get the models loss function.
@@ -450,9 +480,13 @@ class Tacotron:
         """
         return self.loss_op
 
-    def summary(self):
+    def summary(self, mode):
         """
         Create all summary operations for the model.
+
+        Arguments:
+            mode (tf.estimator.ModeKeys):
+                Current mode for the graph to build. Valid modes are TRAIN, EVAL, PREDICT.
 
         Returns:
             tf.Tensor:
@@ -461,7 +495,7 @@ class Tacotron:
         """
 
         # Training only ============================================================================
-        if self._mode == Mode.TRAIN:
+        if mode == tf.estimator.ModeKeys.TRAIN:
             with tf.name_scope('loss'):
                 tf.summary.scalar('loss', self.loss_op)
                 tf.summary.scalar('loss_decoder', self.loss_op_decoder)
@@ -493,7 +527,7 @@ class Tacotron:
                     tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # Evaluation only ==========================================================================
-        if self._mode == Mode.EVAL and False:
+        if mode == tf.estimator.ModeKeys.EVAL and False:
             with tf.name_scope('inference_reconstruction'):
                 win_len = ms_to_samples(self.hparams.win_len, self.hparams.sampling_rate)
                 win_hop = ms_to_samples(self.hparams.win_hop, self.hparams.sampling_rate)
@@ -520,7 +554,7 @@ class Tacotron:
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         # Training and evaluation ==================================================================
-        if (self._mode == Mode.TRAIN and self._training_summary is True) or self._mode == Mode.EVAL:
+        if (mode == tf.estimator.ModeKeys.TRAIN and self._training_summary is True) or mode == tf.estimator.ModeKeys.EVAL:
             with tf.name_scope('normalized_outputs'):
                 # Convert the mel spectrogram into an image that can be displayed.
                 # => shape=(1, T_spec, n_mels, 1)
@@ -552,7 +586,7 @@ class Tacotron:
         alignments = tf.transpose(self.alignment_history, [1, 2, 0])
 
         # Inference only ===========================================================================
-        if self._mode == Mode.PREDICT:
+        if mode == tf.estimator.ModeKeys.PREDICT:
             def __dump_attention_alignments(align):
                 # Create the target file path.
                 out_path = os.path.join(inference_params.synthesis_dir, 'alignments.npz')
@@ -638,8 +672,8 @@ class Tacotron:
         ph_lin_specs = tf.placeholder(dtype=tf.float32,
                                       name='ph_lin_specs')
 
-        ph_sentence_length = tf.placeholder(dtype=tf.int32,
-                                            name='ph_sentence_length')
+        ph_sentence_lengths = tf.placeholder(dtype=tf.int32,
+                                             name='ph_sentence_lengths')
 
         ph_time_frames = tf.placeholder(dtype=tf.int32,
                                         name='ph_time_frames')
@@ -647,7 +681,7 @@ class Tacotron:
         # Collect all created placeholder in a dictionary.
         placeholder_dict = {
             'ph_sentences': ph_sentences,
-            'ph_sentence_length': ph_sentence_length,
+            'ph_sentence_lengths': ph_sentence_lengths,
             'ph_mel_specs': ph_mel_specs,
             'ph_lin_specs': ph_lin_specs,
             'ph_time_frames': ph_time_frames
