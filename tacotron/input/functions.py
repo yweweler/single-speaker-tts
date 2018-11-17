@@ -77,6 +77,8 @@ def _input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_threads, cach
     # Pre-process dataset elements.
     dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
 
+    # TODO: Implement dataset input pipeline statistics (`tf.data.experimental.StatsAggregator`).
+
     # Feature caching.
     if cache_preprocessed:
         # Cache dataset elements (including the calculated features) in RAM.

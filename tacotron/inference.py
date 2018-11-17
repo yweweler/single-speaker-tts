@@ -1,12 +1,9 @@
 import os
 
-import numpy as np
 import tensorflow as tf
-from multiprocessing import Pool as ThreadPool
 
-from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
 from audio.io import save_wav
-from audio.synthesis import spectrogram_to_wav
+from tacotron.input.helpers import py_pre_process_sentences, py_post_process_spectrograms
 from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
 from tacotron.params.inference import inference_params
@@ -14,17 +11,9 @@ from tacotron.params.model import model_params
 
 # Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 tf.logging.set_verbosity(tf.logging.INFO)
-
-
-def pad_sentence(_sentence, _max_len):
-    pad_len = _max_len - len(_sentence)
-    pad_token = dataset_params.vocabulary_dict['pad']
-    _sentence = np.append(_sentence, [pad_token] * pad_len)
-
-    return _sentence
 
 
 def inference(model, sentences):
@@ -62,7 +51,7 @@ def inference(model, sentences):
 
     # Prepare the summary writer.
     summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
-    summary_op = tacotron_model.summary()
+    summary_op = model.summary()
 
     # Create the inference session.
     session = start_session()
@@ -89,20 +78,9 @@ def inference(model, sentences):
     inference_summary.ParseFromString(summary)
     summary_writer.add_summary(inference_summary)
 
-    # Apply Griffin-Lim to all spectrogram's to get the waveforms.
-    normalized = list()
-    for spectrogram in spectrograms:
-        print('Reverse spectrogram normalization ...', spectrogram.shape)
-        linear_mag_db = inv_normalize_decibel(spectrogram.T,
-                                              dataset_params.dataset_loader.mel_mag_ref_db,
-                                              dataset_params.dataset_loader.mel_mag_max_db)
-
-        linear_mag = decibel_to_magnitude(linear_mag_db)
-        normalized.append(linear_mag)
-
     session.close()
 
-    return normalized
+    return spectrograms
 
 
 def start_session():
@@ -127,7 +105,7 @@ def start_session():
     return session
 
 
-if __name__ == '__main__':
+def main(_):
     # Before we start doing anything we check if the required target folder actually exists.
     if not os.path.isdir(inference_params.synthesis_dir):
         raise NotADirectoryError('The specified synthesis target folder does not exist.')
@@ -145,15 +123,7 @@ if __name__ == '__main__':
 
     print("{} sentences were loaded for inference.".format(len(raw_sentences)))
 
-    # Pre-process sentence and convert it into ids.
-    id_sequences, sequence_lengths = dataset.process_sentences(raw_sentences)
-
-    # Get the first sentence.
-    sentences = [np.fromstring(id_sequence, dtype=np.int32) for id_sequence in id_sequences]
-
-    # Pad sentence to the same length in order to be able to batch them in a single tensor.
-    max_length = max(sequence_lengths)
-    sentences = [pad_sentence(sentence, max_length) for sentence in sentences]
+    sentences = py_pre_process_sentences(raw_sentences, dataset)
 
     # Create a batch with only one entry.
     # sentence = np.array([sentences[0]], dtype=np.int32)
@@ -167,25 +137,7 @@ if __name__ == '__main__':
     # generate linear scale magnitude spectrograms.
     specs = inference(tacotron_model, sentences)
 
-    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
-    win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
-    n_fft = model_params.n_fft
-
-    def synthesize(linear_mag):
-        linear_mag = np.power(linear_mag, model_params.magnitude_power)
-
-        print('Spectrogram inversion ...')
-        return spectrogram_to_wav(linear_mag,
-                                  win_len,
-                                  win_hop,
-                                  n_fft,
-                                  model_params.reconstruction_iterations)
-
-    # Synthesize waveforms from the spectrograms.
-    pool = ThreadPool(inference_params.n_synthesis_threads)
-    wavs = pool.map(synthesize, specs)
-    pool.close()
-    pool.join()
+    wavs = py_post_process_spectrograms(specs)
 
     # Write all generated waveforms to disk.
     for i, (sentence, wav) in enumerate(zip(raw_sentences, wavs)):
@@ -198,3 +150,8 @@ if __name__ == '__main__':
         # Write the wav to disk.
         save_wav(save_path, wav, model_params.sampling_rate, True)
         print('Saved: "{}"'.format(save_path))
+
+
+if __name__ == '__main__':
+    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.app.run()

@@ -1,11 +1,87 @@
+from multiprocessing.pool import ThreadPool
+
 import numpy as np
-import tensorflow as tf
-from datasets.dataset_helper import DatasetHelper
+
+from audio.conversion import inv_normalize_decibel, decibel_to_magnitude, ms_to_samples
+from audio.synthesis import spectrogram_to_wav
 from tacotron.params.dataset import dataset_params
+from tacotron.params.inference import inference_params
 from tacotron.params.model import model_params
-from tacotron.params.training import training_params
-from tensorflow.python.data.experimental.ops import grouping
-import sys
+
+
+def __py_pad_sentence(_sentence, _max_len):
+    pad_len = _max_len - len(_sentence)
+    pad_token = dataset_params.vocabulary_dict['pad']
+    _sentence = np.append(_sentence, [pad_token] * pad_len)
+
+    return _sentence
+
+
+def py_pre_process_sentences(_sentences, dataset):
+    # Pre-process sentence and convert it into ids.
+    id_sequences, sequence_lengths = dataset.process_sentences(_sentences)
+
+    # Get the first sentence.
+    sentences = [np.fromstring(id_sequence, dtype=np.int32) for id_sequence in id_sequences]
+
+    # Pad sentence to the same length in order to be able to batch them in a single tensor.
+    max_length = max(sequence_lengths)
+    sentences = np.array([__py_pad_sentence(sentence, max_length) for sentence in sentences])
+
+    print('sentences', sentences)
+    print('sentences.shape', sentences.shape)
+
+    return sentences
+
+
+def py_post_process_spectrograms(_spectrograms):
+    # Apply Griffin-Lim to all spectrogram's to get the waveforms.
+    normalized = list()
+    for spectrogram in _spectrograms:
+        print('Reverse spectrogram normalization ...', spectrogram.shape)
+        linear_mag_db = inv_normalize_decibel(spectrogram.T,
+                                              dataset_params.dataset_loader.mel_mag_ref_db,
+                                              dataset_params.dataset_loader.mel_mag_max_db)
+
+        linear_mag = decibel_to_magnitude(linear_mag_db)
+        normalized.append(linear_mag)
+
+    specs = normalized
+
+    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
+    win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
+    n_fft = model_params.n_fft
+
+    def synthesize(linear_mag):
+        linear_mag = np.squeeze(linear_mag, -1)
+        linear_mag = np.power(linear_mag, model_params.magnitude_power)
+
+        print('Spectrogram inversion ...')
+        return spectrogram_to_wav(linear_mag,
+                                  win_len,
+                                  win_hop,
+                                  n_fft,
+                                  model_params.reconstruction_iterations)
+
+    # Synthesize waveforms from the spectrograms.
+    pool = ThreadPool(inference_params.n_synthesis_threads)
+    wavs = pool.map(synthesize, specs)
+    pool.close()
+    pool.join()
+
+    # # Write all generated waveforms to disk.
+    # for i, (sentence, wav) in enumerate(zip(raw_sentences, wavs)):
+    #     # Append ".wav" to the sentence line number to get the filename.
+    #     file_name = '{}.wav'.format(i + 1)
+    #
+    #     # Generate the full path under which to save the wav.
+    #     save_path = os.path.join(inference_params.synthesis_dir, file_name)
+    #
+    #     # Write the wav to disk.
+    #     # save_wav(save_path, wav, model_params.sampling_rate, True)
+    #     print('Saved: "{}"'.format(save_path))
+
+    return wavs
 
 
 def derive_bucket_boundaries(element_lengths, n_buckets):
