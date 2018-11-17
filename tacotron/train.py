@@ -7,7 +7,7 @@ from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
-from tacotron.input.providers import train_input_fn
+from tacotron.input.functions import train_input_fn
 import sys
 
 # Hack to force tensorflow to run on the CPU.
@@ -308,53 +308,53 @@ def start_session(loss_op, summary_op):
     return session
 
 
-# def main(_):
-#     # Create a dataset loader.
-#     train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
-#                                                   char_dict=dataset_params.vocabulary_dict,
-#                                                   fill_dict=False)
-#
-#     # Create batched placeholders from the dataset.
-#     with tf.device('/cpu:0'):
-#         placeholders, n_samples = batched_placeholders(dataset=train_dataset,
-#                                                        max_samples=training_params.max_samples,
-#                                                        n_epochs=training_params.n_epochs,
-#                                                        batch_size=training_params.batch_size)
-#
-#     # Create the Tacotron model.
-#     tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
-#                               training_summary=training_params.write_summary)
-#
-#     # Train the model.
-#     train(tacotron_model)
-
-
 def main(_):
     # Create a dataset loader.
     train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                                   char_dict=dataset_params.vocabulary_dict,
                                                   fill_dict=False)
 
-    # tf.enable_eager_execution()
+    # Create batched placeholders from the dataset.
+    with tf.device('/cpu:0'):
+        placeholders, n_samples = batched_placeholders(dataset=train_dataset,
+                                                       max_samples=training_params.max_samples,
+                                                       n_epochs=training_params.n_epochs,
+                                                       batch_size=training_params.batch_size)
 
-    next_element = train_input_fn(
-        dataset_loader=train_dataset,
-        max_samples=training_params.max_samples
-    )
-    print('next_element', next_element)
+    # Create the Tacotron model.
+    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
+                              training_summary=training_params.write_summary)
 
-    batch_iter = next_element.get_next()
+    # Train the model.
+    train(tacotron_model)
 
-    with tf.Session() as session:
-        for i in range(5):
-            batch = session.run(batch_iter)
-            print('Dataset batch elements:', len(batch))
-            for elem_id, e in enumerate(batch):
-                print('batch.elem[{}]: type={}, shape={}, data={}'
-                      .format(elem_id, type(e), e.shape, None))
-            print('======================')
 
-    print('The End.')
+# def main(_):
+#     # Create a dataset loader.
+#     train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
+#                                                   char_dict=dataset_params.vocabulary_dict,
+#                                                   fill_dict=False)
+#
+#     # tf.enable_eager_execution()
+#
+#     next_element = train_input_fn(
+#         dataset_loader=train_dataset,
+#         max_samples=training_params.max_samples
+#     )
+#     print('next_element', next_element)
+#
+#     batch_iter = next_element.get_next()
+#
+#     with tf.Session() as session:
+#         for i in range(5):
+#             batch = session.run(batch_iter)
+#             print('Dataset batch elements:', len(batch))
+#             for elem_id, e in enumerate(batch):
+#                 print('batch.elem[{}]: type={}, shape={}, data={}'
+#                       .format(elem_id, type(e), e.shape, None))
+#             print('======================')
+#
+#     print('The End.')
 
 
 if __name__ == '__main__':
