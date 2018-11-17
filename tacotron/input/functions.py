@@ -1,23 +1,29 @@
-import numpy as np
 import tensorflow as tf
-from datasets.dataset_helper import DatasetHelper
-from tacotron.params.dataset import dataset_params
+from tensorflow.python.data.experimental.ops import grouping
+
+from tacotron.input.helpers import derive_bucket_boundaries
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
-from tensorflow.python.data.experimental.ops import grouping
-import sys
-from tacotron.input.helpers import derive_bucket_boundaries
 
 
 def train_input_fn(dataset_loader, max_samples):
-    print('entered train_input_fn')
-    return _input_fn(dataset_loader, max_samples, n_epochs=training_params.n_epochs)
+    return _input_fn(dataset_loader=dataset_loader,
+                     max_samples=max_samples,
+                     batch_size=training_params.batch_size,
+                     n_epochs=training_params.n_epochs,
+                     n_threads=training_params.n_threads,
+                     cache_preprocessed=training_params.cache_preprocessed,
+                     shuffle_samples=training_params.shuffle_samples,
+                     n_buckets=training_params.n_buckets,
+                     n_pre_calc_batches=training_params.n_pre_calc_batches,
+                     model_n_mels=model_params.n_mels,
+                     model_reduction=model_params.reduction,
+                     model_n_fft=model_params.n_fft)
 
 
-# TODO: Refactor to make the function more general so train/eval can use it (maybe even predict).
-def _input_fn(dataset_loader, max_samples, n_epochs):
-    print('entered _input_fn')
-
+def _input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_threads, cache_preprocessed,
+              shuffle_samples, n_buckets, n_pre_calc_batches, model_n_mels, model_reduction,
+              model_n_fft):
     # Load all sentences and the corresponding audio file paths.
     sentences, sentence_lengths, wav_paths = dataset_loader.load(max_samples=max_samples)
     print('Loaded {} dataset sentences.'.format(len(sentences)))
@@ -32,8 +38,8 @@ def _input_fn(dataset_loader, max_samples, n_epochs):
                                         [tf.float32, tf.float32])
 
         # The shape of the returned values from py_func seems to get lost for some reason.
-        mel_spec.set_shape((None, model_params.n_mels * model_params.reduction))
-        lin_spec.set_shape((None, (1 + model_params.n_fft // 2) * model_params.reduction))
+        mel_spec.set_shape((None, model_n_mels * model_reduction))
+        lin_spec.set_shape((None, (1 + model_n_fft // 2) * model_reduction))
 
         # print_op = tf.print("sentence_length:", sentence_length, output_stream=sys.stdout)
         # with tf.control_dependencies([print_op]):
@@ -51,20 +57,42 @@ def _input_fn(dataset_loader, max_samples, n_epochs):
         )
         return processed_tensors
 
-    dataset = dataset.map(__element_pre_process_fn)
-    dataset = dataset.cache()
+    # TODO: Implement loading of pre-calculated features.
+    # Pre-process dataset elements.
+    dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
+
+    # Feature caching.
+    if cache_preprocessed:
+        # Cache dataset elements (including the calculated features) in RAM.
+        dataset = dataset.cache()
+
+    # Repeat epochs and shuffle.
+    if shuffle_samples:
+        # TODO: Rework the hyper-params to enable setting this manually.
+        # buffer_size: the maximum number elements that will be buffered when pre-fetching.
+        buffer_size = batch_size * n_threads
+
+        # Repeat dataset for the requested number of epochs and shuffle the cache with each epoch.
+        dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size, n_epochs))
+    else:
+        # Repeat dataset for the requested number of epochs without shuffle.
+        dataset = dataset.repeat(n_epochs)
 
     def __element_length_fn(sentence, sentence_length, mel_spec, lin_spec, n_time_frames):
         del sentence
         del mel_spec
         del lin_spec
         del n_time_frames
+
         return sentence_length
 
-    bucket_boundaries = derive_bucket_boundaries(sentence_lengths, training_params.n_buckets)
-    bucket_batch_sizes = [training_params.batch_size] * (len(bucket_boundaries) + 1)
+    # Derive the bucket boundaries based on the distribution of all sequence lengths in the dataset.
+    bucket_boundaries = derive_bucket_boundaries(sentence_lengths, n_buckets)
 
-    print('Starting bucket collection...')
+    # Use the same batch_size for all buckets.
+    bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
+
+    # TODO: Implement `allow_smaller_batches`.
     # TODO: Open a PR to enable bucket_by_sequence_length to provide full batches only.
     dataset = dataset.apply(
         # Bucket dataset elements based on sequence_length.
@@ -77,22 +105,10 @@ def _input_fn(dataset_loader, max_samples, n_epochs):
         )
     )
 
-    # TODO: Add new flags to the hyper-params.
-    # print('Prefetch...')
-    # dataset = dataset.prefetch(5)
-    dataset = dataset.repeat(n_epochs)
+    # Prefetch batches.
+    dataset = dataset.prefetch(n_pre_calc_batches)
 
+    # Create an iterator over the dataset.
     iterator = dataset.make_one_shot_iterator()
+
     return iterator
-    # ds_sentences, ds_sentence_lengths, ds_mel_specs, ds_lin_specs, ds_n_time_frames =\
-    #     iterator.get_next()
-
-    # features = {
-    #     'ds_sentences': ds_sentences,
-    #     'ds_sentence_lengths': ds_sentence_lengths,
-    #     'ds_mel_specs': ds_mel_specs,
-    #     'ds_lin_specs': ds_lin_specs,
-    #     'ds_time_frames': ds_n_time_frames,
-    # }
-
-    # return features, None

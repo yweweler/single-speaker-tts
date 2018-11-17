@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 
 from datasets.dataset_helper import DatasetHelper
+from tacotron.input.helpers import placeholders_from_dataset_iter
 from tacotron.model import Tacotron, Mode
 from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
@@ -314,23 +315,14 @@ def main(_):
                                                   char_dict=dataset_params.vocabulary_dict,
                                                   fill_dict=False)
 
+    # Create a dataset iterator for training.
     dataset_iter = train_input_fn(
         dataset_loader=train_dataset,
         max_samples=training_params.max_samples
     )
 
-    ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames = \
-        dataset_iter.get_next()
-
-    # TODO: Technically these are no longer `tf.placeholder` objects.
-    # Create batched placeholders from the dataset.
-    placeholders = {
-        'ph_sentences': ph_sentences,
-        'ph_sentence_length': ph_sentence_lengths,
-        'ph_mel_specs': ph_mel_specs,
-        'ph_lin_specs': ph_lin_specs,
-        'ph_time_frames': ph_time_frames
-    }
+    # Create placeholders from the dataset iterator.
+    placeholders = placeholders_from_dataset_iter(dataset_iter)
 
     # Create the Tacotron model.
     tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
