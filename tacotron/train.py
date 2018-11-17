@@ -314,12 +314,23 @@ def main(_):
                                                   char_dict=dataset_params.vocabulary_dict,
                                                   fill_dict=False)
 
+    dataset_iter = train_input_fn(
+        dataset_loader=train_dataset,
+        max_samples=training_params.max_samples
+    )
+
+    ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames = \
+        dataset_iter.get_next()
+
+    # TODO: Technically these are no longer `tf.placeholder` objects.
     # Create batched placeholders from the dataset.
-    with tf.device('/cpu:0'):
-        placeholders, n_samples = batched_placeholders(dataset=train_dataset,
-                                                       max_samples=training_params.max_samples,
-                                                       n_epochs=training_params.n_epochs,
-                                                       batch_size=training_params.batch_size)
+    placeholders = {
+        'ph_sentences': ph_sentences,
+        'ph_sentence_length': ph_sentence_lengths,
+        'ph_mel_specs': ph_mel_specs,
+        'ph_lin_specs': ph_lin_specs,
+        'ph_time_frames': ph_time_frames
+    }
 
     # Create the Tacotron model.
     tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,

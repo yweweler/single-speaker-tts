@@ -11,10 +11,11 @@ from tacotron.input.helpers import derive_bucket_boundaries
 
 def train_input_fn(dataset_loader, max_samples):
     print('entered train_input_fn')
-    return _input_fn(dataset_loader, max_samples)
+    return _input_fn(dataset_loader, max_samples, n_epochs=training_params.n_epochs)
 
 
-def _input_fn(dataset_loader, max_samples):
+# TODO: Refactor to make the function more general so train/eval can use it (maybe even predict).
+def _input_fn(dataset_loader, max_samples, n_epochs):
     print('entered _input_fn')
 
     # Load all sentences and the corresponding audio file paths.
@@ -51,7 +52,7 @@ def _input_fn(dataset_loader, max_samples):
         return processed_tensors
 
     dataset = dataset.map(__element_pre_process_fn)
-    # dataset = dataset.cache()
+    dataset = dataset.cache()
 
     def __element_length_fn(sentence, sentence_length, mel_spec, lin_spec, n_time_frames):
         del sentence
@@ -76,9 +77,10 @@ def _input_fn(dataset_loader, max_samples):
         )
     )
 
-    print('Prefetch...')
-    dataset = dataset.prefetch(5)
-    dataset = dataset.repeat(1)
+    # TODO: Add new flags to the hyper-params.
+    # print('Prefetch...')
+    # dataset = dataset.prefetch(5)
+    dataset = dataset.repeat(n_epochs)
 
     iterator = dataset.make_one_shot_iterator()
     return iterator
