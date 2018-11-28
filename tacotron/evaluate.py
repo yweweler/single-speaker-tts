@@ -176,7 +176,7 @@ def main(_):
     )
 
     session_config = tf.ConfigProto(
-        log_device_placement=True,
+        log_device_placement=False,
         gpu_options=tf.GPUOptions(
             allow_growth=True
         )
@@ -193,17 +193,7 @@ def main(_):
     model = Tacotron()
     model_fn = model.model_fn
 
-    # TODO: Not sure if reusing an estimator for evaluation is allowed.
-    estimator = tf.estimator.Estimator(
-        model_fn=model_fn,
-        model_dir=checkpoint_load_dir,
-        config=config,
-        params={}
-    )
-
-    # TODO: Implement the averaged loss summaries for evaluation.
-    # See: https: // github.com / tensorflow / tensorflow / issues / 15332
-    # TODO: The summaries for multiple checkpoints are not written.
+    # TODO: The averaged loss summaries are wrong and pollute tensorboard.
     def __eval_cycle(_checkpoint_file):
         # Create a dataset loader.
         eval_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
@@ -216,8 +206,15 @@ def main(_):
             dataset_loader=eval_dataset
         )
 
+        estimator = tf.estimator.Estimator(
+            model_fn=model_fn,
+            model_dir=checkpoint_load_dir,
+            config=config,
+            params={}
+        )
+
         # Evaluate the model.
-        eval_result = estimator.evaluate(input_fn=input_fn, hooks=None)
+        eval_result = estimator.evaluate(input_fn=input_fn, hooks=None, checkpoint_path=_checkpoint_file)
         print('Evaluation result: {}'.format(eval_result))
 
     if evaluation_params.evaluate_all_checkpoints is False:
@@ -235,6 +232,8 @@ def main(_):
         for checkpoint_file in checkpoint_files:
             print(checkpoint_file)
             __eval_cycle(checkpoint_file)
+            # TODO: Not sure if this is needed any more with the estimator.
+            tf.reset_default_graph()
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.params.inference import inference_params
 from tacotron.params.training import training_params
+from tacotron.params.evaluation import evaluation_params
 from tacotron.wrappers import PrenetWrapper
 
 
@@ -494,15 +495,33 @@ class Tacotron:
             )
         elif mode == tf.estimator.ModeKeys.EVAL:
             eval_metrics_ops = {
-                'decoder_loss': tf.metrics.mean(self.loss_op_decoder,
-                                                name='decoder_loss'),
-                'post_processing_loss': tf.metrics.mean(self.loss_op_post_processing,
-                                                        name='post_processing_loss')
+                'mean_loss': tf.metrics.mean(self.loss_op_decoder,
+                                             name='mean_loss'),
+                'mean_decoder_loss': tf.metrics.mean(self.loss_op_decoder,
+                                                name='mean_decoder_loss'),
+                'mean_post_processing_loss': tf.metrics.mean(self.loss_op_post_processing,
+                                                        name='mean_post_processing_loss')
             }
+
+            # The estimator only adds ans logs summaries during training.
+            # During evaluation or inference, writing the summaries has to be done manually.
+            # See: https://github.com/tensorflow/tensorflow/issues/15332
+
+            # Checkpoint folder to save the evaluation summaries into.
+            checkpoint_save_dir = os.path.join(
+                evaluation_params.checkpoint_dir,
+                evaluation_params.checkpoint_save_run
+            )
+
+            summary_hook = tf.train.SummarySaverHook(save_steps=evaluation_params.summary_save_steps,
+                                                     output_dir=checkpoint_save_dir,
+                                                     summary_op=summary_op)
+
             return tf.estimator.EstimatorSpec(
                 mode=mode,
                 loss=self.loss_op,
-                eval_metric_ops=eval_metrics_ops
+                eval_metric_ops=eval_metrics_ops,
+                evaluation_hooks=[summary_hook]
             )
         elif mode == tf.estimator.ModeKeys.PREDICT:
             raise NotImplementedError('Prediction is not implemented.')
