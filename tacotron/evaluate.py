@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from tacotron.input.functions import eval_input_fn
 from tacotron.input.helpers import placeholders_from_dataset_iter
-from tacotron.model import Tacotron, Mode
+from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
 from tacotron.params.evaluation import evaluation_params
 
@@ -123,30 +123,6 @@ def evaluate(model, checkpoint_file):
         summary_writer.add_summary(eval_summary, global_step=global_step)
 
 
-def start_session():
-    """
-    Creates a session that can be used for training.
-
-    Returns:
-        tf.Session
-    """
-
-    session_config = tf.ConfigProto(
-        gpu_options=tf.GPUOptions(
-            allow_growth=True,
-        )
-    )
-
-    session = tf.Session(config=session_config)
-
-    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-    session.run(init_op)
-
-    tf.train.start_queue_runners(sess=session)
-
-    return session
-
-
 def collect_checkpoint_paths(checkpoint_dir):
     """
     Generates a list of paths to each checkpoint file found in a folder.
@@ -199,6 +175,34 @@ def main(_):
         evaluation_params.checkpoint_load_run
     )
 
+    session_config = tf.ConfigProto(
+        log_device_placement=True,
+        gpu_options=tf.GPUOptions(
+            allow_growth=True
+        )
+    )
+
+    # TODO: Add support for the NanTensorHook.
+    config = tf.estimator.RunConfig(
+        model_dir=checkpoint_load_dir,
+        session_config=session_config,
+        save_summary_steps=evaluation_params.summary_save_steps,
+        log_step_count_steps=evaluation_params.performance_log_steps,
+        eval_distribute=None
+    )
+
+    model = Tacotron(training_summary=False)
+    model_fn = model.model_fn
+
+    estimator = tf.estimator.Estimator(
+        model_fn=model_fn,
+        model_dir=checkpoint_load_dir,
+        config=config,
+        params={}
+    )
+
+    # TODO: Implement the averaged loss summaries for evaluation.
+    # TODO: The summaries for multiple checkpoints are not written.
     def __eval_cycle(_checkpoint_file):
         # Create a dataset loader.
         eval_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
@@ -206,26 +210,25 @@ def main(_):
                                                      fill_dict=False)
 
         # Create a dataset iterator for evaluation.
-        dataset_iter = eval_input_fn(
+        # TODO: Rewrite the dataset helpers to make it easier to handle train and eval portions.
+        input_fn = eval_input_fn(
             dataset_loader=eval_dataset
         )
 
-        # Create placeholders from the dataset iterator.
-        placeholders = placeholders_from_dataset_iter(dataset_iter)
-
-        # Create the Tacotron model.
-        tacotron_model = Tacotron(inputs=placeholders, mode=Mode.EVAL)
-
         # Evaluate the model.
-        evaluate(tacotron_model, _checkpoint_file)
-        tf.reset_default_graph()
+        eval_result = estimator.evaluate(input_fn=input_fn, hooks=None)
+        print('Evaluation result: {}'.format(eval_result))
 
     if evaluation_params.evaluate_all_checkpoints is False:
-        # Get the latest checkpoint for evaluation.
+        # Evaluate the latest checkpoint.
+        # NOTE: Passing None as the path to estimator.evaluate will load the latest checkpoint
+        # too, but in case the path is invalid or there is no checkpoint the estimator will
+        # initialize and evaluate a blank model (Which is not intended).
         checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+        assert checkpoint_file is not None, 'No checkpoint was found to load for evaluation!'
         __eval_cycle(checkpoint_file)
     else:
-        # Get all checkpoints and evaluate the sequentially.
+        # Get all checkpoints and evaluate them sequentially.
         checkpoint_files = collect_checkpoint_paths(checkpoint_load_dir)
         print("Found #{} checkpoints to evaluate.".format(len(checkpoint_files)))
         for checkpoint_file in checkpoint_files:
