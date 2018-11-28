@@ -3,7 +3,6 @@ import os
 import tensorflow as tf
 
 from tacotron.input.functions import eval_input_fn
-from tacotron.input.helpers import placeholders_from_dataset_iter
 from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
 from tacotron.params.evaluation import evaluation_params
@@ -12,115 +11,6 @@ from tacotron.params.evaluation import evaluation_params
 # Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-
-
-def evaluate(model, checkpoint_file):
-    """
-    Evaluates a Tacotron model.
-
-    Arguments:
-        model (Tacotron):
-            The Tacotron model instance to be evaluated.
-
-        checkpoint_file (string):
-            Absolute path to the checkpoint file to be evaluated.
-    """
-    # Get the models loss function.
-    loss_op = model.get_loss_op()
-
-    # Checkpoint folder to load the evaluation checkpoint from.
-    checkpoint_load_dir = os.path.join(
-        evaluation_params.checkpoint_dir,
-        evaluation_params.checkpoint_load_run
-    )
-
-    print('checkpoint_file', checkpoint_file)
-
-    # Checkpoint folder to save the evaluation summaries into.
-    checkpoint_save_dir = os.path.join(
-        evaluation_params.checkpoint_dir,
-        evaluation_params.checkpoint_save_run
-    )
-
-    # Get the checkpoints global step from the checkpoints file name.
-    global_step = int(checkpoint_file.split('-')[-1])
-    print('[checkpoint_file] step: {}, file: "{}"'.format(global_step, checkpoint_file))
-
-    saver = tf.train.Saver()
-
-    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph(),
-                                           flush_secs=10)
-    summary_op = model.summary(mode=tf.estimator.ModeKeys.EVAL)
-
-    # ========================================================
-
-    session_config = tf.ConfigProto(
-        gpu_options=tf.GPUOptions(
-            allow_growth=True,
-        )
-    )
-
-    with tf.Session(config=session_config) as session:
-
-        init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-        session.run(init_op)
-
-        tf.train.start_queue_runners(sess=session)
-
-        # ========================================================
-
-        # Create the evaluation session.
-        # with start_session() as session:
-        print('Restoring model...')
-        saver.restore(session, checkpoint_file)
-        print('Restoring finished')
-
-        sum_loss = 0
-        sum_loss_decoder = 0
-        sum_loss_post_processing = 0
-
-        batch_count = 0
-        summary = None
-
-        # Start evaluation.
-        while True:
-            try:
-                # Evaluate loss functions for the current batch.
-                summary, loss, loss_decoder, loss_post_processing = session.run([
-                    summary_op,
-                    model.loss_op,
-                    model.loss_op_decoder,
-                    model.loss_op_post_processing,
-                ])
-
-                # Accumulate loss values.
-                sum_loss += loss
-                sum_loss_decoder += loss_decoder
-                sum_loss_post_processing += loss_post_processing
-
-                # Increment batch counter.
-                batch_count += 1
-
-            except tf.errors.OutOfRangeError:
-                if batch_count == 0:
-                    raise Exception("Error: No batches were processed!")
-                    exit(1)
-                break
-
-        avg_loss = sum_loss / batch_count
-        avg_loss_decoder = sum_loss_decoder / batch_count
-        avg_loss_post_processing = sum_loss_post_processing / batch_count
-
-        # Create evaluation summaries.
-        eval_summary = tf.Summary()
-
-        eval_summary.ParseFromString(summary)
-        eval_summary.value.add(tag='loss/loss', simple_value=avg_loss)
-        eval_summary.value.add(tag='loss/loss_decoder', simple_value=avg_loss_decoder)
-        eval_summary.value.add(tag='loss/loss_post_processing',
-                               simple_value=avg_loss_post_processing)
-
-        summary_writer.add_summary(eval_summary, global_step=global_step)
 
 
 def collect_checkpoint_paths(checkpoint_dir):
