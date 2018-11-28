@@ -552,9 +552,14 @@ class Tacotron:
 
         # Training only ============================================================================
         if mode == tf.estimator.ModeKeys.TRAIN:
-            with tf.name_scope('loss'):
-                # Note, the estimator will write the loss_op as 'loss/loss'.
-                # tf.summary.scalar('loss', self.loss_op)
+            # Note, for some stupid reason, the estimator will search for an existing loss
+            # summary ('loss'). In case it is named different it will create another summary
+            # with the name 'loss'. To prevent this duplication the final loss has to be
+            # called 'loss'.
+            tf.summary.scalar('loss', self.loss_op)
+
+            with tf.name_scope('losses'):
+                tf.summary.scalar('loss_total', self.loss_op)
                 tf.summary.scalar('loss_decoder', self.loss_op_decoder)
                 tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 

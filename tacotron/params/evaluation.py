@@ -3,7 +3,7 @@ import tensorflow as tf
 # Default hyper-parameters:
 evaluation_params = tf.contrib.training.HParams(
     # Batch size used for evaluation.
-    batch_size=32,
+    batch_size=2,
 
     # Number of threads used to load data during evaluation.
     n_threads=4,
@@ -22,14 +22,14 @@ evaluation_params = tf.contrib.training.HParams(
 
     # The number of buckets to create. Note that this is the number of buckets that are actually
     # created. If less buckets are needed for proper sorting of the data, less buckets are used.
-    n_buckets=20,
+    n_buckets=5,
 
     # Flag enabling the bucketing mechanism to output batches of smaller size than
     # `batch_size` if not enough samples are available.
     allow_smaller_batches=True,
 
     # Checkpoint folder used for loading the latest checkpoint.
-    checkpoint_dir='/tmp/tacotron/ljspeech/LJSpeech',
+    checkpoint_dir='/tmp/checkpoints/ljspeech',
 
     # Run folder to load a checkpoint from the checkpoint folder.
     checkpoint_load_run='train',
@@ -38,11 +38,11 @@ evaluation_params = tf.contrib.training.HParams(
     checkpoint_save_run='evaluate',
 
     # Flag to control if all checkpoints or only the latest one should be evaluated.
-    evaluate_all_checkpoints=False,
+    evaluate_all_checkpoints=True,
 
     # Number of global steps after which to save the model summary.
     summary_save_steps=50,
 
     # Number of global steps after which to log the global steps per second.
-    performance_log_steps=50
+    performance_log_steps=1
 )

@@ -8,7 +8,7 @@ from datasets.pavoque import PAVOQUEDatasetHelper
 # Default hyper-parameters:
 dataset_params = tf.contrib.training.HParams(
     # Folder containing the dataset.
-    dataset_folder='/thesis/datasets/ljspeech',
+    dataset_folder='/home/yves-noel/documents/master/thesis/datasets/LJSpeech-1.1',
 
     # Dataset load helper.
     dataset_loader=LJSpeechDatasetHelper,

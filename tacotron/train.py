@@ -28,6 +28,13 @@ def main(_):
         )
     )
 
+    # NOTE: During training an estimator may add the following hooks on its own:
+    # (NanTensorHook, LoggingTensorHook, CheckpointSaverHook).
+    # A `NanTensorHook` is always created.
+    # A `LoggingTensorHook` is created if `log_step_count_steps` is set.
+    # A `CheckpointSaverHook` is not created if an existing hook is found in `training_hooks`.
+    # If multiple `CheckpointSaverHook` objects are found only the first is used (This behaviour
+    # is not very obvious as it does not output a warning).
     config = tf.estimator.RunConfig(
         model_dir=checkpoint_dir,
         session_config=session_config,

@@ -48,7 +48,7 @@ model_params = tf.contrib.training.HParams(
     reconstruction_iterations=50,
 
     # Flag allowing to force the use accelerated RNN implementation from CUDNN.
-    force_cudnn=True,
+    force_cudnn=False,
 
     # Encoder network parameters.
     encoder=tf.contrib.training.HParams(
