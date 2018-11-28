@@ -22,7 +22,7 @@ def py_pre_process_sentences(_sentences, dataset):
     id_sequences, sequence_lengths = dataset.process_sentences(_sentences)
 
     # Get the first sentence.
-    sentences = [np.fromstring(id_sequence, dtype=np.int32) for id_sequence in id_sequences]
+    sentences = [np.frombuffer(id_sequence, dtype=np.int32) for id_sequence in id_sequences]
 
     # Pad sentence to the same length in order to be able to batch them in a single tensor.
     max_length = max(sequence_lengths)
