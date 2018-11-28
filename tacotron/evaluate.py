@@ -194,6 +194,7 @@ def main(_):
     model = Tacotron(training_summary=False)
     model_fn = model.model_fn
 
+    # TODO: Not sure if reusing an estimator for evaluation is allowed.
     estimator = tf.estimator.Estimator(
         model_fn=model_fn,
         model_dir=checkpoint_load_dir,

@@ -27,7 +27,7 @@ class Tacotron:
       * Source: [1] https://arxiv.org/abs/1703.10135
     """
 
-    def __init__(self, training_summary=True):
+    def __init__(self):
         """
         Creates an instance of the Tacotron model.
 
@@ -58,11 +58,6 @@ class Tacotron:
                     - ph_time_frames (tf.Tensor):
                         Batched number of frames in the spectrogram's excluding the padding
                         frames. The shape is shape=(B), with B being the batch size.
-
-            training_summary (boolean):
-                Flag controlling if summaries should be written during training.
-                The only exceptions to this are attention summary plots and the train losses.
-                These are written always. Default is True.
         """
         self.hparams = model_params
 
@@ -73,6 +68,7 @@ class Tacotron:
         self.inp_linear_spec = None
         self.inp_time_steps = None
 
+        # TODO: Do not save state in a model object.
         # Merged loss function.
         self.loss_op = None
         # Mel. spectrogram loss measured after the decoder.
@@ -91,8 +87,6 @@ class Tacotron:
 
         # Stacked attention alignment history.
         self.alignment_history = None
-
-        self._training_summary = training_summary
 
     def is_training(self, mode):
         """
@@ -361,7 +355,7 @@ class Tacotron:
 
         return network
 
-    # TODO: Return `EstimatorSpec`.
+    # TODO: Return `EstimatorSpec` during inference.
     def model_fn(self, features, labels, mode, params):
         """
         Builds the Tacotron model.
@@ -417,7 +411,7 @@ class Tacotron:
         output_mel_spec = self.output_mel_spec
         output_linear_spec = self.output_linear_spec
 
-        if self.is_training(mode) and self._training_summary is True:
+        if self.is_training(mode) and training_params.write_summary is True:
             # ======================================================================================
             mel_spec_img = tf.expand_dims(
                 tf.reshape(inp_mel_spec[0], (1, -1, self.hparams.n_mels)), -1)
@@ -447,6 +441,8 @@ class Tacotron:
 
         # Combine the decoder and the post-processing losses.
         self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
+
+        summary_op = self.summary(mode)
 
         if self.is_training(mode):
 
@@ -538,7 +534,7 @@ class Tacotron:
                 tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
             # We only write image summaries during training if it is requested.
-            if self._training_summary is True:
+            if training_params.write_summary is True:
                 with tf.name_scope('normalized_inputs'):
                     # Convert the mel spectrogram into an image that can be displayed.
                     # => shape=(1, T_spec, n_mels, 1)
@@ -590,7 +586,8 @@ class Tacotron:
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         # Training and evaluation ==================================================================
-        if (mode == tf.estimator.ModeKeys.TRAIN and self._training_summary is True) or mode == tf.estimator.ModeKeys.EVAL:
+        if (mode == tf.estimator.ModeKeys.TRAIN and training_params.write_summary is True) or mode == \
+                tf.estimator.ModeKeys.EVAL:
             with tf.name_scope('normalized_outputs'):
                 # Convert the mel spectrogram into an image that can be displayed.
                 # => shape=(1, T_spec, n_mels, 1)
