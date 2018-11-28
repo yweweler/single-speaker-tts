@@ -193,7 +193,6 @@ def main(_):
     model = Tacotron()
     model_fn = model.model_fn
 
-    # TODO: The averaged loss summaries are wrong and pollute tensorboard.
     def __eval_cycle(_checkpoint_file):
         # Create a dataset loader.
         eval_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
@@ -232,7 +231,8 @@ def main(_):
         for checkpoint_file in checkpoint_files:
             print(checkpoint_file)
             __eval_cycle(checkpoint_file)
-            # TODO: Not sure if this is needed any more with the estimator.
+
+            # Reset the graph. Not sure if this is actually needed, but it should not hurt also.
             tf.reset_default_graph()
 
 

@@ -488,39 +488,38 @@ class Tacotron:
                 train_op=train_op
             )
         elif mode == tf.estimator.ModeKeys.EVAL:
-
-            # TODO: Collecting the metrics in a separate scope does not work.
-            with tf.name_scope("metrics"):
-                mean_loss = tf.metrics.mean(self.loss_op, name='mean_loss')
-                mean_decoder_loss = tf.metrics.mean(self.loss_op_decoder, name='mean_decoder_loss')
-                mean_post_processing_loss = tf.metrics.mean(self.loss_op_post_processing,
-                                                        name='mean_post_processing_loss')
+            # NOTE: `name_scope` has no effect on metrics.
+            mean_loss = tf.metrics.mean(self.loss_op, name='mean_loss_total')
+            mean_decoder_loss = tf.metrics.mean(self.loss_op_decoder, name='mean_loss_decoder')
+            mean_post_processing_loss = tf.metrics.mean(self.loss_op_post_processing,
+                                                    name='mean_loss_post_processing')
             eval_metrics_ops = {
-                'mean_loss': mean_loss,
-                'mean_decoder_loss': mean_decoder_loss,
-                'mean_post_processing_loss': mean_post_processing_loss
+                'losses/loss_total': mean_loss,
+                'losses/loss_decoder': mean_decoder_loss,
+                'losses/loss_post_processing': mean_post_processing_loss
             }
 
+            # TODO: It seems that the estimator does write summaries to a hardcoded folder.
             # The estimator only adds and logs summaries during training.
             # During evaluation or inference, writing the summaries has to be done manually.
             # See: https://github.com/tensorflow/tensorflow/issues/15332
 
-            # Checkpoint folder to save the evaluation summaries into.
-            checkpoint_save_dir = os.path.join(
-                evaluation_params.checkpoint_dir,
-                evaluation_params.checkpoint_save_run
-            )
+            # # Checkpoint folder to save the evaluation summaries into.
+            # checkpoint_save_dir = os.path.join(
+            #     evaluation_params.checkpoint_dir,
+            #     evaluation_params.checkpoint_save_run
+            # )
 
-            print('Writing evaluation summaries to: "{}"'.format(checkpoint_save_dir))
-            summary_hook = tf.train.SummarySaverHook(save_steps=evaluation_params.summary_save_steps,
-                                                     output_dir=checkpoint_save_dir,
-                                                     summary_op=summary_op)
+            # print('Writing evaluation summaries to: "{}"'.format(checkpoint_save_dir))
+            # summary_hook = tf.train.SummarySaverHook(save_steps=evaluation_params.summary_save_steps,
+            #                                          output_dir=checkpoint_save_dir,
+            #                                          summary_op=summary_op)
 
             return tf.estimator.EstimatorSpec(
                 mode=mode,
                 loss=self.loss_op,
                 eval_metric_ops=eval_metrics_ops,
-                evaluation_hooks=[summary_hook]
+                # evaluation_hooks=[summary_hook]
             )
         elif mode == tf.estimator.ModeKeys.PREDICT:
             raise NotImplementedError('Prediction is not implemented.')
