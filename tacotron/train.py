@@ -156,7 +156,6 @@ def main(_):
         )
     )
 
-    # TODO: Add support for the NanTensorHook.
     config = tf.estimator.RunConfig(
         model_dir=checkpoint_dir,
         session_config=session_config,
@@ -167,7 +166,7 @@ def main(_):
         train_distribute=None
     )
 
-    model = Tacotron(training_summary=training_params.write_summary)
+    model = Tacotron()
     model_fn = model.model_fn
 
     estimator = tf.estimator.Estimator(

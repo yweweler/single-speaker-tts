@@ -481,10 +481,16 @@ class Tacotron:
                         global_step
                     )
 
+            nan_hook = tf.train.NanTensorHook(
+                loss_tensor=self.loss_op,
+                fail_on_nan_loss=True
+            )
+
             return tf.estimator.EstimatorSpec(
                 mode=mode,
                 loss=self.loss_op,
-                train_op=train_op
+                train_op=train_op,
+                training_hooks=[nan_hook]
             )
         elif mode == tf.estimator.ModeKeys.EVAL:
             eval_metrics_ops = {

@@ -182,7 +182,6 @@ def main(_):
         )
     )
 
-    # TODO: Add support for the NanTensorHook.
     config = tf.estimator.RunConfig(
         model_dir=checkpoint_load_dir,
         session_config=session_config,
@@ -191,7 +190,7 @@ def main(_):
         eval_distribute=None
     )
 
-    model = Tacotron(training_summary=False)
+    model = Tacotron()
     model_fn = model.model_fn
 
     # TODO: Not sure if reusing an estimator for evaluation is allowed.
@@ -203,6 +202,7 @@ def main(_):
     )
 
     # TODO: Implement the averaged loss summaries for evaluation.
+    # See: https: // github.com / tensorflow / tensorflow / issues / 15332
     # TODO: The summaries for multiple checkpoints are not written.
     def __eval_cycle(_checkpoint_file):
         # Create a dataset loader.
