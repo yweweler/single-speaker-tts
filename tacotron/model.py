@@ -495,7 +495,7 @@ class Tacotron:
             )
         elif mode == tf.estimator.ModeKeys.EVAL:
             eval_metrics_ops = {
-                'mean_loss': tf.metrics.mean(self.loss_op_decoder,
+                'mean_loss': tf.metrics.mean(self.loss_op,
                                              name='mean_loss'),
                 'mean_decoder_loss': tf.metrics.mean(self.loss_op_decoder,
                                                 name='mean_decoder_loss'),
