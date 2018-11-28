@@ -147,11 +147,6 @@ def main(_):
                                                   char_dict=dataset_params.vocabulary_dict,
                                                   fill_dict=False)
 
-    # Create a dataset iterator for training.
-    input_fn = train_input_fn(
-        dataset_loader=train_dataset
-    )
-
     checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)
 
     session_config = tf.ConfigProto(
@@ -182,18 +177,14 @@ def main(_):
         params={}
     )
 
+    # Create a dataset iterator for training.
+    # TODO: Rewrite the dataset helpers to make it easier to handle train and eval portions.
+    input_fn = train_input_fn(
+        dataset_loader=train_dataset
+    )
+
     # Train the model.
     estimator.train(input_fn=input_fn, hooks=None, steps=None, max_steps=None)
-
-    # # Create placeholders from the dataset iterator.
-    # placeholders = placeholders_from_dataset_iter(dataset_iter)
-    #
-    # # Create the Tacotron model.
-    # tacotron_model = Tacotron(inputs=placeholders, mode=Mode.TRAIN,
-    #                           training_summary=training_params.write_summary)
-    #
-    # # Train the model.
-    # train(tacotron_model)
 
 
 if __name__ == '__main__':
