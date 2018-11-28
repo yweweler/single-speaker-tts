@@ -482,28 +482,26 @@ class Tacotron:
                         global_step
                     )
 
-            nan_hook = tf.train.NanTensorHook(
-                loss_tensor=self.loss_op,
-                fail_on_nan_loss=True
-            )
-
             return tf.estimator.EstimatorSpec(
                 mode=mode,
                 loss=self.loss_op,
-                train_op=train_op,
-                training_hooks=[nan_hook]
+                train_op=train_op
             )
         elif mode == tf.estimator.ModeKeys.EVAL:
-            eval_metrics_ops = {
-                'mean_loss': tf.metrics.mean(self.loss_op,
-                                             name='mean_loss'),
-                'mean_decoder_loss': tf.metrics.mean(self.loss_op_decoder,
-                                                name='mean_decoder_loss'),
-                'mean_post_processing_loss': tf.metrics.mean(self.loss_op_post_processing,
+
+            # TODO: Collecting the metrics in a separate scope does not work.
+            with tf.name_scope("metrics"):
+                mean_loss = tf.metrics.mean(self.loss_op, name='mean_loss')
+                mean_decoder_loss = tf.metrics.mean(self.loss_op_decoder, name='mean_decoder_loss')
+                mean_post_processing_loss = tf.metrics.mean(self.loss_op_post_processing,
                                                         name='mean_post_processing_loss')
+            eval_metrics_ops = {
+                'mean_loss': mean_loss,
+                'mean_decoder_loss': mean_decoder_loss,
+                'mean_post_processing_loss': mean_post_processing_loss
             }
 
-            # The estimator only adds ans logs summaries during training.
+            # The estimator only adds and logs summaries during training.
             # During evaluation or inference, writing the summaries has to be done manually.
             # See: https://github.com/tensorflow/tensorflow/issues/15332
 
@@ -513,6 +511,7 @@ class Tacotron:
                 evaluation_params.checkpoint_save_run
             )
 
+            print('Writing evaluation summaries to: "{}"'.format(checkpoint_save_dir))
             summary_hook = tf.train.SummarySaverHook(save_steps=evaluation_params.summary_save_steps,
                                                      output_dir=checkpoint_save_dir,
                                                      summary_op=summary_op)
@@ -554,7 +553,8 @@ class Tacotron:
         # Training only ============================================================================
         if mode == tf.estimator.ModeKeys.TRAIN:
             with tf.name_scope('loss'):
-                tf.summary.scalar('loss', self.loss_op)
+                # Note, the estimator will write the loss_op as 'loss/loss'.
+                # tf.summary.scalar('loss', self.loss_op)
                 tf.summary.scalar('loss_decoder', self.loss_op_decoder)
                 tf.summary.scalar('loss_post_processing', self.loss_op_post_processing)
 
