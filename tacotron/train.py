@@ -172,7 +172,8 @@ def main(_):
     estimator = tf.estimator.Estimator(
         model_fn=model_fn,
         model_dir=checkpoint_dir,
-        config=config
+        config=config,
+        params={}
     )
 
     # Train the model.
