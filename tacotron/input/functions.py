@@ -5,6 +5,7 @@ from tacotron.input.helpers import derive_bucket_boundaries
 from tacotron.params.evaluation import evaluation_params
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
+from tacotron.params.inference import inference_params
 
 
 def train_input_fn(dataset_loader):
@@ -35,6 +36,40 @@ def eval_input_fn(dataset_loader):
                             model_n_mels=model_params.n_mels,
                             model_reduction=model_params.reduction,
                             model_n_fft=model_params.n_fft)
+
+
+def inference_input_fn(dataset_loader, sentence_generator):
+    return __build_inference_input_fn(dataset_loader=dataset_loader,
+                                      sentence_generator=sentence_generator,
+                                      n_threads=inference_params.n_threads)
+
+
+# TODO: Debug and implement sentence pre-processing.
+def __build_inference_input_fn(dataset_loader, sentence_generator, n_threads):
+    dataset = tf.data.Dataset.from_generator(sentence_generator,
+                                             (tf.int32),
+                                             (tf.TensorShape([None, 1])))
+
+    def __element_pre_process_fn(sentence):
+        processed_tensors = (
+            tf.decode_raw(sentence, tf.int32),
+        )
+        return processed_tensors
+
+    # Pre-process dataset elements.
+    dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
+
+    # Create an iterator over the dataset.
+    iterator = dataset.make_one_shot_iterator()
+
+    # Get features from the iterator.
+    ph_sentences = iterator.__next__()
+
+    features = {
+        'ph_sentences': ph_sentences
+    }
+
+    return features, None
 
 
 def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_threads,

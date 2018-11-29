@@ -522,7 +522,16 @@ class Tacotron:
                 # evaluation_hooks=[summary_hook]
             )
         elif mode == tf.estimator.ModeKeys.PREDICT:
-            raise NotImplementedError('Prediction is not implemented.')
+            # Dictionary that is returned on `estimator.predict`.
+            predictions = {
+                "output_mel_spec": self.output_mel_spec,
+                "output_linear_spec": self.output_linear_spec
+            }
+
+            return tf.estimator.EstimatorSpec(
+                mode=mode,
+                predictions=predictions,
+            )
         else:
             raise Exception('Encountered an unknown mode.')
 

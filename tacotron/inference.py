@@ -3,8 +3,9 @@ import os
 import tensorflow as tf
 
 from audio.io import save_wav
+from tacotron.input.functions import inference_input_fn
 from tacotron.input.helpers import py_pre_process_sentences, py_post_process_spectrograms
-from tacotron.model import Tacotron, Mode
+from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
 from tacotron.params.inference import inference_params
 from tacotron.params.model import model_params
@@ -110,6 +111,39 @@ def main(_):
     if not os.path.isdir(inference_params.synthesis_dir):
         raise NotADirectoryError('The specified synthesis target folder does not exist.')
 
+    # Checkpoint folder to load the inference checkpoints from.
+    checkpoint_load_dir = os.path.join(
+        inference_params.checkpoint_dir,
+        inference_params.checkpoint_load_run
+    )
+
+    session_config = tf.ConfigProto(
+        log_device_placement=False,
+        gpu_options=tf.GPUOptions(
+            allow_growth=True
+        )
+    )
+
+    config = tf.estimator.RunConfig(
+        model_dir=checkpoint_load_dir,
+        session_config=session_config
+    )
+
+    model = Tacotron()
+    model_fn = model.model_fn
+
+    print('Probing "{}" for checkpoints ...'.format(checkpoint_load_dir))
+    if inference_params.checkpoint_file is None:
+        # Get the path to the latest checkpoint file.
+        checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+        assert checkpoint_file is not None, \
+            'Could determine the latest checkpoint in "{}"'.format(checkpoint_load_dir)
+    else:
+        checkpoint_file = inference_params.checkpoint_file
+
+    assert os.path.exists(checkpoint_file) is False, \
+        'The requested checkpoint file "{}" does not exist.'.format(checkpoint_file)
+
     # Create a dataset loader.
     dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                             char_dict=dataset_params.vocabulary_dict,
@@ -125,31 +159,51 @@ def main(_):
 
     sentences = py_pre_process_sentences(raw_sentences, dataset)
 
-    # Create a batch with only one entry.
-    # sentence = np.array([sentences[0]], dtype=np.int32)
+    def sentence_generator(_sentences):
+        for s in _sentences:
+            yield s
 
-    # Create batched placeholders for inference.
-    placeholders = Tacotron.model_placeholders()
+    input_fn = inference_input_fn(
+        dataset_loader=dataset,
+        sentence_generator=sentence_generator(sentences)
+    )
 
-    # Create the Tacotron model.
-    tacotron_model = Tacotron(inputs=placeholders, mode=Mode.PREDICT)
+    estimator = tf.estimator.Estimator(
+        model_fn=model_fn,
+        model_dir=checkpoint_load_dir,
+        config=config,
+        params={}
+    )
 
-    # generate linear scale magnitude spectrograms.
-    specs = inference(tacotron_model, sentences)
+    # Start prediction.
+    predict_result = estimator.predict(input_fn=input_fn,
+                                       hooks=None,
+                                       predict_keys=['output_linear_spec'],
+                                       checkpoint_path=checkpoint_file)
+    print('Prediction result: {}'.format(predict_result))
 
-    wavs = py_post_process_spectrograms(specs)
-
-    # Write all generated waveforms to disk.
-    for i, (sentence, wav) in enumerate(zip(raw_sentences, wavs)):
-        # Append ".wav" to the sentence line number to get the filename.
-        file_name = '{}.wav'.format(i + 1)
-
-        # Generate the full path under which to save the wav.
-        save_path = os.path.join(inference_params.synthesis_dir, file_name)
-
-        # Write the wav to disk.
-        save_wav(save_path, wav, model_params.sampling_rate, True)
-        print('Saved: "{}"'.format(save_path))
+    # # Create batched placeholders for inference.
+    # placeholders = Tacotron.model_placeholders()
+    #
+    # # Create the Tacotron model.
+    # tacotron_model = Tacotron(inputs=placeholders, mode=Mode.PREDICT)
+    #
+    # # generate linear scale magnitude spectrograms.
+    # specs = inference(tacotron_model, sentences)
+    #
+    # wavs = py_post_process_spectrograms(specs)
+    #
+    # # Write all generated waveforms to disk.
+    # for i, (sentence, wav) in enumerate(zip(raw_sentences, wavs)):
+    #     # Append ".wav" to the sentence line number to get the filename.
+    #     file_name = '{}.wav'.format(i + 1)
+    #
+    #     # Generate the full path under which to save the wav.
+    #     save_path = os.path.join(inference_params.synthesis_dir, file_name)
+    #
+    #     # Write the wav to disk.
+    #     save_wav(save_path, wav, model_params.sampling_rate, True)
+    #     print('Saved: "{}"'.format(save_path))
 
 
 if __name__ == '__main__':
