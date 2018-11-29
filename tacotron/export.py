@@ -42,6 +42,8 @@ def main(_):
     )
 
     placeholders = model.model_placeholders()
+    # TODO: There are so much input receivers I have no idea which are supposed
+    # to be used (Take a look at `ServingInputReceiver`)
     model_path = estimator.export_saved_model(export_params.export_dir,
                                               tf.estimator.export.build_raw_serving_input_receiver_fn(
                                                   {
