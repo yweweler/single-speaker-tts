@@ -144,6 +144,8 @@ def main(_):
     assert os.path.exists(checkpoint_file) is False, \
         'The requested checkpoint file "{}" does not exist.'.format(checkpoint_file)
 
+    print('Loading checkpoint from "{}"'.format(checkpoint_file))
+
     # Create a dataset loader.
     dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                             char_dict=dataset_params.vocabulary_dict,
@@ -159,13 +161,15 @@ def main(_):
 
     sentences = py_pre_process_sentences(raw_sentences, dataset)
 
-    def sentence_generator(_sentences):
+    def __build_sentence_generator(*args):
+        _sentences = args[0]
         for s in _sentences:
             yield s
 
     input_fn = inference_input_fn(
         dataset_loader=dataset,
-        sentence_generator=sentence_generator(sentences)
+        sentence_generator=__build_sentence_generator,
+        sentences=sentences
     )
 
     estimator = tf.estimator.Estimator(
@@ -176,34 +180,29 @@ def main(_):
     )
 
     # Start prediction.
+    print('calling: estimator.predict')
     predict_result = estimator.predict(input_fn=input_fn,
                                        hooks=None,
                                        predict_keys=['output_linear_spec'],
                                        checkpoint_path=checkpoint_file)
+
     print('Prediction result: {}'.format(predict_result))
 
-    # # Create batched placeholders for inference.
-    # placeholders = Tacotron.model_placeholders()
-    #
-    # # Create the Tacotron model.
-    # tacotron_model = Tacotron(inputs=placeholders, mode=Mode.PREDICT)
-    #
-    # # generate linear scale magnitude spectrograms.
-    # specs = inference(tacotron_model, sentences)
-    #
-    # wavs = py_post_process_spectrograms(specs)
-    #
-    # # Write all generated waveforms to disk.
-    # for i, (sentence, wav) in enumerate(zip(raw_sentences, wavs)):
-    #     # Append ".wav" to the sentence line number to get the filename.
-    #     file_name = '{}.wav'.format(i + 1)
-    #
-    #     # Generate the full path under which to save the wav.
-    #     save_path = os.path.join(inference_params.synthesis_dir, file_name)
-    #
-    #     # Write the wav to disk.
-    #     save_wav(save_path, wav, model_params.sampling_rate, True)
-    #     print('Saved: "{}"'.format(save_path))
+    # Write all generated waveforms to disk.
+    for i, (sentence, result) in enumerate(zip(raw_sentences, predict_result)):
+        spectrogram = result['output_linear_spec']
+        wavs = py_post_process_spectrograms([spectrogram])
+        wav = wavs[0]
+
+        # Append ".wav" to the sentence line number to get the filename.
+        file_name = '{}.wav'.format(i + 1)
+
+        # Generate the full path under which to save the wav.
+        save_path = os.path.join(inference_params.synthesis_dir, file_name)
+
+        # Write the wav to disk.
+        save_wav(save_path, wav, model_params.sampling_rate, True)
+        print('Saved: "{}"'.format(save_path))
 
 
 if __name__ == '__main__':

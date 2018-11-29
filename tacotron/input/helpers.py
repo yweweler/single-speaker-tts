@@ -34,6 +34,22 @@ def py_pre_process_sentences(_sentences, dataset):
     return sentences
 
 
+def __py_synthesize(linear_mag):
+    # linear_mag = np.squeeze(linear_mag, -1)
+    linear_mag = np.power(linear_mag, model_params.magnitude_power)
+
+    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
+    win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
+    n_fft = model_params.n_fft
+
+    print('Spectrogram inversion ...')
+    return spectrogram_to_wav(linear_mag,
+                              win_len,
+                              win_hop,
+                              n_fft,
+                              model_params.reconstruction_iterations)
+
+
 def py_post_process_spectrograms(_spectrograms):
     # Apply Griffin-Lim to all spectrogram's to get the waveforms.
     normalized = list()
@@ -48,24 +64,9 @@ def py_post_process_spectrograms(_spectrograms):
 
     specs = normalized
 
-    win_len = ms_to_samples(model_params.win_len, model_params.sampling_rate)
-    win_hop = ms_to_samples(model_params.win_hop, model_params.sampling_rate)
-    n_fft = model_params.n_fft
-
-    def synthesize(linear_mag):
-        linear_mag = np.squeeze(linear_mag, -1)
-        linear_mag = np.power(linear_mag, model_params.magnitude_power)
-
-        print('Spectrogram inversion ...')
-        return spectrogram_to_wav(linear_mag,
-                                  win_len,
-                                  win_hop,
-                                  n_fft,
-                                  model_params.reconstruction_iterations)
-
     # Synthesize waveforms from the spectrograms.
     pool = ThreadPool(inference_params.n_synthesis_threads)
-    wavs = pool.map(synthesize, specs)
+    wavs = pool.map(__py_synthesize, specs)
     pool.close()
     pool.join()
 

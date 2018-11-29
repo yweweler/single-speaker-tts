@@ -1,6 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.data.experimental.ops import grouping
 
+import numpy as np
+
 from tacotron.input.helpers import derive_bucket_boundaries
 from tacotron.params.evaluation import evaluation_params
 from tacotron.params.model import model_params
@@ -38,38 +40,55 @@ def eval_input_fn(dataset_loader):
                             model_n_fft=model_params.n_fft)
 
 
-def inference_input_fn(dataset_loader, sentence_generator):
+def inference_input_fn(dataset_loader, sentence_generator, sentences):
+    print('called: inference_input_fn')
     return __build_inference_input_fn(dataset_loader=dataset_loader,
                                       sentence_generator=sentence_generator,
-                                      n_threads=inference_params.n_threads)
+                                      sentences=sentences,
+                                      n_threads=inference_params.n_synthesis_threads)
 
 
 # TODO: Debug and implement sentence pre-processing.
-def __build_inference_input_fn(dataset_loader, sentence_generator, n_threads):
-    dataset = tf.data.Dataset.from_generator(sentence_generator,
-                                             (tf.int32),
-                                             (tf.TensorShape([None, 1])))
+def __build_inference_input_fn(dataset_loader, sentence_generator, sentences, n_threads):
+    print('called: __build_inference_input_fn')
 
-    def __element_pre_process_fn(sentence):
-        processed_tensors = (
-            tf.decode_raw(sentence, tf.int32),
-        )
-        return processed_tensors
+    def __input_fn():
+        def __const_generator():
+            yield np.array([0] * 32, dtype=np.int32)
 
-    # Pre-process dataset elements.
-    dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
+        dataset = tf.data.Dataset.from_generator(__const_generator,
+                                                 (tf.int32),
+                                                 (tf.TensorShape([None, ])))
 
-    # Create an iterator over the dataset.
-    iterator = dataset.make_one_shot_iterator()
+        # dataset = tf.data.Dataset.from_generator(sentence_generator,
+        #                                          (tf.int32),
+        #                                          (tf.TensorShape([None, 1])),
+        #                                          args=[sentences])
+        #
+        # def __element_pre_process_fn(sentence):
+        #     processed_tensors = (
+        #         tf.decode_raw(sentence, tf.int32),
+        #     )
+        #     return processed_tensors
+        #
+        # # Pre-process dataset elements.
+        # # dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
 
-    # Get features from the iterator.
-    ph_sentences = iterator.__next__()
+        dataset = dataset.batch(1)
 
-    features = {
-        'ph_sentences': ph_sentences
-    }
+        # Create an iterator over the dataset.
+        iterator = dataset.make_one_shot_iterator()
 
-    return features, None
+        # Get features from the iterator.
+        ph_sentences = iterator.get_next()
+
+        features = {
+            'ph_sentences': ph_sentences
+        }
+
+        return features, None
+
+    return __input_fn
 
 
 def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_threads,

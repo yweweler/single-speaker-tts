@@ -363,10 +363,11 @@ class Tacotron:
         """
         # Get the placeholders for the input data.
         self.inp_sentences = features['ph_sentences']
-        self.seq_lengths = features['ph_sentence_lengths']
-        self.inp_mel_spec = features['ph_mel_specs']
-        self.inp_linear_spec = features['ph_lin_specs']
-        self.inp_time_steps = features['ph_time_frames']
+        if mode != tf.estimator.ModeKeys.PREDICT:
+            self.seq_lengths = features['ph_sentence_lengths']
+            self.inp_mel_spec = features['ph_mel_specs']
+            self.inp_linear_spec = features['ph_lin_specs']
+            self.inp_time_steps = features['ph_time_frames']
 
         # inp_sentences.shape = (B, T_sent, ?)
         batch_size = tf.shape(self.inp_sentences)[0]
@@ -402,12 +403,13 @@ class Tacotron:
         # shape => (B, T_spec, (1 + n_fft // 2))
         self.output_linear_spec = outputs
 
-        inp_mel_spec = self.inp_mel_spec
-        inp_linear_spec = self.inp_linear_spec
+        if mode != tf.estimator.ModeKeys.PREDICT:
+            inp_mel_spec = self.inp_mel_spec
+            inp_linear_spec = self.inp_linear_spec
 
-        inp_mel_spec = tf.reshape(inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
-        inp_linear_spec = tf.reshape(inp_linear_spec,
-                                     [batch_size, -1, (1 + self.hparams.n_fft // 2)])
+            inp_mel_spec = tf.reshape(inp_mel_spec, [batch_size, -1, self.hparams.n_mels])
+            inp_linear_spec = tf.reshape(inp_linear_spec,
+                                         [batch_size, -1, (1 + self.hparams.n_fft // 2)])
 
         output_mel_spec = self.output_mel_spec
         output_linear_spec = self.output_linear_spec
@@ -432,21 +434,21 @@ class Tacotron:
             tf.summary.image('linear_spec_gt_loss', linear_spec_image, max_outputs=1)
             # ======================================================================================
 
-        # Calculate decoder Mel. spectrogram loss.
-        self.loss_op_decoder = tf.reduce_mean(
-            tf.abs(inp_mel_spec - output_mel_spec))
+        if mode != tf.estimator.ModeKeys.PREDICT:
+            # Calculate decoder Mel. spectrogram loss.
+            self.loss_op_decoder = tf.reduce_mean(
+                tf.abs(inp_mel_spec - output_mel_spec))
 
-        # Calculate post-processing linear spectrogram loss.
-        self.loss_op_post_processing = tf.reduce_mean(
-            tf.abs(inp_linear_spec - output_linear_spec))
+            # Calculate post-processing linear spectrogram loss.
+            self.loss_op_post_processing = tf.reduce_mean(
+                tf.abs(inp_linear_spec - output_linear_spec))
 
-        # Combine the decoder and the post-processing losses.
-        self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
+            # Combine the decoder and the post-processing losses.
+            self.loss_op = self.loss_op_decoder + self.loss_op_post_processing
 
         summary_op = self.summary(mode)
 
         if self.is_training(mode):
-
             # NOTE: The global step has to be created before the optimizer is created.
             global_step = tf.train.get_global_step()
 
@@ -522,6 +524,7 @@ class Tacotron:
                 # evaluation_hooks=[summary_hook]
             )
         elif mode == tf.estimator.ModeKeys.PREDICT:
+            print('Model was build in inference mode.')
             # Dictionary that is returned on `estimator.predict`.
             predictions = {
                 "output_mel_spec": self.output_mel_spec,
