@@ -99,3 +99,6 @@ ENV/
 
 # pytest
 .pytest_cache
+
+# intermediate checkpoint files
+checkpoints/*
