@@ -161,15 +161,13 @@ def main(_):
 
     sentences = py_pre_process_sentences(raw_sentences, dataset)
 
-    def __build_sentence_generator(*args):
-        _sentences = args[0]
+    def __build_sentence_generator(_sentences):
         for s in _sentences:
             yield s
 
     input_fn = inference_input_fn(
         dataset_loader=dataset,
-        sentence_generator=__build_sentence_generator,
-        sentences=sentences
+        sentence_generator=lambda: __build_sentence_generator(sentences)
     )
 
     estimator = tf.estimator.Estimator(
@@ -180,13 +178,10 @@ def main(_):
     )
 
     # Start prediction.
-    print('calling: estimator.predict')
     predict_result = estimator.predict(input_fn=input_fn,
                                        hooks=None,
                                        predict_keys=['output_linear_spec'],
                                        checkpoint_path=checkpoint_file)
-
-    print('Prediction result: {}'.format(predict_result))
 
     # Write all generated waveforms to disk.
     for i, (sentence, result) in enumerate(zip(raw_sentences, predict_result)):

@@ -524,7 +524,6 @@ class Tacotron:
                 # evaluation_hooks=[summary_hook]
             )
         elif mode == tf.estimator.ModeKeys.PREDICT:
-            print('Model was build in inference mode.')
             # Dictionary that is returned on `estimator.predict`.
             predictions = {
                 "output_mel_spec": self.output_mel_spec,
