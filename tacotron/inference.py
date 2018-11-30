@@ -10,113 +10,27 @@ from tacotron.params.dataset import dataset_params
 from tacotron.params.inference import inference_params
 from tacotron.params.model import model_params
 
+
 # Hack to force tensorflow to run on the CPU.
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
-tf.logging.set_verbosity(tf.logging.INFO)
-
-
-def inference(model, sentences):
-    """
-    Arguments:
-        model (Tacotron):
-            The Tacotron model instance to use for inference.
-
-        sentences (:obj:`list` of :obj:`np.ndarray`):
-            The padded sentences in id representation to feed to the network.
-
-    Returns:
-        spectrograms (:obj:`list` of :obj:`np.ndarray`):
-            The generated linear scale magnitude spectrograms.
-    """
-    # Checkpoint folder to load the inference checkpoint from.
-    checkpoint_load_dir = os.path.join(
-        inference_params.checkpoint_dir,
-        inference_params.checkpoint_load_run
-    )
-
-    if inference_params.checkpoint_file is None:
-        # Get the path to the latest checkpoint file.
-        checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
-    else:
-        checkpoint_file = inference_params.checkpoint_file
-
-    saver = tf.train.Saver()
-
-    # Checkpoint folder to save the evaluation summaries into.
-    checkpoint_save_dir = os.path.join(
-        inference_params.checkpoint_dir,
-        inference_params.checkpoint_save_run
-    )
-
-    # Prepare the summary writer.
-    summary_writer = tf.summary.FileWriter(checkpoint_save_dir, tf.get_default_graph())
-    summary_op = model.summary(mode=tf.estimator.ModeKeys.PREDICT)
-
-    # Create the inference session.
-    session = start_session()
-
-    print('Restoring model...')
-    saver.restore(session, checkpoint_file)
-    print('Restoring finished')
-
-    # Infer data.
-    summary, spectrograms = session.run(
-        # TODO: implement automatic stopping after a certain amount of silence was generated.
-        # Then we could set max_iterations much higher and only use it as a worst case fallback
-        # when the network does not stop by itself.
-        [
-            summary_op,
-            model.output_linear_spec
-        ],
-        feed_dict={
-            model.inp_sentences: sentences
-        })
-
-    # Write the summary statistics.
-    inference_summary = tf.Summary()
-    inference_summary.ParseFromString(summary)
-    summary_writer.add_summary(inference_summary)
-
-    session.close()
-
-    return spectrograms
-
-
-def start_session():
-    """
-    Creates a session that can be used for training.
-
-    Returns:
-        tf.Session
-    """
-
-    session_config = tf.ConfigProto(
-        gpu_options=tf.GPUOptions(
-            allow_growth=True,
-        )
-    )
-
-    session = tf.Session(config=session_config)
-
-    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-    session.run(init_op)
-
-    return session
-
 
 def main(_):
-    # Before we start doing anything we check if the required target folder actually exists.
+    """
+    Predict using a trained model.
+    """
+    # Check if the required synthesis target folder actually exists.
     if not os.path.isdir(inference_params.synthesis_dir):
         raise NotADirectoryError('The specified synthesis target folder does not exist.')
 
-    # Checkpoint folder to load the inference checkpoints from.
+    # Get the checkpoint folder to load the inference checkpoints from.
     checkpoint_load_dir = os.path.join(
         inference_params.checkpoint_dir,
         inference_params.checkpoint_load_run
     )
 
+    # Configure the session to be created.
     session_config = tf.ConfigProto(
         log_device_placement=False,
         gpu_options=tf.GPUOptions(
@@ -124,23 +38,30 @@ def main(_):
         )
     )
 
+    # Configuration for the estimtor.
     config = tf.estimator.RunConfig(
         model_dir=checkpoint_load_dir,
         session_config=session_config
     )
 
+    # Create a model instance.
     model = Tacotron()
     model_fn = model.model_fn
 
     print('Probing "{}" for checkpoints ...'.format(checkpoint_load_dir))
     if inference_params.checkpoint_file is None:
-        # Get the path to the latest checkpoint file.
+        # The is no pre-configured checkpoint path to use.
+        # Get the path to the latest checkpoint file instead.
         checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+
+        # Make sure the latest checkpoint could actually be determined.
         assert checkpoint_file is not None, \
             'Could determine the latest checkpoint in "{}"'.format(checkpoint_load_dir)
     else:
+        # Use the pre-configures checkpoint file for prediction.
         checkpoint_file = inference_params.checkpoint_file
 
+    # Make sure the checkpoint to be loaded exists.
     assert os.path.exists(checkpoint_file) is False, \
         'The requested checkpoint file "{}" does not exist.'.format(checkpoint_file)
 
@@ -151,6 +72,7 @@ def main(_):
                                             char_dict=dataset_params.vocabulary_dict,
                                             fill_dict=False)
 
+    # Read all sentences to predict from the synthesis file.
     raw_sentences = []
     with open(inference_params.synthesis_file, 'r') as f_sent:
         for line in f_sent:
@@ -159,17 +81,21 @@ def main(_):
 
     print("{} sentences were loaded for inference.".format(len(raw_sentences)))
 
+    # Pre-process the loaded sentences for synthesis.
     sentences = py_pre_process_sentences(raw_sentences, dataset)
 
+    # TODO: Either implement this in the input_fn or remove it entirely and use batching.
     def __build_sentence_generator(_sentences):
         for s in _sentences:
             yield s
 
+    # Create a input function for prediction.
     input_fn = inference_input_fn(
         dataset_loader=dataset,
         sentence_generator=lambda: __build_sentence_generator(sentences)
     )
 
+    # Create a estimator.
     estimator = tf.estimator.Estimator(
         model_fn=model_fn,
         model_dir=checkpoint_load_dir,
@@ -177,7 +103,7 @@ def main(_):
         params={}
     )
 
-    # Start prediction.
+    # Start prediction and read the resulting linear scale magnitude spectrogram.
     predict_result = estimator.predict(input_fn=input_fn,
                                        hooks=None,
                                        predict_keys=['output_linear_spec'],
