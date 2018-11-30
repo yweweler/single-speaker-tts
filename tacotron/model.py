@@ -15,7 +15,6 @@ from tacotron.params.dataset import dataset_params
 from tacotron.params.model import model_params
 from tacotron.params.inference import inference_params
 from tacotron.params.training import training_params
-from tacotron.params.evaluation import evaluation_params
 from tacotron.wrappers import PrenetWrapper
 
 
@@ -31,34 +30,6 @@ class Tacotron:
     def __init__(self):
         """
         Creates an instance of the Tacotron model.
-
-        Arguments:
-            inputs (:obj:`dict`):
-                Input data placeholders. All data that is used for training or inference is
-                consumed from this placeholders.
-                The placeholder dictionary contains the following fields with keys of the same name:
-                    - ph_sentences (tf.Tensor):
-                        Batched integer sentence sequence with appended <EOS> token padded to same
-                        length using the <PAD> token. The characters were converted
-                        converted to their vocabulary id's. The shape is shape=(B, T_sent, ?),
-                        with B being the batch size and T_sent being the sentence length
-                        including the <EOS> token.
-                    - ph_sentence_length (tf.Tensor):
-                        Batched sequence lengths including the <EOS> token, excluding the padding.
-                        The shape is shape=(B), with B being the batch size.
-                    - ph_mel_specs (tf.Tensor):
-                        Batched Mel. spectrogram's that were padded to the same length in the
-                        time axis using zero frames. The shape is shape=(B, T_spec, n_mels),
-                        with B being the batch size and T_spec being the number of frames in the
-                        spectrogram.
-                    - ph_lin_specs (tf.Tensor):
-                        Batched linear spectrogram's that were padded to the same length in the
-                        time axis using zero frames. The shape is shape=(B, T_spec, 1 + n_fft // 2),
-                        with B being the batch size and T_spec being the number of frames in the
-                        spectrogram.
-                    - ph_time_frames (tf.Tensor):
-                        Batched number of frames in the spectrogram's excluding the padding
-                        frames. The shape is shape=(B), with B being the batch size.
         """
         self.hparams = model_params
 
@@ -356,11 +327,70 @@ class Tacotron:
 
         return network
 
-    # TODO: Return `EstimatorSpec` during inference.
     def model_fn(self, features, labels, mode, params):
         """
-        Builds the Tacotron model.
+        Build the model graph.
+
+        Arguments:
+            features (:obj:`dict` of :obj:`tf.Tensor`):
+                Dictionary containing tensor objects the model can read data from.
+                All data that is used for training, evaluation or inference is consumed from this tensors.
+                The dictionary contains the following fields with keys of the same name:
+                    - ph_sentences (tf.Tensor):
+                        Batched integer sentence sequence with appended <EOS> token padded to same
+                        length using the <PAD> token. The characters were converted
+                        converted to their vocabulary id's. The shape is shape=(B, T_sent, ?),
+                        with B being the batch size and T_sent being the sentence length
+                        including the <EOS> token.
+                    - ph_sentence_length (tf.Tensor):
+                        Batched sequence lengths including the <EOS> token, excluding the padding.
+                        The shape is shape=(B), with B being the batch size.
+                    - ph_mel_specs (tf.Tensor):
+                        Batched Mel. spectrogram's that were padded to the same length in the
+                        time axis using zero frames. The shape is shape=(B, T_spec, n_mels),
+                        with B being the batch size and T_spec being the number of frames in the
+                        spectrogram.
+                    - ph_lin_specs (tf.Tensor):
+                        Batched linear spectrogram's that were padded to the same length in the
+                        time axis using zero frames. The shape is shape=(B, T_spec, 1 + n_fft // 2),
+                        with B being the batch size and T_spec being the number of frames in the
+                        spectrogram.
+                    - ph_time_frames (tf.Tensor):
+                        Batched number of frames in the spectrogram's excluding the padding
+                        frames. The shape is shape=(B), with B being the batch size.
+            labels:
+                The model does not use this field.
+
+            mode (tf.estimator.ModeKeys):
+                Current mode for the graph to build. Valid modes are TRAIN, EVAL, PREDICT.
+
+            params:
+                The model does not use this field.
+
+        Returns:
+            tf.estimator.EstimatorSpec:
+                When evaluating the `eval_metrics_ops` field contains a `tf.metrics.mean` metric
+                for each indivisual loss as follows:
+                ```
+                eval_metrics_ops = {
+                    'losses/loss_total': <mean_loss>,
+                    'losses/loss_decoder': <mean_decoder_loss>,
+                    'losses/loss_post_processing': <mean_post_processing_loss>
+                }
+                ```
+
+                When predicting, the `predictions` field is set as follows:
+                ```
+                predictions = {
+                    "output_mel_spec": <output_mel_spec>,
+                    "output_linear_spec": <output_linear_spec>
+                }
+                ```
         """
+        # Unused arguments, required to be compliant with the model_fn interface.
+        del labels
+        del params
+
         # Get the placeholders for the input data.
         self.inp_sentences = features['ph_sentences']
         if mode != tf.estimator.ModeKeys.PREDICT:
