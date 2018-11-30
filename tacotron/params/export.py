@@ -15,6 +15,7 @@ export_params = tf.contrib.training.HParams(
     # Directory to save the exported model in.
     export_dir='/tmp/export/ljspeech',
 
+    # TODO: The version is not used when exporting (@yweweler this should be fixed).
     # Version number to export the model under.
     export_version=1,
 
