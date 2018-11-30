@@ -14,15 +14,20 @@ from tacotron.params.training import training_params
 
 
 def main(_):
+    """
+    Train a model.
+    """
     # Create a dataset loader.
     train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                                   char_dict=dataset_params.vocabulary_dict,
                                                   fill_dict=False)
 
+    # Get the folder to load checkpoints from.
     checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)
 
+    # Configure the session to be created.
     session_config = tf.ConfigProto(
-        log_device_placement=True,
+        log_device_placement=False,
         gpu_options=tf.GPUOptions(
             allow_growth=True
         )
@@ -45,9 +50,11 @@ def main(_):
         train_distribute=None
     )
 
+    # Create a model instance.
     model = Tacotron()
     model_fn = model.model_fn
 
+    # Create an estimator.
     estimator = tf.estimator.Estimator(
         model_fn=model_fn,
         model_dir=checkpoint_dir,
