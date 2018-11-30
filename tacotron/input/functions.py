@@ -144,8 +144,8 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
         # Use the same batch_size for all buckets.
         bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
 
-        # TODO: Implement `allow_smaller_batches`.
-        # TODO: Open a PR to enable bucket_by_sequence_length to provide full batches only.
+        # TODO: Wait for PR to enable bucketing to provide full batches only.
+        # https://github.com/tensorflow/tensorflow/pull/24071
         dataset = dataset.apply(
             # Bucket dataset elements based on sequence_length.
             # By default sequences are padded using 0 up to the longest sequence in each batch.
