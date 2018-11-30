@@ -1,3 +1,4 @@
+import os
 from multiprocessing.pool import ThreadPool
 
 import numpy as np
@@ -7,6 +8,15 @@ from audio.synthesis import spectrogram_to_wav
 from tacotron.params.dataset import dataset_params
 from tacotron.params.inference import inference_params
 from tacotron.params.model import model_params
+
+
+def py_load_processed_features(wav_path):
+    file_path = os.path.splitext(wav_path.decode())[0]
+
+    # Load features from disk.
+    data = np.load('{}.npz'.format(file_path))
+
+    return data['mel_mag_db'], data['linear_mag_db']
 
 
 def __py_pad_sentence(_sentence, _max_len):

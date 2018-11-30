@@ -3,7 +3,8 @@ from tensorflow.python.data.experimental.ops import grouping
 
 import numpy as np
 
-from tacotron.input.helpers import derive_bucket_boundaries, py_pre_process_sentences
+from tacotron.input.helpers import derive_bucket_boundaries, py_pre_process_sentences, \
+    py_load_processed_features
 from tacotron.params.evaluation import evaluation_params
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
@@ -17,6 +18,7 @@ def train_input_fn(dataset_loader):
                             n_epochs=training_params.n_epochs,
                             n_threads=training_params.n_threads,
                             cache_preprocessed=training_params.cache_preprocessed,
+                            load_preprocessed=training_params.load_preprocessed,
                             shuffle_samples=training_params.shuffle_samples,
                             n_buckets=training_params.n_buckets,
                             n_pre_calc_batches=training_params.n_pre_calc_batches,
@@ -32,6 +34,7 @@ def eval_input_fn(dataset_loader):
                             n_epochs=1,
                             n_threads=evaluation_params.n_threads,
                             cache_preprocessed=False,
+                            load_preprocessed=False,
                             shuffle_samples=evaluation_params.shuffle_samples,
                             n_buckets=evaluation_params.n_buckets,
                             n_pre_calc_batches=evaluation_params.n_pre_calc_batches,
@@ -70,7 +73,7 @@ def __build_inference_input_fn(dataset_loader, sentence_generator, n_threads):
 
 
 def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_threads,
-                     cache_preprocessed,
+                     cache_preprocessed, load_preprocessed,
                      shuffle_samples, n_buckets, n_pre_calc_batches, model_n_mels, model_reduction,
                      model_n_fft):
     def __input_fn():
@@ -78,14 +81,20 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
         sentences, sentence_lengths, wav_paths = dataset_loader.load(max_samples=max_samples)
         print('Loaded {} dataset sentences.'.format(len(sentences)))
 
-        # TODO: Compare the performance with `tf.data.Dataset.from_generator`.
         dataset = tf.data.Dataset.from_tensor_slices((sentences, sentence_lengths, wav_paths))
 
         def __element_pre_process_fn(sentence, sentence_length, wav_path):
             # TODO: Rewrite this to use tensorflow functions only.
-            mel_spec, lin_spec = tf.py_func(dataset_loader.load_audio,
-                                            [wav_path],
-                                            [tf.float32, tf.float32])
+            if load_preprocessed:
+                # Load pre-calculated features from disk.
+                mel_spec, lin_spec = tf.py_func(py_load_processed_features,
+                                                [wav_path],
+                                                [tf.float32, tf.float32])
+            else:
+                # Calculate features on the fly.
+                mel_spec, lin_spec = tf.py_func(dataset_loader.load_audio,
+                                                [wav_path],
+                                                [tf.float32, tf.float32])
 
             # The shape of the returned values from py_func seems to get lost for some reason.
             mel_spec.set_shape((None, model_n_mels * model_reduction))
@@ -95,7 +104,7 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
             # with tf.control_dependencies([print_op]):
             #     mel_spec = tf.identity(mel_spec)
 
-            # Get the number spectrogram time-steps (used as the number of time frames when generating).
+            # Get the number spectrogram time-steps (number of time frames when generating).
             n_time_frames = tf.shape(mel_spec)[0]
 
             processed_tensors = (
@@ -107,7 +116,6 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
             )
             return processed_tensors
 
-        # TODO: Implement loading of pre-calculated features.
         # Pre-process dataset elements.
         dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
 
