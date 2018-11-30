@@ -18,7 +18,7 @@ def collect_checkpoint_paths(checkpoint_dir):
     Generates a list of paths to each checkpoint file found in a folder.
 
     Note:
-        - This function assumes, that checkpoint paths were written in relative.
+        - This function assumes, that checkpoint paths were written in relative form.
 
     Arguments:
         checkpoint_dir (string):
@@ -59,12 +59,16 @@ def collect_checkpoint_paths(checkpoint_dir):
 
 
 def main(_):
+    """
+    Evaluate a model.
+    """
     # Checkpoint folder to load the evaluation checkpoints from.
     checkpoint_load_dir = os.path.join(
         evaluation_params.checkpoint_dir,
         evaluation_params.checkpoint_load_run
     )
 
+    # Configure the session to be created.
     session_config = tf.ConfigProto(
         log_device_placement=False,
         gpu_options=tf.GPUOptions(
@@ -72,6 +76,7 @@ def main(_):
         )
     )
 
+    # Configuration for the estimtor.
     config = tf.estimator.RunConfig(
         model_dir=checkpoint_load_dir,
         session_config=session_config,
@@ -80,11 +85,18 @@ def main(_):
         eval_distribute=None
     )
 
+    # Create a model instance.
     model = Tacotron()
     model_fn = model.model_fn
 
     def __eval_cycle(_checkpoint_file):
-        # Create a dataset loader.
+        """
+
+        Arguments:
+            _checkpoint_file (:obj:`str`):
+                Path to the checkpoint file to evaluate.
+        """
+        # Create a new dataset loader.
         eval_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
                                                      char_dict=dataset_params.vocabulary_dict,
                                                      fill_dict=False)
@@ -95,6 +107,7 @@ def main(_):
             dataset_loader=eval_dataset
         )
 
+        # Create a new estimator for evaluation.
         estimator = tf.estimator.Estimator(
             model_fn=model_fn,
             model_dir=checkpoint_load_dir,
@@ -103,21 +116,29 @@ def main(_):
         )
 
         # Evaluate the model.
-        eval_result = estimator.evaluate(input_fn=input_fn, hooks=None, checkpoint_path=_checkpoint_file)
+        eval_result = estimator.evaluate(input_fn=input_fn, hooks=None,
+                                         checkpoint_path=_checkpoint_file)
         print('Evaluation result: {}'.format(eval_result))
 
+    # Check if only the latest or all checkpoints have to be evaluated.
     if evaluation_params.evaluate_all_checkpoints is False:
         # Evaluate the latest checkpoint.
         # NOTE: Passing None as the path to estimator.evaluate will load the latest checkpoint
         # too, but in case the path is invalid or there is no checkpoint the estimator will
         # initialize and evaluate a blank model (Which is not intended).
         checkpoint_file = tf.train.latest_checkpoint(checkpoint_load_dir)
+
+        # Make sure the checkpoint file actually exists on disk.
         assert checkpoint_file is not None, 'No checkpoint was found to load for evaluation!'
+
+        # Evaluate the checkoint.
         __eval_cycle(checkpoint_file)
     else:
         # Get all checkpoints and evaluate them sequentially.
         checkpoint_files = collect_checkpoint_paths(checkpoint_load_dir)
         print("Found #{} checkpoints to evaluate.".format(len(checkpoint_files)))
+
+        # Evaluate all checkoint files.
         for checkpoint_file in checkpoint_files:
             print(checkpoint_file)
             __eval_cycle(checkpoint_file)
