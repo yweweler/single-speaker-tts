@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.data.experimental.ops import grouping
+import tensorflow.python.data.experimental as tf_experimental
 
 import numpy as np
 
@@ -119,7 +120,14 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
         # Pre-process dataset elements.
         dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
 
-        # TODO: Implement dataset input pipeline statistics (`tf.data.experimental.StatsAggregator`).
+        # TODO: Input pipeline statistics are not working right now.
+        # I can not get the aggregator to collect anything from the graph nor can I make it
+        # produce summaries that can be shown in tensorboard.
+        # stats_aggregator = tf_experimental.StatsAggregator()
+        # dataset = dataset.apply(tf_experimental.set_stats_aggregator(stats_aggregator))
+        # dataset = dataset.apply(tf_experimental.latency_stats("total_bytes"))
+        # stats_summary = stats_aggregator.get_summary()
+        # tf.add_to_collection(tf.GraphKeys.SUMMARIES, stats_summary)
 
         # Feature caching.
         if cache_preprocessed:
@@ -169,7 +177,11 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
         dataset = dataset.prefetch(n_pre_calc_batches)
 
         # Create an iterator over the dataset.
-        iterator = dataset.make_one_shot_iterator()
+        # iterator = dataset.make_one_shot_iterator()
+        iterator = dataset.make_initializable_iterator()
+
+        # TODO: Not sure if this is the recommended way to go.
+        tf.add_to_collection(tf.GraphKeys.TABLE_INITIALIZERS, iterator.initializer)
 
         # Get features from the iterator.
         ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames =\
