@@ -6,6 +6,8 @@ import csv
 import json
 import os
 
+import numpy as np
+
 from audio.io import load_wav
 from datasets.utils import statistics
 
@@ -22,32 +24,77 @@ class Dataset:
         self.__dataset_file = dataset_file
         self.__definition = dict()
 
+        self.__reverse_vocabulary = None
+        self.__train_listing = None
+        self.__eval_listing = None
+
     def get_definition(self):
         return self.__definition
 
-    def get_train_listing_generator(self):
-        train_listing_file = os.path.join(
-            self.get_definition()['dataset_folder'],
-            self.get_definition()['train_listing']
-        )
-        raw_rows = self.load_listing_file(train_listing_file)
-        print('Loaded {} train rows'.format(len(raw_rows)))
+    def get_vocabulary(self):
+        return self.get_definition()['vocabulary']
 
-        for row in raw_rows:
-            parsed_row = self.parse_listing_row(row)
-            yield parsed_row
+    def get_reverse_vocabulary(self):
+        return self.__reverse_vocabulary
 
+    def get_eos_token(self):
+        return self.get_vocabulary()['eos']
+
+    def get_pad_token(self):
+        return self.get_vocabulary()['pad']
+
+    def sentence2tokens(self, sentence):
+        """
+        Convert each character of a string into its corresponding dictionary id.
+
+        Arguments:
+            sentence (str):
+                Sentence to be converted.
+
+        Returns:
+            ids (:obj:`list` of int):
+                List containing the id's corresponding to each character in the input sentence.
+                With a length of: `len(ids) == len(sentence)`.
+
+        Raises:
+            KeyError:
+                If a character was encountered that is not contained in the translation dictionary.
+        """
+        vocabulary = self.get_vocabulary()
+        return [vocabulary[char] for char in sentence]
+
+    def tokens2sentence(self, idx):
+        """
+        Convert a list of dictionary id's into the corresponding characters.
+
+        Arguments:
+            idx (:obj:`list` of int):
+                List of dictionary id's to be converted.
+
+        Returns:
+            sentence (str):
+                Converted sentence.
+                With a length of: `len(sentence) == len(idx)`.
+
+        Raises:
+            KeyError:
+                If a id was encountered that is not contained in the translation dictionary.
+        """
+        reverse_vocabulary = self.get_reverse_vocabulary()
+        return ''.join([reverse_vocabulary[_id] for _id in idx])
+
+    def get_train_listing_generator(self, max_samples=None):
+        for i, _element in enumerate(self.__train_listing):
+            if max_samples is not None:
+                if i + 1 > max_samples:
+                    raise StopIteration()
+
+            yield _element
+
+    # TODO: Implement the `max_samples` argument.
     def get_eval_listing_generator(self):
-        eval_listing_file = os.path.join(
-            self.get_definition()['dataset_folder'],
-            self.get_definition()['eval_listing']
-        )
-        raw_rows = self.load_listing_file(eval_listing_file)
-        print('Loaded {} eval rows'.format(len(raw_rows)))
-
-        for row in raw_rows:
-            parsed_row = self.parse_listing_row(row)
-            yield parsed_row
+        for parsed_row in self.__eval_listing:
+            yield parsed_row['sentence'], len(parsed_row['sentence']), parsed_row['audio_path']
 
     def set_dataset_folder(self, _folder_path):
         assert os.path.exists(_folder_path), \
@@ -80,26 +127,20 @@ class Dataset:
         self.__definition['eval_listing'] = _listing_path
 
     def generate_vocabulary(self):
-        train_listing_file = os.path.join(dataset.get_definition()['dataset_folder'],
-                                          dataset.get_definition()['train_listing']
-                                          )
-        raw_train_rows = dataset.load_listing_file(train_listing_file)
-        print('Loaded {} train rows'.format(len(raw_train_rows)))
+        all_rows = self.__train_listing + self.__eval_listing
 
-        eval_listing_file = os.path.join(dataset.get_definition()['dataset_folder'],
-                                         dataset.get_definition()['eval_listing']
-                                         )
-        raw_eval_rows = dataset.load_listing_file(eval_listing_file)
-        print('Loaded {} eval rows'.format(len(raw_eval_rows)))
-
-        raw_rows = raw_train_rows + raw_eval_rows
-        print('Loaded {} rows in total'.format(len(raw_rows)))
-
-        parsed_sentences = [dataset.parse_listing_row(row)['sentence'] for row in raw_rows]
+        parsed_sentences = [row['sentence'] for row in all_rows]
         _vocabulary_dict = dataset.collect_vocabulary(parsed_sentences)
         print(_vocabulary_dict)
 
         self.__definition['vocabulary'] = _vocabulary_dict
+        self.__generate_reverse_vocabulary()
+
+    def __generate_reverse_vocabulary(self):
+        # Initialize reverse_dictionary in case a user defined dictionary was passed.
+        self.__reverse_vocabulary = dict()
+        for _token, _id in self.get_vocabulary().items():
+            self.__reverse_vocabulary[_id] = _token
 
     def load(self):
         """
@@ -114,6 +155,8 @@ class Dataset:
             definition = json.loads(json_file.read())
 
         self.__definition = definition
+        self.load_listings()
+        self.__generate_reverse_vocabulary()
 
     def save(self):
         """
@@ -126,12 +169,50 @@ class Dataset:
         with open(self.__dataset_file, 'w') as json_file:
             json.dump(self.__definition, json_file, indent=2)
 
-    def load_listing_file(self, _listing_file):
+    def load_listings(self):
+        train_listing_file = os.path.join(
+            self.get_definition()['dataset_folder'],
+            self.get_definition()['train_listing']
+        )
+        parsed_train_rows = self.__load_listing_file(train_listing_file)
+        self.__train_listing = parsed_train_rows
+        print('Loaded {} train rows'.format(len(parsed_train_rows)))
+
+        eval_listing_file = os.path.join(
+            self.get_definition()['dataset_folder'],
+            self.get_definition()['eval_listing']
+        )
+        parsed_eval_rows = self.__load_listing_file(eval_listing_file)
+        self.__eval_listing = parsed_eval_rows
+        print('Loaded {} eval rows'.format(len(parsed_eval_rows)))
+
+    def __load_listing_file(self, _listing_file):
         with open(_listing_file, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=' ', quotechar='|')
-            return list(csv_reader)
+            csv_rows = list(csv_reader)
 
-    def parse_listing_row(self, _row):
+            parsed_rows = list()
+            for row in csv_rows:
+                parsed_row = self.__parse_listing_row(row)
+
+                # Tokenize sentence.
+                sentence = parsed_row['sentence']
+                # TODO: Stopped here! Re-generate train.csv/eval.csv with `normalize_sentence`.
+                tokenized_sentence = self.sentence2tokens(sentence)
+                tokenized_sentence.append(self.get_eos_token())
+
+                # Get tokenized sentence length.
+                tokenized_sentence_length = len(tokenized_sentence)
+
+                parsed_row.update({
+                    'tokenized_sentence': tokenized_sentence,
+                    'tokenized_sentence_length': tokenized_sentence_length
+                })
+                parsed_rows.append(parsed_row)
+
+        return parsed_rows
+
+    def __parse_listing_row(self, _row):
         definition = self.__definition
         audio_folder = os.path.join(
             definition['dataset_folder'],
@@ -166,15 +247,7 @@ class Dataset:
         raise NotImplementedError
 
     def generate_normalization(self):
-        # Collect decibel statistics for all the files in the train listing.
-        train_listing_file = os.path.join(
-            self.get_definition()['dataset_folder'],
-            self.get_definition()['train_listing']
-        )
-        raw_train_rows = self.load_listing_file(train_listing_file)
-        print('Loaded {} train rows'.format(len(raw_train_rows)))
-
-        path_listing = [dataset.parse_listing_row(row)['audio_path'] for row in raw_train_rows]
+        path_listing = [row['audio_path'] for row in self.__train_listing]
 
         # (min_linear, max_linear, min_mel, max_mel)
         stats = statistics.collect_decibel_statistics(path_listing, n_threads=4)
@@ -197,6 +270,7 @@ if __name__ == '__main__':
     # dataset.set_audio_folder('wavs')
     # dataset.set_train_listing('train.csv')
     # dataset.set_eval_listing('eval.csv')
+    # dataset.load_listings()
     # dataset.generate_vocabulary()
     # dataset.generate_normalization()
     # dataset.save()

@@ -78,11 +78,23 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
                      shuffle_samples, n_buckets, n_pre_calc_batches, model_n_mels, model_reduction,
                      model_n_fft):
     def __input_fn():
-        # Load all sentences and the corresponding audio file paths.
-        sentences, sentence_lengths, wav_paths = dataset_loader.load(max_samples=max_samples)
-        print('Loaded {} dataset sentences.'.format(len(sentences)))
+        # TODO: Add flag: consumption of the generator and alternative use of `from_tensor_slices`.
+        # dataset = tf.data.Dataset.from_tensor_slices((sentences, sentence_lengths, wav_paths))
+        dataset_generator = dataset_loader.get_train_listing_generator(max_samples=max_samples)
 
-        dataset = tf.data.Dataset.from_tensor_slices((sentences, sentence_lengths, wav_paths))
+        # TODO: Rewrite so that this also works for evaluation.
+        def _generator():
+            for _element in dataset_generator:
+                yield _element['tokenized_sentence'], \
+                      _element['tokenized_sentence_length'], \
+                      _element['audio_path']
+
+        dataset = tf.data.Dataset.from_generator(
+            _generator,
+            (tf.string, tf.int32, tf.string),
+            (tf.TensorShape([]), tf.TensorShape([]), tf.TensorShape([]))
+        )
+        #    args=[max_samples])
 
         def __element_pre_process_fn(sentence, sentence_length, wav_path):
             # TODO: Rewrite this to use tensorflow functions only.
@@ -154,8 +166,10 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
 
             return sentence_length
 
-        # Derive the bucket boundaries based on the distribution of all sequence lengths in the dataset.
-        bucket_boundaries = derive_bucket_boundaries(sentence_lengths, n_buckets)
+        # TODO: Rewrite so that this also works for evaluation.
+        # Derive the bucket boundaries based on the distribution of all sequence lengths in the
+        # training portion of the dataset.
+        bucket_boundaries = derive_bucket_boundaries(dataset_loader, n_buckets)
 
         # Use the same batch_size for all buckets.
         bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
