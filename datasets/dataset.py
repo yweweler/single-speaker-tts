@@ -87,7 +87,7 @@ class Dataset:
         for i, _element in enumerate(self.__train_listing):
             if max_samples is not None:
                 if i + 1 > max_samples:
-                    raise StopIteration()
+                    return
 
             yield _element
 

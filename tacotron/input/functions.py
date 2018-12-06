@@ -14,7 +14,9 @@ from tacotron.params.inference import inference_params
 
 def train_input_fn(dataset_loader):
     return __build_input_fn(dataset_loader=dataset_loader,
-                            max_samples=training_params.max_samples,
+                            build_generator_fn=lambda: dataset_loader.get_train_listing_generator(
+                                max_samples=training_params.max_samples
+                            ),
                             batch_size=training_params.batch_size,
                             n_epochs=training_params.n_epochs,
                             n_threads=training_params.n_threads,
@@ -31,7 +33,9 @@ def train_input_fn(dataset_loader):
 
 def eval_input_fn(dataset_loader):
     return __build_input_fn(dataset_loader=dataset_loader,
-                            max_samples=evaluation_params.max_samples,
+                            build_generator_fn=lambda: dataset_loader.get_eval_listing_generator(
+                                max_samples=evaluation_params.max_samples
+                            ),
                             batch_size=evaluation_params.batch_size,
                             n_epochs=1,
                             n_threads=evaluation_params.n_threads,
@@ -75,34 +79,26 @@ def __build_inference_input_fn(dataset_loader, sentence_generator, n_threads):
     return __input_fn
 
 
-def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs,
+def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
                      n_threads, cache_preprocessed, load_preprocessed,
                      shuffle_samples, shuffle_buffer_size, n_buckets,
                      n_pre_calc_batches, model_n_mels, model_reduction,
                      model_n_fft):
     def __input_fn():
-        # TODO: raise StopIteration does not stop training for some reason.
-        # TODO: Rewrite so that this also works for evaluation.
-        dataset_generator = dataset_loader.get_train_listing_generator(max_samples=max_samples)
-
         def _generator():
-            for _element in dataset_generator:
-                try:
-                    yield _element['tokenized_sentence'], \
-                          _element['tokenized_sentence_length'], \
-                          _element['audio_path']
-                except StopIteration as se:
-                    raise se
+            for _element in build_generator_fn():
+                yield _element['tokenized_sentence'], \
+                      _element['tokenized_sentence_length'], \
+                      _element['audio_path']
 
         dataset = tf.data.Dataset.from_generator(
             _generator,
             (tf.int32, tf.int32, tf.string),
             (tf.TensorShape([None, ]), tf.TensorShape([]), tf.TensorShape([]))
         )
-        #    args=[max_samples])
 
         def __element_pre_process_fn(sentence, sentence_length, wav_path):
-            # TODO: Rewrite this to use tensorflow functions only.
+            # TODO: Rewrite this to support alternative tensorflow functions.
             if load_preprocessed:
                 # Load pre-calculated features from disk.
                 mel_spec, lin_spec = tf.py_func(py_load_processed_features,
@@ -173,12 +169,10 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs,
 
             return sentence_length
 
-        # TODO: Rewrite so that this also works for evaluation.
         # Derive the bucket boundaries based on the distribution of all sequence lengths in the
         # training portion of the dataset.
         print('Deriving bucket boundaries ...')
-        bucket_boundaries = derive_bucket_boundaries(dataset_loader, n_buckets)
-        print('Derived boundaries: {}'.format(bucket_boundaries))
+        bucket_boundaries = derive_bucket_boundaries(build_generator_fn(), n_buckets)
 
         # Use the same batch_size for all buckets.
         bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
@@ -201,10 +195,9 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs,
         dataset = dataset.prefetch(n_pre_calc_batches)
 
         # Create an iterator over the dataset.
-        # iterator = dataset.make_one_shot_iterator()
         iterator = dataset.make_initializable_iterator()
 
-        # TODO: Not sure if this is the recommended way to go.
+        # Register the iterator so it is initialized properly by the estimator.
         tf.add_to_collection(tf.GraphKeys.TABLE_INITIALIZERS, iterator.initializer)
 
         # Get features from the iterator.
@@ -219,6 +212,7 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs,
             'ph_time_frames': ph_time_frames
         }
 
+        # Print tensor info for all features.
         for k, f in features.items():
             print(k, f)
 

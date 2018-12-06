@@ -95,9 +95,8 @@ def py_post_process_spectrograms(_spectrograms):
     return wavs
 
 
-def derive_bucket_boundaries(dataset_loader, n_buckets):
-    element_lengths = [row['tokenized_sentence_length']
-                       for row in dataset_loader.get_train_listing_generator()]
+def derive_bucket_boundaries(dataset_generator, n_buckets):
+    element_lengths = [row['tokenized_sentence_length'] for row in dataset_generator]
 
     # Get the total number of samples in the dataset.
     n_samples = len(element_lengths)
