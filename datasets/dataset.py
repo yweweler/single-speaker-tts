@@ -188,7 +188,7 @@ class Dataset:
 
     def __load_listing_file(self, _listing_file):
         with open(_listing_file, 'r', newline='') as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=' ', quotechar='|')
+            csv_reader = csv.reader(csv_file, delimiter='|', quotechar='|')
             csv_rows = list(csv_reader)
 
             parsed_rows = list()
@@ -205,7 +205,7 @@ class Dataset:
                 tokenized_sentence_length = len(tokenized_sentence)
 
                 parsed_row.update({
-                    'tokenized_sentence': tokenized_sentence,
+                    'tokenized_sentence': np.array(tokenized_sentence, dtype=np.int32),
                     'tokenized_sentence_length': tokenized_sentence_length
                 })
                 parsed_rows.append(parsed_row)

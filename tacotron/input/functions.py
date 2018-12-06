@@ -80,7 +80,8 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
     def __input_fn():
         # TODO: Add flag: consumption of the generator and alternative use of `from_tensor_slices`.
         # dataset = tf.data.Dataset.from_tensor_slices((sentences, sentence_lengths, wav_paths))
-        dataset_generator = dataset_loader.get_train_listing_generator(max_samples=max_samples)
+        # dataset_generator = dataset_loader.get_train_listing_generator(max_samples=max_samples)
+        dataset_generator = dataset_loader.get_train_listing_generator()
 
         # TODO: Rewrite so that this also works for evaluation.
         def _generator():
@@ -91,8 +92,8 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
 
         dataset = tf.data.Dataset.from_generator(
             _generator,
-            (tf.string, tf.int32, tf.string),
-            (tf.TensorShape([]), tf.TensorShape([]), tf.TensorShape([]))
+            (tf.int32, tf.int32, tf.string),
+            (tf.TensorShape([None, ]), tf.TensorShape([]), tf.TensorShape([]))
         )
         #    args=[max_samples])
 
@@ -121,7 +122,8 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
             n_time_frames = tf.shape(mel_spec)[0]
 
             processed_tensors = (
-                tf.decode_raw(sentence, tf.int32),
+                sentence,
+                # tf.decode_raw(sentence, tf.int32),
                 sentence_length,
                 mel_spec,
                 lin_spec,
@@ -130,6 +132,7 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
             return processed_tensors
 
         # Pre-process dataset elements.
+        print('Applying pre-processing ...')
         dataset = dataset.map(__element_pre_process_fn, num_parallel_calls=n_threads)
 
         # TODO: Input pipeline statistics are not working right now.
@@ -169,13 +172,16 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
         # TODO: Rewrite so that this also works for evaluation.
         # Derive the bucket boundaries based on the distribution of all sequence lengths in the
         # training portion of the dataset.
+        print('Deriving bucket boundaries ...')
         bucket_boundaries = derive_bucket_boundaries(dataset_loader, n_buckets)
+        print('Derived boundaries: {}'.format(bucket_boundaries))
 
         # Use the same batch_size for all buckets.
         bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)
 
         # TODO: Wait for PR to enable bucketing to provide full batches only.
         # https://github.com/tensorflow/tensorflow/pull/24071
+        print('Applying bucketing ...')
         dataset = dataset.apply(
             # Bucket dataset elements based on sequence_length.
             # By default sequences are padded using 0 up to the longest sequence in each batch.
@@ -208,6 +214,9 @@ def __build_input_fn(dataset_loader, max_samples, batch_size, n_epochs, n_thread
             'ph_lin_specs': ph_lin_specs,
             'ph_time_frames': ph_time_frames
         }
+
+        for k, f in features.items():
+            print(k, f)
 
         return features, None
 

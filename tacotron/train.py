@@ -2,6 +2,7 @@ import os
 
 import tensorflow as tf
 
+from datasets.dataset import Dataset
 from tacotron.input.functions import train_input_fn
 from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
@@ -18,9 +19,11 @@ def main(_):
     Train a model.
     """
     # Create a dataset loader.
-    train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
-                                                  char_dict=dataset_params.vocabulary_dict,
-                                                  fill_dict=False)
+    # train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
+    #                                               char_dict=dataset_params.vocabulary_dict,
+    #                                               fill_dict=False)
+    train_dataset = Dataset(dataset_file=dataset_params.dataset_file)
+    train_dataset.load()
 
     # Get the folder to load checkpoints from.
     checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)
