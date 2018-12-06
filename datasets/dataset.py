@@ -8,6 +8,8 @@ import os
 
 import numpy as np
 
+from audio.conversion import magnitude_to_decibel, normalize_decibel, ms_to_samples
+from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
 from datasets.utils import statistics
 
@@ -33,6 +35,9 @@ class Dataset:
 
     def get_vocabulary(self):
         return self.get_definition()['vocabulary']
+
+    def get_normalization(self):
+        return self.get_definition()['normalization']
 
     def get_reverse_vocabulary(self):
         return self.__reverse_vocabulary
@@ -200,7 +205,6 @@ class Dataset:
 
                 # Tokenize sentence.
                 sentence = parsed_row['sentence']
-                # TODO: Stopped here! Re-generate train.csv/eval.csv with `normalize_sentence`.
                 tokenized_sentence = self.sentence2tokens(sentence)
                 tokenized_sentence.append(self.get_eos_token())
 
@@ -239,15 +243,6 @@ class Dataset:
             vocabulary_dict[symbol] = i
 
         return vocabulary_dict
-
-    def py_load_audio(self, _path):
-        # Load the actual audio file.
-        audio, sr = load_wav(_path.decode())
-
-        return audio, sr
-
-    def py_get_spectrograms(self, audio, sr):
-        raise NotImplementedError
 
     def generate_normalization(self):
         path_listing = [row['audio_path'] for row in self.__train_listing]

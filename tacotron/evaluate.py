@@ -2,6 +2,7 @@ import os
 
 import tensorflow as tf
 
+from datasets.dataset import Dataset
 from tacotron.input.functions import eval_input_fn
 from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
@@ -96,13 +97,11 @@ def main(_):
             _checkpoint_file (:obj:`str`):
                 Path to the checkpoint file to evaluate.
         """
-        # Create a new dataset loader.
-        eval_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
-                                                     char_dict=dataset_params.vocabulary_dict,
-                                                     fill_dict=False)
+        # Create a dataset loader.
+        eval_dataset = Dataset(dataset_file=dataset_params.dataset_file)
+        eval_dataset.load()
 
         # Create a dataset iterator for evaluation.
-        # TODO: Rewrite the dataset helpers to make it easier to handle train and eval portions.
         input_fn = eval_input_fn(
             dataset_loader=eval_dataset
         )

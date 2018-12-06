@@ -18,8 +18,12 @@ def pre_process_row(_abbreviations, whitelist_expression, _row):
 
     sentence = normalize_sentence(_abbreviations, _sentence)
     sentence = filter_whitelist(sentence, whitelist_expression)
+
+    audio_file = '{}.wav'.format(_id)
+
     return {
         'id': _id,
+        'audio_file': audio_file,
         'sentence': sentence
     }
 
@@ -45,7 +49,7 @@ def write_listing(_listing, _listing_file):
         csv_writer = csv.writer(csv_file, delimiter='|', quotechar='|')
         for processed_row in _listing:
             csv_writer.writerow(
-                (processed_row['id'], processed_row['sentence'])
+                (processed_row['audio_file'], processed_row['sentence'])
             )
 
 

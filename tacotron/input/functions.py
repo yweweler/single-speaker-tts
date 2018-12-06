@@ -1,15 +1,13 @@
 import tensorflow as tf
 from tensorflow.python.data.experimental.ops import grouping
-import tensorflow.python.data.experimental as tf_experimental
 
-import numpy as np
-
-from tacotron.input.helpers import derive_bucket_boundaries, py_pre_process_sentences, \
-    py_load_processed_features
+from datasets.utils.processing import py_load_audio, \
+    py_calculate_spectrogram
+from tacotron.input.helpers import derive_bucket_boundaries, py_load_processed_features
 from tacotron.params.evaluation import evaluation_params
+from tacotron.params.inference import inference_params
 from tacotron.params.model import model_params
 from tacotron.params.training import training_params
-from tacotron.params.inference import inference_params
 
 
 def train_input_fn(dataset_loader):
@@ -103,12 +101,37 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
                 # Load pre-calculated features from disk.
                 mel_spec, lin_spec = tf.py_func(py_load_processed_features,
                                                 [wav_path],
-                                                [tf.float32, tf.float32])
+                                                [tf.float32, tf.float32],
+                                                stateful=False)
             else:
+                # Load audio file from disk.
+                audio, sr = tf.py_func(py_load_audio,
+                                       [
+                                           wav_path
+                                       ],
+                                       [tf.float32, tf.int64],
+                                       stateful=False)
+
                 # Calculate features on the fly.
-                mel_spec, lin_spec = tf.py_func(dataset_loader.load_audio,
-                                                [wav_path],
-                                                [tf.float32, tf.float32])
+                normalization_params = dataset_loader.get_normalization()
+                mel_spec, lin_spec = tf.py_func(py_calculate_spectrogram,
+                                                [
+                                                    normalization_params['mel_mag_ref_db'],
+                                                    normalization_params['mel_mag_max_db'],
+                                                    normalization_params['linear_ref_db'],
+                                                    normalization_params['linear_mag_max_db'],
+                                                    model_params.win_len,
+                                                    model_params.win_hop,
+                                                    model_params.sampling_rate,
+                                                    model_params.n_fft,
+                                                    model_params.n_mels,
+                                                    model_params.mel_fmin,
+                                                    model_params.mel_fmax,
+                                                    model_params.reduction,
+                                                    audio
+                                                ],
+                                                [tf.float32, tf.float32],
+                                                stateful=False)
 
             # The shape of the returned values from py_func seems to get lost for some reason.
             mel_spec.set_shape((None, model_n_mels * model_reduction))
@@ -201,7 +224,7 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
         tf.add_to_collection(tf.GraphKeys.TABLE_INITIALIZERS, iterator.initializer)
 
         # Get features from the iterator.
-        ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames =\
+        ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames = \
             iterator.get_next()
 
         features = {
