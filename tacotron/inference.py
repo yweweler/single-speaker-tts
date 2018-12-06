@@ -1,10 +1,13 @@
 import os
+import re
 
 import tensorflow as tf
 
 from audio.io import save_wav
+from datasets.dataset import Dataset
+from datasets.utils.processing import prediction_prepare_sentence, synthesize, \
+    py_post_process_spectrograms
 from tacotron.input.functions import inference_input_fn
-from tacotron.input.helpers import py_pre_process_sentences, py_post_process_spectrograms
 from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
 from tacotron.params.inference import inference_params
@@ -68,10 +71,9 @@ def main(_):
     print('Loading checkpoint from "{}"'.format(checkpoint_file))
 
     # Create a dataset loader.
-    dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
-                                            char_dict=dataset_params.vocabulary_dict,
-                                            fill_dict=False)
-
+    dataset = Dataset(dataset_file=dataset_params.dataset_file)
+    dataset.load()
+    # TODO: Stopped here, the dataset has to be rewritten here!
     # Read all sentences to predict from the synthesis file.
     raw_sentences = []
     with open(inference_params.synthesis_file, 'r') as f_sent:
@@ -82,7 +84,9 @@ def main(_):
     print("{} sentences were loaded for inference.".format(len(raw_sentences)))
 
     # Pre-process the loaded sentences for synthesis.
-    sentences = py_pre_process_sentences(raw_sentences, dataset)
+    whitelist_expression = re.compile(r'[^a-z !?,\-:;()"\']+')
+    sentences = [prediction_prepare_sentence(dataset, whitelist_expression, sentence)
+                 for sentence in raw_sentences]
 
     # TODO: Either implement this in the input_fn or remove it entirely and use batching.
     def __build_sentence_generator(_sentences):
@@ -109,10 +113,18 @@ def main(_):
                                        predict_keys=['output_linear_spec'],
                                        checkpoint_path=checkpoint_file)
 
+    def synthesis_fn(linear_mag):
+        return synthesize(linear_mag, model_params.win_len, model_params.win_hop,
+                          model_params.sampling_rate, model_params.n_fft,
+                          model_params.magnitude_power, model_params.reconstruction_iterations)
+
     # Write all generated waveforms to disk.
     for i, (sentence, result) in enumerate(zip(raw_sentences, predict_result)):
         spectrogram = result['output_linear_spec']
-        wavs = py_post_process_spectrograms([spectrogram])
+        wavs = py_post_process_spectrograms([spectrogram],
+                                            dataset,
+                                            synthesis_fn,
+                                            inference_params.n_synthesis_threads)
         wav = wavs[0]
 
         # Append ".wav" to the sentence line number to get the filename.

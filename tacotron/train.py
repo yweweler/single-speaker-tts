@@ -21,6 +21,7 @@ def main(_):
     # Create a dataset loader.
     train_dataset = Dataset(dataset_file=dataset_params.dataset_file)
     train_dataset.load()
+    train_dataset.load_listings()
 
     # Get the folder to load checkpoints from.
     checkpoint_dir = os.path.join(training_params.checkpoint_dir, training_params.checkpoint_run)

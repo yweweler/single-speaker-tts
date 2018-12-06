@@ -8,9 +8,6 @@ import os
 
 import numpy as np
 
-from audio.conversion import magnitude_to_decibel, normalize_decibel, ms_to_samples
-from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
-from audio.io import load_wav
 from datasets.utils import statistics
 
 
@@ -163,7 +160,6 @@ class Dataset:
             definition = json.loads(json_file.read())
 
         self.__definition = definition
-        self.load_listings()
         self.__generate_reverse_vocabulary()
 
     def save(self):
@@ -263,6 +259,7 @@ class Dataset:
 if __name__ == '__main__':
     dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
     dataset.load()
+    dataset.load_listings()
 
     # dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
     # dataset.set_audio_folder('wavs')

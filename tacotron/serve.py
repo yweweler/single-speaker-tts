@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib as tfc
 
-from tacotron.input.helpers import py_pre_process_sentences, py_post_process_spectrograms
+from tacotron.input.helpers import py_pre_process_sentences
 from tacotron.params.dataset import dataset_params
 from tacotron.params.serving import serving_params
 
@@ -37,6 +37,7 @@ def main(_):
 
     print('Generated spectrogram {}'.format(prediction['output_linear_spec'].shape))
 
+    # TODO: The interface has changed, rewrite call.
     wav = py_post_process_spectrograms(prediction['output_linear_spec'])
     print('Generated waveform')
 

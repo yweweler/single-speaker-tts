@@ -1,11 +1,15 @@
 import math
 import re
+from multiprocessing.pool import ThreadPool
 
 import numpy as np
+import os
 
-from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel
+from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel, \
+    inv_normalize_decibel, decibel_to_magnitude
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
 from audio.io import load_wav
+from audio.synthesis import spectrogram_to_wav
 
 
 def utf8_to_ascii(sentence):
@@ -75,6 +79,23 @@ def normalize_sentence(abbreviations, sentence):
     sentence = replace_abbreviations(abbreviations, sentence)
 
     return sentence
+
+
+def prediction_prepare_sentence(dataset, whitelist_expression, sentence):
+    abbreviations = dict()
+    sentence = normalize_sentence(abbreviations, sentence)
+    sentence = filter_whitelist(sentence, whitelist_expression)
+
+    tokenized_sentence = dataset.sentence2tokens(sentence)
+    tokenized_sentence.append(dataset.get_eos_token())
+
+    return np.array(tokenized_sentence, dtype=np.int32)
+
+
+# def prediction_pad_sentences(tokenized_sentences):
+#     # Pad sentence to the same length in order to be able to batch them in a single tensor.
+#     max_length = max(sequence_lengths)
+#     sentences = np.array([__py_pad_sentence(sentence, max_length) for sentence in sentences])
 
 
 def split_list_proportional(_listing, train=0.8):
@@ -206,3 +227,85 @@ def py_calculate_spectrogram(mel_mag_ref_db,
 
     return np.array(mel_mag_db).astype(np.float32), \
            np.array(linear_mag_db).astype(np.float32)
+
+
+def synthesize(linear_mag, _win_len, _win_hop, sampling_rate, n_fft, magnitude_power,
+               reconstruction_iterations):
+    # linear_mag = np.squeeze(linear_mag, -1)
+    linear_mag = np.power(linear_mag, magnitude_power)
+
+    win_len = ms_to_samples(_win_len, sampling_rate)
+    win_hop = ms_to_samples(_win_hop, sampling_rate)
+
+    print('Spectrogram inversion ...')
+    return spectrogram_to_wav(linear_mag,
+                              win_len,
+                              win_hop,
+                              n_fft,
+                              reconstruction_iterations)
+
+
+def py_post_process_spectrograms(_spectrograms, dataset_loader, synthesis_fn, n_synthesis_threads):
+    normalization_params = dataset_loader.get_normalization()
+    # Apply Griffin-Lim to all spectrogram's to get the waveforms.
+    normalized = list()
+    for spectrogram in _spectrograms:
+        print('Reverse spectrogram normalization ...', spectrogram.shape)
+        linear_mag_db = inv_normalize_decibel(spectrogram.T,
+                                              normalization_params['mel_mag_ref_db'],
+                                              normalization_params['mel_mag_max_db'])
+
+        linear_mag = decibel_to_magnitude(linear_mag_db)
+        normalized.append(linear_mag)
+
+    specs = normalized
+
+    # Synthesize waveforms from the spectrograms.
+    pool = ThreadPool(n_synthesis_threads)
+    wavs = pool.map(synthesis_fn, specs)
+    pool.close()
+    pool.join()
+
+    return wavs
+
+
+def derive_bucket_boundaries(dataset_generator, n_buckets):
+    element_lengths = [row['tokenized_sentence_length'] for row in dataset_generator]
+
+    # Get the total number of samples in the dataset.
+    n_samples = len(element_lengths)
+
+    # Sort sequence lengths in order to slice them into buckets that contain sequences of roughly
+    # equal length.
+    sorted_sentence_lengths = np.sort(element_lengths)
+
+    if n_samples < n_buckets:
+        raise AssertionError('The number of entries loaded is smaller than the number of '
+                             'buckets to be created. Automatic calculation of the bucket '
+                             'boundaries is not possible.')
+
+    # Slice the sorted lengths into equidistant sections and use the first element of a slice as
+    # the bucket boundary.
+    bucket_step = n_samples // n_buckets
+    bucket_boundaries = sorted_sentence_lengths[::bucket_step]
+
+    # Throw away the first and last bucket boundaries since the bucketing algorithm automatically
+    # adds two surrounding ones.
+    bucket_boundaries = bucket_boundaries[1:-1].tolist()
+
+    # Remove duplicate boundaries from the list.
+    bucket_boundaries = sorted(list(set(bucket_boundaries)))
+
+    print('bucket_boundaries', bucket_boundaries)
+    print('n_buckets: {} + 2'.format(len(bucket_boundaries)))
+
+    return bucket_boundaries
+
+
+def py_load_processed_features(wav_path):
+    file_path = os.path.splitext(wav_path.decode())[0]
+
+    # Load features from disk.
+    data = np.load('{}.npz'.format(file_path))
+
+    return data['mel_mag_db'], data['linear_mag_db']

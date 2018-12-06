@@ -100,6 +100,7 @@ def main(_):
         # Create a dataset loader.
         eval_dataset = Dataset(dataset_file=dataset_params.dataset_file)
         eval_dataset.load()
+        eval_dataset.load_listings()
 
         # Create a dataset iterator for evaluation.
         input_fn = eval_input_fn(

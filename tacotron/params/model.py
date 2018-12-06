@@ -1,3 +1,7 @@
+"""
+Contains the model definition.
+"""
+
 import tensorflow as tf
 
 # Default hyper-parameters:
