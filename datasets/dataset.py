@@ -91,10 +91,13 @@ class Dataset:
 
             yield _element
 
-    # TODO: Implement the `max_samples` argument.
-    def get_eval_listing_generator(self):
-        for parsed_row in self.__eval_listing:
-            yield parsed_row['sentence'], len(parsed_row['sentence']), parsed_row['audio_path']
+    def get_eval_listing_generator(self, max_samples=None):
+        for i, _element in enumerate(self.__eval_listing):
+            if max_samples is not None:
+                if i + 1 > max_samples:
+                    return
+
+            yield _element
 
     def set_dataset_folder(self, _folder_path):
         assert os.path.exists(_folder_path), \
