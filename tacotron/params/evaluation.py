@@ -17,6 +17,9 @@ evaluation_params = tf.contrib.training.HParams(
     # Maximum number elements that will be buffered when prefetching for the shuffle operation.
     shuffle_buffer_size=2 * 4,
 
+    # Flag telling the code to load pre-processed features or calculate them on the fly.
+    load_preprocessed=False,
+
     # Number of batches to pre-calculate for feeding to the GPU.
     n_pre_calc_batches=8,
 

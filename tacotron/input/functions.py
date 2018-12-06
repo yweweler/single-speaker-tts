@@ -38,7 +38,7 @@ def eval_input_fn(dataset_loader):
                             n_epochs=1,
                             n_threads=evaluation_params.n_threads,
                             cache_preprocessed=False,
-                            load_preprocessed=False,
+                            load_preprocessed=evaluation_params.load_preprocessed,
                             shuffle_samples=evaluation_params.shuffle_samples,
                             shuffle_buffer_size=evaluation_params.shuffle_buffer_size,
                             n_buckets=evaluation_params.n_buckets,
@@ -146,7 +146,6 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
 
             processed_tensors = (
                 sentence,
-                # tf.decode_raw(sentence, tf.int32),
                 sentence_length,
                 mel_spec,
                 lin_spec,
