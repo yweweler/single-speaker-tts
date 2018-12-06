@@ -110,7 +110,7 @@ class Dataset:
 
         self.__definition['audio_folder'] = _audio_folder
 
-    def set_train_listing(self, _file_path):
+    def set_train_listing_file(self, _file_path):
         _dataset_folder = self.__definition['dataset_folder']
         _listing_path = os.path.join(_dataset_folder, _file_path)
         assert os.path.exists(_listing_path), \
@@ -118,7 +118,7 @@ class Dataset:
 
         self.__definition['train_listing'] = _listing_path
 
-    def set_eval_listing(self, _file_path):
+    def set_eval_listing_file(self, _file_path):
         _dataset_folder = self.__definition['dataset_folder']
         _listing_path = os.path.join(_dataset_folder, _file_path)
         assert os.path.exists(_listing_path), \
@@ -268,8 +268,8 @@ if __name__ == '__main__':
 
     # dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
     # dataset.set_audio_folder('wavs')
-    # dataset.set_train_listing('train.csv')
-    # dataset.set_eval_listing('eval.csv')
+    # dataset.set_train_listing_file('train.csv')
+    # dataset.set_eval_listing_file('eval.csv')
     # dataset.load_listings()
     # dataset.generate_vocabulary()
     # dataset.generate_normalization()

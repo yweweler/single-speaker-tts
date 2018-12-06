@@ -14,6 +14,9 @@ evaluation_params = tf.contrib.training.HParams(
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=False,
 
+    # Maximum number elements that will be buffered when prefetching for the shuffle operation.
+    shuffle_buffer_size=2 * 4,
+
     # Number of batches to pre-calculate for feeding to the GPU.
     n_pre_calc_batches=8,
 

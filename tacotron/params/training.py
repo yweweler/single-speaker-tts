@@ -14,13 +14,17 @@ training_params = tf.contrib.training.HParams(
     n_threads=4,
 
     # Maximal number of samples to load from the train dataset.
-    max_samples=100,
+    # Set to `None` if all samples from the dataset should be used.
+    max_samples=None,
 
     # Flag that enables/disables sample shuffle at the beginning of each epoch.
     shuffle_samples=True,
 
+    # Maximum number elements that will be buffered when prefetching for the shuffle operation.
+    shuffle_buffer_size=2 * 4,
+
     # Flag telling the training code to load pre-processed features or calculate them on the fly.
-    load_preprocessed=False,
+    load_preprocessed=True,
 
     # Cache preprocessed features in RAM entirely.
     cache_preprocessed=True,

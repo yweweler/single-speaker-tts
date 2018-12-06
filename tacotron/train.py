@@ -19,9 +19,6 @@ def main(_):
     Train a model.
     """
     # Create a dataset loader.
-    # train_dataset = dataset_params.dataset_loader(dataset_folder=dataset_params.dataset_folder,
-    #                                               char_dict=dataset_params.vocabulary_dict,
-    #                                               fill_dict=False)
     train_dataset = Dataset(dataset_file=dataset_params.dataset_file)
     train_dataset.load()
 
@@ -66,7 +63,6 @@ def main(_):
     )
 
     # Create a dataset iterator for training.
-    # TODO: Rewrite the dataset helpers to make it easier to handle train and eval portions.
     input_fn = train_input_fn(
         dataset_loader=train_dataset
     )
