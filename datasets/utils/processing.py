@@ -171,9 +171,16 @@ def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
     return mel_mag_db, linear_mag_db
 
 
+def load_audio(_path):
+    # Load the actual audio file using plain python code.
+    audio, sr = load_wav(_path)
+
+    return audio, sr
+
+
 def py_load_audio(_path):
-    # Load the actual audio file.
-    audio, sr = load_wav(_path.decode())
+    # Load the actual audio file in an `tf.py_func` compatible way.
+    audio, sr = load_audio(_path.decode())
 
     return audio, sr
 
