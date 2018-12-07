@@ -1,3 +1,7 @@
+"""
+Use a trained speech synthesis model for prediction.
+"""
+
 import os
 import re
 
@@ -73,7 +77,7 @@ def main(_):
     # Create a dataset loader.
     dataset = Dataset(dataset_file=dataset_params.dataset_file)
     dataset.load()
-    # TODO: Stopped here, the dataset has to be rewritten here!
+
     # Read all sentences to predict from the synthesis file.
     raw_sentences = []
     with open(inference_params.synthesis_file, 'r') as f_sent:
@@ -135,7 +139,7 @@ def main(_):
 
         # Write the wav to disk.
         save_wav(save_path, wav, model_params.sampling_rate, True)
-        print('Saved: "{}"'.format(save_path))
+        print('Saved: "{}" to "{}"'.format(sentence, save_path))
 
 
 if __name__ == '__main__':
