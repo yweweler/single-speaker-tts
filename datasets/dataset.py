@@ -240,11 +240,11 @@ class Dataset:
 
         return vocabulary_dict
 
-    def generate_normalization(self):
+    def generate_normalization(self, n_threads=1):
         path_listing = [row['audio_path'] for row in self.__train_listing]
 
         # (min_linear, max_linear, min_mel, max_mel)
-        stats = statistics.collect_decibel_statistics(path_listing, n_threads=4)
+        stats = statistics.collect_decibel_statistics(path_listing, n_threads=n_threads)
 
         self.__definition['normalization'] = {
             "mel_mag_ref_db": stats[3],
@@ -265,9 +265,11 @@ if __name__ == '__main__':
     # dataset.set_audio_folder('wavs')
     # dataset.set_train_listing_file('train.csv')
     # dataset.set_eval_listing_file('eval.csv')
+    # TODO: Fix cyclic dependency between `load_listings` and `generate_vocabulary`.
     # dataset.load_listings()
     # dataset.generate_vocabulary()
     # dataset.generate_normalization()
+    # TODO: Implement automatic feature pre-calculation.
     # dataset.save()
 
     # for element in dataset.get_train_listing_generator():

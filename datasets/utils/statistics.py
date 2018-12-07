@@ -1,8 +1,12 @@
+"""
+Helper functions for calculating and plotting various statistics from audio files.
+"""
+
+import os
 from multiprocessing.pool import ThreadPool
 
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 
 from audio.conversion import magnitude_to_decibel, get_duration, ms_to_samples
 from audio.features import linear_scale_spectrogram, mel_scale_spectrogram
@@ -10,25 +14,19 @@ from audio.io import load_wav
 from audio.synthesis import griffin_lim_v2
 
 
-def decibel_statistics(_path):
-    # TODO: Update docstring.
+def decibel_statistics_from_file(_path):
     """
     Calculate (min, max) values for the decibel values of both
     the linear scale magnitude spectrogram and a
     mel scale magnitude spectrogram.
 
     Arguments:
-        wav (np.ndarray):
-            Audio time series.
-            The shape is expected to be shape=(n,).
-
-        sampling_rate (int):
-            Sampling rate using in the calculation of `wav`.
+        _path (str):
+            Audio file path.
 
     Returns:
         np.ndarray:
             Min and max values of the decibel representations.
-
             Calculation: np.array[min(linear_db), max(linear_db), min(mel_db), max(mel_db)]
     """
     wav, sampling_rate = load_wav(_path)
@@ -58,12 +56,10 @@ def decibel_statistics(_path):
     # Convert the linear spectrogram into decibel representation.
     linear_mag = np.abs(linear_spec)
     linear_mag_db = magnitude_to_decibel(linear_mag)
-    # linear_mag_db = normalize_decibel(linear_mag_db, 20, 100)
 
     # Convert the mel spectrogram into decibel representation.
     mel_mag = np.abs(mel_spec)
     mel_mag_db = magnitude_to_decibel(mel_mag)
-    # mel_mag_db = normalize_decibel(mel_mag_db, -7.7, 95.8)
 
     return np.array([
         np.min(linear_mag_db), np.max(linear_mag_db),
@@ -91,10 +87,9 @@ def collect_decibel_statistics(path_listing, n_threads=1):
 
             Calculation: (avg(linear_min_db), avg(linear_max_db), avg(mel_min_db), avg(mel_max_db)).
     """
-    pool = ThreadPool(n_threads)
-
     # Accumulate statistics for a list of file paths.
-    stats_list = pool.map(decibel_statistics, path_listing)
+    pool = ThreadPool(n_threads)
+    stats_list = pool.map(decibel_statistics_from_file, path_listing)
     pool.close()
     pool.join()
 
@@ -246,7 +241,7 @@ def plot_iterate_reconstruction_error(dataset_name, path_listing, n_iters):
     # Create a plot of the MSE related to the number of reconstruction iterations.
     # fig = plt.figure(figsize=((1.5 * 14.0 / 2.54)/1.0, 7.7 / 2.54), dpi=100)
     fig = plt.figure(figsize=((14.0 / 2.54) / 1.35, 7.7 / 2.54), dpi=100)
-    plt.plot(x_iters, mse_errors, color="#B85450")#, marker="x")
+    plt.plot(x_iters, mse_errors, color="#B85450")  # , marker="x")
     # plt.scatter(x_iters, mse_errors, color="#E1D5E7", marker="x")
     plt.grid(linestyle='dashed')
     plt.xlim([1, x_iters[-1]])
@@ -262,7 +257,7 @@ def plot_iterate_reconstruction_error(dataset_name, path_listing, n_iters):
 
     # Create a plot of the number of reconstruction iterations related to execution time.
     fig = plt.figure(figsize=((14.0 / 2.54) / 1.25, 7.7 / 2.54), dpi=100)
-    plt.plot(x_iters, avg_durations, color="#B85450")#, marker="x")
+    plt.plot(x_iters, avg_durations, color="#B85450")  # , marker="x")
     plt.grid(linestyle='dashed')
     plt.xlim([1, x_iters[-1]])
     plt.ylim([0, 7])

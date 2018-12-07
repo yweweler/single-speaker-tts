@@ -1,9 +1,9 @@
 import math
+import os
 import re
 from multiprocessing.pool import ThreadPool
 
 import numpy as np
-import os
 
 from audio.conversion import ms_to_samples, magnitude_to_decibel, normalize_decibel, \
     inv_normalize_decibel, decibel_to_magnitude
@@ -61,11 +61,41 @@ def replace_abbreviations(abbreviations, sentence):
 
 
 def filter_whitelist(sentence, whitelist_expression):
+    """
+    Remove all characters from a string that do not match a whitelist expression.
+
+    Arguments:
+        sentence (str):
+            String to br filtered.
+
+        whitelist_expression:
+            Compiled regex pattern object which is used for whitelisting.
+
+    Returns (str):
+        Filtered string.
+    """
     filtered_sentence = re.sub(whitelist_expression, '', sentence)
     return filtered_sentence
 
 
 def normalize_sentence(abbreviations, sentence):
+    """
+    Normalize a sentence.
+    Normalization includes stripping non-printable character, lower-case conversion and
+    abbreviation replacements.
+
+    Arguments:
+        abbreviations (:obj:`dict` of :obj:`str`):
+            Abbreviation translation dictionary.
+            Every substring matching a key in the `abbreviations` dictionary is replaced with
+            the key.
+
+        sentence (str):
+            String to be normalized.
+
+    Returns (str):
+        The normalized sentence.
+    """
     sentence = sentence.strip()
 
     # Extract the transcription.
@@ -81,13 +111,24 @@ def normalize_sentence(abbreviations, sentence):
     return sentence
 
 
-def prediction_prepare_sentence(dataset, whitelist_expression, sentence):
+def prediction_prepare_sentence(dataset_loader, whitelist_expression, sentence):
+    """
+    TODO: Write docstring.
+    Arguments:
+        dataset_loader:
+        whitelist_expression:
+        sentence:
+
+    Returns (np.ndarray):
+        Numpy array with `dtype=np.int32` containing the normalized and tokenized sentence.
+    """
+
     abbreviations = dict()
     sentence = normalize_sentence(abbreviations, sentence)
     sentence = filter_whitelist(sentence, whitelist_expression)
 
-    tokenized_sentence = dataset.sentence2tokens(sentence)
-    tokenized_sentence.append(dataset.get_eos_token())
+    tokenized_sentence = dataset_loader.sentence2tokens(sentence)
+    tokenized_sentence.append(dataset_loader.get_eos_token())
 
     return np.array(tokenized_sentence, dtype=np.int32)
 
@@ -99,6 +140,15 @@ def prediction_prepare_sentence(dataset, whitelist_expression, sentence):
 
 
 def split_list_proportional(_listing, train=0.8):
+    """
+    # TODO: Write docstring.
+    Arguments:
+        _listing:
+        train:
+
+    Returns:
+
+    """
     assert 0.0 < train < 1.0, \
         'Training proportion must be greater 0.0 and below 1.0.'
 
