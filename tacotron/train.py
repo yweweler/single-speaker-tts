@@ -1,3 +1,7 @@
+"""
+Train a speech synthesis model.
+"""
+
 import os
 
 import tensorflow as tf
