@@ -1,8 +1,27 @@
+"""
+Generic helper functions for training, evaluation, prediction and serving.
+"""
+
 import os
 
 
 def inputs_from_dataset_iter(dataset_iter):
-    # get inputs from the dataset iterator.
+    """
+    Create a dictionary with all columns the generator outputs.
+    
+    Arguments:
+        dataset_iter (tf.data.Iterator):
+            Tensorflow dataset iterator.
+            The iterator is expected to produce the following columns:
+            (ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames).
+
+    Returns:
+        paths (:obj:`dict` of :obj:`tf.Tensor`):
+            Dictionary containing the tensors that are fed using the `dataset_iter` iterator.
+            The keys are ['ph_sentences', 'ph_sentence_length', 'ph_mel_specs', 'ph_lin_specs',
+            'ph_time_frames']
+    """
+    # Get inputs from the dataset iterator.
     ph_sentences, ph_sentence_lengths, ph_mel_specs, ph_lin_specs, ph_time_frames = \
         dataset_iter.get_next()
 
