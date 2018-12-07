@@ -8,7 +8,7 @@ import os
 def inputs_from_dataset_iter(dataset_iter):
     """
     Create a dictionary with all columns the generator outputs.
-    
+
     Arguments:
         dataset_iter (tf.data.Iterator):
             Tensorflow dataset iterator.

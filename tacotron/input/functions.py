@@ -1,3 +1,8 @@
+"""
+Tensorflow input functions for train, evaluate and prediction implemented based on
+`tf.data.Dataset`.
+"""
+
 import tensorflow as tf
 from tensorflow.python.data.experimental.ops import grouping
 
@@ -10,10 +15,22 @@ from tacotron.params.training import training_params
 
 
 def train_input_fn(dataset_loader):
+    """
+    Create the input_fn function for model training.
+
+    Arguments:
+        dataset_loader (datasets.dataset.Dataset):
+            Dataset loading helper to load the dataset with.
+
+    Returns:
+        input_fn function for use in `estimator.train`.
+    """
+
+    def __build_generator_fn():
+        return dataset_loader.get_train_listing_generator(max_samples=training_params.max_samples)
+
     return __build_input_fn(dataset_loader=dataset_loader,
-                            build_generator_fn=lambda: dataset_loader.get_train_listing_generator(
-                                max_samples=training_params.max_samples
-                            ),
+                            build_generator_fn=__build_generator_fn,
                             batch_size=training_params.batch_size,
                             n_epochs=training_params.n_epochs,
                             n_threads=training_params.n_threads,
@@ -29,10 +46,22 @@ def train_input_fn(dataset_loader):
 
 
 def eval_input_fn(dataset_loader):
+    """
+    Create the input_fn function for model evaluation.
+
+    Arguments:
+        dataset_loader (datasets.dataset.Dataset):
+            Dataset loading helper to load the dataset with.
+
+    Returns:
+        input_fn function for use in `estimator.evaluate`.
+    """
+
+    def __build_generator_fn():
+        return dataset_loader.get_eval_listing_generator(max_samples=training_params.max_samples)
+
     return __build_input_fn(dataset_loader=dataset_loader,
-                            build_generator_fn=lambda: dataset_loader.get_eval_listing_generator(
-                                max_samples=evaluation_params.max_samples
-                            ),
+                            build_generator_fn=__build_generator_fn,
                             batch_size=evaluation_params.batch_size,
                             n_epochs=1,
                             n_threads=evaluation_params.n_threads,
@@ -48,12 +77,31 @@ def eval_input_fn(dataset_loader):
 
 
 def inference_input_fn(dataset_loader, sentence_generator):
+    """
+    Create the input_fn function for model prediction.
+
+    Arguments:
+        dataset_loader (datasets.dataset.Dataset):
+            Dataset loading helper to load the dataset with.
+
+        sentence_generator (:obj:`iter` of :obj:`str`):
+            Generator to read individual strings to synthezise.
+            Currently the strings are expected to be pre-processed such that they only contain
+            characters from the vocabulary of the dataset.
+
+    Returns:
+        input_fn function for use in `estimator.predict`.
+    """
     return __build_inference_input_fn(dataset_loader=dataset_loader,
                                       sentence_generator=sentence_generator,
                                       n_threads=inference_params.n_synthesis_threads)
 
 
 def __build_inference_input_fn(dataset_loader, sentence_generator, n_threads):
+    # TODO: Implement sentence character filtering and normalization here.
+    # This way the caller does not have to pre-process raw sentences manually and can feed any
+    # string to the input_fn.
+
     def __input_fn():
         dataset = tf.data.Dataset.from_generator(sentence_generator,
                                                  (tf.int32),
@@ -81,9 +129,78 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
                      shuffle_samples, shuffle_buffer_size, n_buckets,
                      n_pre_calc_batches, model_n_mels, model_reduction,
                      model_n_fft):
+    """
+    Input_fn function generating a features dictionary and labels from a dataset loading helper.
+
+    Arguments:
+        dataset_loader (datasets.dataset.Dataset):
+            Dataset loading helper to load the dataset with.
+
+        build_generator_fn (callable):
+            Function that returns an iterator over the dataset_loader when called.
+
+        batch_size (int):
+            Batch-size to use for generating mini-batches.
+
+        n_epochs (int):
+            Number of epoch to repeat the dataset.
+
+        n_threads (int):
+            Number of thread to use for parallel dataset loading.
+
+        cache_preprocessed (bool):
+            Cache preprocessed features in RAM entirely.
+
+        load_preprocessed (bool):
+            Load pre-processed features from disk or calculate them on the fly.
+
+        shuffle_samples (bool):
+            Shuffle at the beginning of each epoch.
+
+        shuffle_buffer_size (int):
+            Maximum number elements that will be buffered when pre-fetching for the shuffle
+            operation.
+
+        n_buckets (int):
+            The number of buckets to create. Note that this is the number of buckets that are
+            actually created. If less buckets are needed for proper sorting of the data, less
+            buckets are used.
+
+        n_pre_calc_batches (int):
+            Number of batches to pre-calculate for feeding.
+
+        model_n_mels (int):
+            Number of Mel bands.
+
+        model_reduction (int):
+            Model reduction factor r to use for decoder target folding.
+
+        model_n_fft (int):
+            FFT window size.
+
+    Returns:
+        features (:obj:`dict` of :obj:`tf.Tensor`):
+            The dictionary keys are:
+            ['ph_sentences', 'ph_sentence_lengths', 'ph_mel_specs', 'ph_lin_specs',
+            'ph_time_frames']
+
+        labels:
+            The input_fn does not generate labels.
+            Defaults to `None`.
+    """
+
     def __input_fn():
         def _generator():
+            """
+            Generator that unpacks only the data required from the dataset_loader.
+
+            Returns (:obj:`tuple`):
+                Tuple containing the tokenized un-padded sentence, the length of the tokenized
+                sentence and the full path to the audio file to load.
+            """
+            # Get a full dataset row from the dataset loader.
             for _element in build_generator_fn():
+                # Yield only the columns of interest.
                 yield _element['tokenized_sentence'], \
                       _element['tokenized_sentence_length'], \
                       _element['audio_path']
@@ -104,12 +221,12 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
                                                 stateful=False)
             else:
                 # Load audio file from disk.
-                audio, sr = tf.py_func(py_load_audio,
-                                       [
-                                           wav_path
-                                       ],
-                                       [tf.float32, tf.int64],
-                                       stateful=False)
+                audio, _ = tf.py_func(py_load_audio,
+                                      [
+                                          wav_path
+                                      ],
+                                      [tf.float32, tf.int64],
+                                      stateful=False)
 
                 # Calculate features on the fly.
                 normalization_params = dataset_loader.get_normalization()
@@ -232,10 +349,6 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
             'ph_lin_specs': ph_lin_specs,
             'ph_time_frames': ph_time_frames
         }
-
-        # Print tensor info for all features.
-        for k, f in features.items():
-            print(k, f)
 
         return features, None
 
