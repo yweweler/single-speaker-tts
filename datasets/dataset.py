@@ -20,29 +20,74 @@ class Dataset:
     """
 
     def __init__(self, dataset_file):
+        # Path ot the dataset definition file.
         self.__dataset_file = dataset_file
+
+        # Dataset definition.
         self.__definition = dict()
 
+        # Inverse version of the vocabulary dictionary from the dataste definition.
+        # This translates integer tokens back to symbols.
         self.__reverse_vocabulary = None
+
+        # Loaded and processed training and evaluation listings.
         self.__train_listing = None
         self.__eval_listing = None
 
     def get_definition(self):
+        """
+        Get the dataset definition.
+
+        Returns (dict):
+            Dataset definition dictionary
+        """
         return self.__definition
 
     def get_vocabulary(self):
+        """
+        Get the dataset vocabulary.
+
+        Returns (dict):
+            Vocabulary dictionary of the dataset.
+            It translates symbols into integer tokens.
+        """
         return self.get_definition()['vocabulary']
 
     def get_normalization(self):
+        """
+        Get the feature normalization parameters.
+
+        Returns (dict):
+            Dictionary containing the feature normalization parameters.
+        """
         return self.get_definition()['normalization']
 
     def get_reverse_vocabulary(self):
+        """
+        Get the reverse vocabulary.
+        This translates integer tokens back to symbols.
+
+        Returns (dict):
+            Reverse vocabulary dictionary.
+        """
         return self.__reverse_vocabulary
 
     def get_eos_token(self):
+        """
+        Get the End-Of-Sequence (EOS) token from the vocabulary.
+
+        Returns (int):
+            EOS token.
+        """
         return self.get_vocabulary()['eos']
 
     def get_pad_token(self):
+        """
+        Get the Padding (PAD) token from the vocabulary.
+
+        Returns (int):
+            PAD token.
+        """
         return self.get_vocabulary()['pad']
 
     def sentence2tokens(self, sentence):
@@ -86,6 +131,19 @@ class Dataset:
         return ''.join([reverse_vocabulary[_id] for _id in idx])
 
     def get_train_listing_generator(self, max_samples=None):
+        """
+        Create a generator over the parsed training listing rows.
+
+        Arguments:
+            max_samples (int):
+                Number of samples after which to stop generating.
+                Default is `None`, meaning that all available rows should be returned.
+
+        Yields (dict):
+            Parsed listing row as a dictionary.
+            The keys are: ['audio_path', sentence, 'tokenized_sentence',
+            'tokenized_sentence_length'].
+        """
         for i, _element in enumerate(self.__train_listing):
             if max_samples is not None:
                 if i + 1 > max_samples:
@@ -94,6 +152,19 @@ class Dataset:
             yield _element
 
     def get_eval_listing_generator(self, max_samples=None):
+        """
+        Create a generator over the parsed evaluation listing rows.
+
+        Arguments:
+            max_samples (int):
+                Number of samples after which to stop generating.
+                Default is `None`, meaning that all available rows should be returned.
+
+        Yields (dict):
+            Parsed listing row as a dictionary.
+            The keys are: ['audio_path', sentence, 'tokenized_sentence',
+            'tokenized_sentence_length'].
+        """
         for i, _element in enumerate(self.__eval_listing):
             if max_samples is not None:
                 if i + 1 > max_samples:
@@ -102,12 +173,26 @@ class Dataset:
             yield _element
 
     def set_dataset_folder(self, _folder_path):
+        """
+        Set the dataset base folder in the dataset definition.
+
+        Arguments:
+            _folder_path (str):
+                Path to the dataset base folder.
+        """
         assert os.path.exists(_folder_path), \
             'The dataset folder "{}" does not exist!'.format(_folder_path)
 
         self.__definition['dataset_folder'] = _folder_path
 
     def set_audio_folder(self, _folder_path):
+        """
+        Set the audio folder in the dataset definition.
+
+        Arguments:
+            _folder_path (str):
+                Path to the audio folder relative from the dataset base folder.
+        """
         _dataset_folder = self.__definition['dataset_folder']
         _audio_folder = os.path.join(_dataset_folder, _folder_path)
         assert os.path.exists(_audio_folder), \
@@ -116,6 +201,13 @@ class Dataset:
         self.__definition['audio_folder'] = _audio_folder
 
     def set_train_listing_file(self, _file_path):
+        """
+        Set the path to the train listing file in the dataset definition.
+
+        Arguments:
+            _file_path (str):
+                Path to the listing file relative from the dataset baser folder.
+        """
         _dataset_folder = self.__definition['dataset_folder']
         _listing_path = os.path.join(_dataset_folder, _file_path)
         assert os.path.exists(_listing_path), \
@@ -124,6 +216,13 @@ class Dataset:
         self.__definition['train_listing'] = _listing_path
 
     def set_eval_listing_file(self, _file_path):
+        """
+        Set the path to the eval listing file in the dataset definition.
+
+        Arguments:
+            _file_path (str):
+                Path to the listing file relative from the dataset baser folder.
+        """
         _dataset_folder = self.__definition['dataset_folder']
         _listing_path = os.path.join(_dataset_folder, _file_path)
         assert os.path.exists(_listing_path), \
