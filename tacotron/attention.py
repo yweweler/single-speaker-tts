@@ -66,8 +66,7 @@ def _luong_local_compute_attention(attention_mechanism, cell_output, attention_s
         value_window = tf.pad(value_window, value_window_paddings, 'CONSTANT')
 
         # Shape information is lost after padding ;(.
-        value_window.set_shape((attention_mechanism.window_size,
-                                attention_mechanism._num_units))
+        value_window.set_shape((attention_mechanism.window_size, attention_mechanism._num_units))
 
         # Calculate the context vector for the current batch entry using only information from
         # teh window.
@@ -535,8 +534,7 @@ class AdvancedAttentionWrapper(AttentionWrapper):
         cell_state = state.cell_state
         cell_output, next_cell_state = self._cell(cell_inputs, cell_state)
 
-        cell_batch_size = (
-                cell_output.shape[0].value or tf.shape(cell_output)[0])
+        cell_batch_size = (cell_output.shape[0].value or tf.shape(cell_output)[0])
         error_message = (
                 "When applying AttentionWrapper %s: " % self.name +
                 "Non-matching batch sizes between the memory "
@@ -544,10 +542,8 @@ class AdvancedAttentionWrapper(AttentionWrapper):
                 "the BeamSearchDecoder?  You may need to tile your memory input via "
                 "the tf.contrib.seq2seq.tile_batch function with argument "
                 "multiple=beam_width.")
-        with tf.control_dependencies(
-                self._batch_size_checks(cell_batch_size, error_message)):
-            cell_output = tf.identity(
-                cell_output, name="checked_cell_output")
+        with tf.control_dependencies(self._batch_size_checks(cell_batch_size, error_message)):
+            cell_output = tf.identity(cell_output, name="checked_cell_output")
 
         if self._is_multi:
             previous_attention_state = state.attention_state
