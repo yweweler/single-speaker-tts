@@ -1,3 +1,7 @@
+"""
+Implementation of different attention mechanisms.
+"""
+
 import tensorflow as tf
 from tensorflow.contrib.seq2seq.python.ops.attention_wrapper import LuongAttention, \
     AttentionWrapper, AttentionWrapperState

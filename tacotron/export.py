@@ -1,3 +1,7 @@
+"""
+Export a trained model.
+"""
+
 import os
 
 import tensorflow as tf

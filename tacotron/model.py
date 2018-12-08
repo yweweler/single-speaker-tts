@@ -1,3 +1,7 @@
+"""
+Implementation of the model architecture.
+"""
+
 import os
 import numpy as np
 
@@ -72,10 +76,7 @@ class Tacotron:
             boolean:
                 True if `mode` == TRAIN, False otherwise.
         """
-        if mode == tf.estimator.ModeKeys.TRAIN:
-            return True
-        else:
-            return False
+        return bool(mode == tf.estimator.ModeKeys.TRAIN)
 
     def encoder(self, inputs, mode):
         """
@@ -214,7 +215,7 @@ class Tacotron:
             # Stack several GRU cells and apply a residual connection after each cell.
             # Before the input reaches the decoder RNN it passes through the attention cell.
             cells = [wrapped_attention_cell]
-            for i in range(n_decoder_layers):
+            for _ in range(n_decoder_layers):
                 # Create a decoder GRU cell.
                 if model_params.force_cudnn:
                     # => (B, T_spec, n_decoder_units) = (B, T_spec, 256)
@@ -268,7 +269,8 @@ class Tacotron:
                                                  input_size=self.hparams.decoder.target_size)
             else:
                 # During inference we stop decoding after `maximum_iterations` frames.
-                maximum_iterations = self.hparams.decoder.maximum_iterations // self.hparams.reduction
+                maximum_iterations = \
+                    self.hparams.decoder.maximum_iterations // self.hparams.reduction
 
                 # Create a custom inference helper that handles proper inference data feeding.
                 helper = TacotronInferenceHelper(batch_size=batch_size,
@@ -315,15 +317,15 @@ class Tacotron:
         with tf.variable_scope('post_process'):
             # network.shape => (B, T_spec, 2 * n_gru_units)
             # state.shape   => (2, n_gru_units)
-            network, state = cbhg(inputs=inputs,
-                                  n_banks=self.hparams.post.n_banks,
-                                  n_filters=self.hparams.post.n_filters,
-                                  n_highway_layers=self.hparams.post.n_highway_layers,
-                                  n_highway_units=self.hparams.post.n_highway_units,
-                                  projections=self.hparams.post.projections,
-                                  n_gru_units=self.hparams.post.n_gru_units,
-                                  training=self.is_training(mode),
-                                  force_cudnn=model_params.force_cudnn)
+            network, _ = cbhg(inputs=inputs,
+                              n_banks=self.hparams.post.n_banks,
+                              n_filters=self.hparams.post.n_filters,
+                              n_highway_layers=self.hparams.post.n_highway_layers,
+                              n_highway_units=self.hparams.post.n_highway_units,
+                              projections=self.hparams.post.projections,
+                              n_gru_units=self.hparams.post.n_gru_units,
+                              training=self.is_training(mode),
+                              force_cudnn=model_params.force_cudnn)
 
         return network
 
@@ -334,7 +336,8 @@ class Tacotron:
         Arguments:
             features (:obj:`dict` of :obj:`tf.Tensor`):
                 Dictionary containing tensor objects the model can read data from.
-                All data that is used for training, evaluation or inference is consumed from this tensors.
+                All data that is used for training, evaluation or inference is consumed from this
+                 tensors.
                 The dictionary contains the following fields with keys of the same name:
                     - ph_sentences (tf.Tensor):
                         Batched integer sentence sequence with appended <EOS> token padded to same
@@ -402,9 +405,9 @@ class Tacotron:
         # inp_sentences.shape = (B, T_sent, ?)
         batch_size = tf.shape(self.inp_sentences)[0]
 
-        # network.shape => (B, T_sent, 256)
+        # encoder_outputs.shape => (B, T_sent, 256)
         # encoder_state.shape => (B, 2, 256)
-        encoder_outputs, encoder_state = self.encoder(self.inp_sentences, mode=mode)
+        encoder_outputs, _ = self.encoder(self.inp_sentences, mode=mode)
 
         # shape => (B, T_spec // r, n_mels * r)
         decoder_outputs = self.decoder(memory=encoder_outputs, mode=mode)
@@ -524,7 +527,7 @@ class Tacotron:
             mean_loss = tf.metrics.mean(self.loss_op, name='mean_loss_total')
             mean_decoder_loss = tf.metrics.mean(self.loss_op_decoder, name='mean_loss_decoder')
             mean_post_processing_loss = tf.metrics.mean(self.loss_op_post_processing,
-                                                    name='mean_loss_post_processing')
+                                                        name='mean_loss_post_processing')
             eval_metrics_ops = {
                 'losses/loss_total': mean_loss,
                 'losses/loss_decoder': mean_decoder_loss,
@@ -543,9 +546,11 @@ class Tacotron:
             # )
 
             # print('Writing evaluation summaries to: "{}"'.format(checkpoint_save_dir))
-            # summary_hook = tf.train.SummarySaverHook(save_steps=evaluation_params.summary_save_steps,
-            #                                          output_dir=checkpoint_save_dir,
-            #                                          summary_op=summary_op)
+            # summary_hook = tf.train.SummarySaverHook(
+            #     save_steps=evaluation_params.summary_save_steps,
+            #     output_dir=checkpoint_save_dir,
+            #     summary_op=summary_op
+            # )
 
             return tf.estimator.EstimatorSpec(
                 mode=mode,
@@ -625,7 +630,8 @@ class Tacotron:
 
                     # => shape=(1, (1 + n_fft // 2), T_spec, 1)
                     linear_spec_image = tf.transpose(linear_spec_image, perm=[0, 2, 1, 3])
-                    linear_spec_image = tf.reverse(linear_spec_image, axis=tf.convert_to_tensor([1]))
+                    linear_spec_image = tf.reverse(linear_spec_image,
+                                                   axis=tf.convert_to_tensor([1]))
                     tf.summary.image('linear_spec', linear_spec_image, max_outputs=1)
 
         # Evaluation only ==========================================================================
@@ -637,9 +643,11 @@ class Tacotron:
 
                 def __synthesis(spec):
                     print('synthesis ...', spec.shape)
-                    linear_mag_db = inv_normalize_decibel(spec.T,
-                                                          dataset_params.dataset_loader.mel_mag_ref_db,
-                                                          dataset_params.dataset_loader.mel_mag_max_db)
+                    linear_mag_db = inv_normalize_decibel(
+                        spec.T,
+                        dataset_params.dataset_loader.mel_mag_ref_db,
+                        dataset_params.dataset_loader.mel_mag_max_db
+                    )
 
                     linear_mag = decibel_to_magnitude(linear_mag_db)
 
@@ -656,8 +664,8 @@ class Tacotron:
                 tf.summary.audio('synthesized', reconstruction, self.hparams.sampling_rate)
 
         # Training and evaluation ==================================================================
-        if (mode == tf.estimator.ModeKeys.TRAIN and training_params.write_summary is True) or mode == \
-                tf.estimator.ModeKeys.EVAL:
+        if (mode == tf.estimator.ModeKeys.TRAIN and training_params.write_summary is True) or \
+                mode == tf.estimator.ModeKeys.EVAL:
             with tf.name_scope('normalized_outputs'):
                 # Convert the mel spectrogram into an image that can be displayed.
                 # => shape=(1, T_spec, n_mels, 1)

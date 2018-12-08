@@ -1,3 +1,7 @@
+"""
+Implementation of different neural layers and activation functions for the model.
+"""
+
 import tensorflow as tf
 import tensorflow.contrib.cudnn_rnn as tfcrnn
 

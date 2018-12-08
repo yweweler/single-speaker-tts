@@ -1,3 +1,7 @@
+"""
+Implementation of seq2seq helpers for training and inference.
+"""
+
 import tensorflow as tf
 from tensorflow.contrib import seq2seq
 from tensorflow.python.framework import tensor_shape

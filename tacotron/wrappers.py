@@ -1,3 +1,7 @@
+"""
+Implementation of RNN wrappers.
+"""
+
 import tensorflow as tf
 import tensorflow.contrib as tfc
 
