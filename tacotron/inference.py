@@ -10,7 +10,7 @@ import tensorflow as tf
 from audio.io import save_wav
 from datasets.dataset import Dataset
 from datasets.utils.processing import prediction_prepare_sentence, synthesize, \
-    py_post_process_spectrograms
+    post_process_spectrograms
 from tacotron.input.functions import inference_input_fn
 from tacotron.model import Tacotron
 from tacotron.params.dataset import dataset_params
@@ -125,10 +125,10 @@ def main(_):
     # Write all generated waveforms to disk.
     for i, (sentence, result) in enumerate(zip(raw_sentences, predict_result)):
         spectrogram = result['output_linear_spec']
-        wavs = py_post_process_spectrograms([spectrogram],
-                                            dataset,
-                                            synthesis_fn,
-                                            inference_params.n_synthesis_threads)
+        wavs = post_process_spectrograms([spectrogram],
+                                         dataset,
+                                         synthesis_fn,
+                                         inference_params.n_synthesis_threads)
         wav = wavs[0]
 
         # Append ".wav" to the sentence line number to get the filename.

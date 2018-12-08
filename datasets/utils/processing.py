@@ -1,3 +1,7 @@
+"""
+Collection of generic helper functions for handling strings and spectrogram.
+"""
+
 import math
 import os
 import re
@@ -250,13 +254,13 @@ def load_audio(_path):
         audio (np.ndarray):
             Audio file.
 
-        sr (int):
+        sampling_rate (int):
             Sampling rate.
     """
     # Load the actual audio file using plain python code.
-    audio, sr = load_wav(_path)
+    audio, sampling_rate = load_wav(_path)
 
-    return audio, sr
+    return audio, sampling_rate
 
 
 def py_load_audio(_path):
@@ -271,14 +275,14 @@ def py_load_audio(_path):
         audio (np.ndarray):
             Audio file.
 
-        sr (int):
+        sampling_rate (int):
             Sampling rate.
     """
     print("py_load_audio", _path)
     # Load the actual audio file in an `tf.py_func` compatible way.
-    audio, sr = load_audio(_path.decode())
+    audio, sampling_rate = load_audio(_path.decode())
 
-    return audio, sr
+    return audio, sampling_rate
 
 
 def py_calculate_spectrogram(mel_mag_ref_db,
@@ -294,6 +298,53 @@ def py_calculate_spectrogram(mel_mag_ref_db,
                              mel_fmax,
                              reduction,
                              audio):
+    """
+    Calculate normalized mel scale and linear scale magnitude spectrograms in decibel
+    representation from a waveform.
+
+    Arguments:
+        mel_mag_ref_db:
+        mel_mag_max_db:
+        linear_ref_db:
+        linear_mag_max_db:
+
+        _win_len (float):
+            Windows length in ms.
+
+        _win_hop (float):
+            Window stride in ms.
+
+        sampling_rate (int):
+            Sampleing rate.
+
+        n_fft (int):
+            FFT window length.
+
+        n_mels (int):
+            Number of Mel bands to generate.
+
+        mel_fmin (int):
+            Mel spectrum lower cutoff frequency.
+
+        mel_fmax (int):
+            Mel spectrum upper cutoff frequency.
+
+        reduction (int):
+            reduction factor `r` used for decoder target folding.
+
+        audio (np.ndarray):
+           Audio time series.
+            The shape is expected to be shape=(n,).
+
+    Returns (:obj:`tuple` of :obj:`np.ndarray`):
+        mel_mag_db (np.ndarray):
+            Mel scaled magnitude spectrum in decibel representation.
+            The shape of the matrix will be shape(`n_mels`, t)
+
+        linear_mag_db (np.ndarray):
+            Linear scaled magnitude spectrum in decibel representation.
+            The shape is of the matrix will be shape=(`1 + n_fft/2`, t)
+    """
     # Window length in audio samples.
     win_len = ms_to_samples(_win_len, sampling_rate)
 
@@ -334,6 +385,36 @@ def py_calculate_spectrogram(mel_mag_ref_db,
 
 def synthesize(linear_mag, _win_len, _win_hop, sampling_rate, n_fft, magnitude_power,
                reconstruction_iterations):
+    """
+    Synthesise a waveform from an linear scale magnitude spectrogram.
+
+    Arguments:
+        linear_mag (np.ndarray):
+            Linear scale magnitude spectrogram to turn into a waveform.
+
+        _win_len (float):
+            Windows length in ms.
+
+        _win_hop (float):
+            Window stride in ms.
+
+        sampling_rate (int):
+            Sampling rate.
+
+        n_fft (int):
+            FFT window size.
+
+        magnitude_power (float):
+            Linear scale magnitudes are raise to the power of `magnitude_power` before
+            reconstruction.
+
+        reconstruction_iterations (int):
+            The number of Griffin-Lim reconstruction iterations.
+
+    Returns (np.ndarray):
+        Audio time series.
+        The shape of the returned array is shape=(n,) and the arrays dtype is np.float32.
+    """
     # linear_mag = np.squeeze(linear_mag, -1)
     linear_mag = np.power(linear_mag, magnitude_power)
 
@@ -348,7 +429,31 @@ def synthesize(linear_mag, _win_len, _win_hop, sampling_rate, n_fft, magnitude_p
                               reconstruction_iterations)
 
 
-def py_post_process_spectrograms(_spectrograms, dataset_loader, synthesis_fn, n_synthesis_threads):
+def post_process_spectrograms(_spectrograms, dataset_loader, synthesis_fn, n_synthesis_threads):
+    """
+    Post-process spectrograms and synthesise waveforms.
+    Post-processing includes reverting the normalization process and transforming spectrograms
+    from decibel representation into magnitude spectrograms.
+
+    Arguments:
+        _spectrograms (:obj:`list` of :obj:`np.ndarray`):
+            List of spectrograms to post-process.
+
+        dataset_loader (datasets.dataset.Dataset):
+            Dataset loading helper to load the dataset with.
+
+        synthesis_fn (callable):
+            Function to call for each spectrogram to be synthezised.
+            `synthesis_fn` is passed a linear magnitude spectrogram as an argument `linear_mag`.
+            `synthesis_fn` is expected to return a synthezised waveform in form of an
+            `np.ndarrary` object.
+
+        n_synthesis_threads (int):
+            Number of thread to use for synthesis.
+
+    Returns (:obj:`list` of :obj:`np.ndarray`):
+        List of synthesised waveforms.
+    """
     normalization_params = dataset_loader.get_normalization()
     # Apply Griffin-Lim to all spectrogram's to get the waveforms.
     normalized = list()
