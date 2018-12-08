@@ -5,6 +5,7 @@ Collection of generic helper functions for handling strings and spectrogram.
 import math
 import os
 import re
+import csv
 from multiprocessing.pool import ThreadPool
 
 import numpy as np
@@ -549,3 +550,21 @@ def py_load_processed_features(audio_path):
     data = np.load('{}.npz'.format(file_path))
 
     return data['mel_mag_db'], data['linear_mag_db']
+
+
+def write_listing_csv(_listing, _listing_file):
+    """
+    Write a .csv listing file to disk.
+
+    Arguments:
+        _listing (iter):
+            Iterator over value tuples forming a single row to write.
+
+        _listing_file (str):
+            path to the listing file to write.
+    """
+    # Open a .csv file for writing.
+    with open(_listing_file, 'w', newline='') as csv_file:
+        csv_writer = csv.writer(csv_file, delimiter='|', quotechar='|')
+        for row in _listing:
+            csv_writer.writerow(row)
