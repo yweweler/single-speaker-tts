@@ -310,7 +310,9 @@ def __build_input_fn(dataset_loader, build_generator_fn, batch_size, n_epochs,
         # Derive the bucket boundaries based on the distribution of all sequence lengths in the
         # training portion of the dataset.
         print('Deriving bucket boundaries ...')
-        bucket_boundaries = derive_bucket_boundaries(build_generator_fn(), n_buckets)
+        bucket_boundaries = derive_bucket_boundaries(build_generator_fn(),
+                                                     'tokenized_sentence_length',
+                                                     n_buckets)
 
         # Use the same batch_size for all buckets.
         bucket_batch_sizes = [batch_size] * (len(bucket_boundaries) + 1)

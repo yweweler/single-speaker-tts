@@ -113,11 +113,16 @@ def normalize_sentence(abbreviations, sentence):
 
 def prediction_prepare_sentence(dataset_loader, whitelist_expression, sentence):
     """
-    TODO: Write docstring.
+    Normalize and tokenize a sentence for prediction.
     Arguments:
-        dataset_loader:
+        dataset_loader (datasets.dataset.Dataset):
+            Dataset loading helper to load the dataset with.
+
         whitelist_expression:
-        sentence:
+            Compiled regex pattern object which is used for whitelisting.
+
+        sentence (str):
+            String to be processed.
 
     Returns (np.ndarray):
         Numpy array with `dtype=np.int32` containing the normalized and tokenized sentence.
@@ -127,7 +132,9 @@ def prediction_prepare_sentence(dataset_loader, whitelist_expression, sentence):
     sentence = normalize_sentence(abbreviations, sentence)
     sentence = filter_whitelist(sentence, whitelist_expression)
 
+    # Tokenize the sentence.
     tokenized_sentence = dataset_loader.sentence2tokens(sentence)
+    # Append the EOS token.
     tokenized_sentence.append(dataset_loader.get_eos_token())
 
     return np.array(tokenized_sentence, dtype=np.int32)
@@ -141,13 +148,23 @@ def prediction_prepare_sentence(dataset_loader, whitelist_expression, sentence):
 
 def split_list_proportional(_listing, train=0.8):
     """
-    # TODO: Write docstring.
+    Split an iterable into a separate train and eval portion based on a percentual limit.
+
     Arguments:
-        _listing:
-        train:
+        _listing (:obj:`iter`):
+            Listing to be split.
 
-    Returns:
+        train (float):
+            Float determining the portion to split an iterable into separate train and evaluation
+            portions.
+            `train` is expected to fulfill (`0.0 < train < 1.0`).
+            Default is `0.8`.
+            After the train listing is filled the remaining elements form the eval listing.
+            When collecting `train` percent does not result in an integer the number of elements
+            is rounded up to the next integer.
 
+    Returns (tuple):
+        Tuple of the form (train_listing, eval_listing).
     """
     assert 0.0 < train < 1.0, \
         'Training proportion must be greater 0.0 and below 1.0.'
@@ -222,6 +239,20 @@ def apply_reduction_padding(mel_mag_db, linear_mag_db, reduction_factor):
 
 
 def load_audio(_path):
+    """
+    Load an audio file from disk.
+
+    Arguments:
+        _path (str):
+            Path to the audio file to be loaded.
+
+    Returns (tuple):
+        audio (np.ndarray):
+            Audio file.
+
+        sr (int):
+            Sampling rate.
+    """
     # Load the actual audio file using plain python code.
     audio, sr = load_wav(_path)
 
@@ -229,6 +260,21 @@ def load_audio(_path):
 
 
 def py_load_audio(_path):
+    """
+    Load an audio file from disk in an `tf.py_func` compatible way.
+
+    Arguments:
+        _path (str):
+            Path to the audio file to be loaded encoded as binary string.
+
+    Returns (tuple):
+        audio (np.ndarray):
+            Audio file.
+
+        sr (int):
+            Sampling rate.
+    """
+    print("py_load_audio", _path)
     # Load the actual audio file in an `tf.py_func` compatible way.
     audio, sr = load_audio(_path.decode())
 
@@ -326,8 +372,25 @@ def py_post_process_spectrograms(_spectrograms, dataset_loader, synthesis_fn, n_
     return wavs
 
 
-def derive_bucket_boundaries(dataset_generator, n_buckets):
-    element_lengths = [row['tokenized_sentence_length'] for row in dataset_generator]
+def derive_bucket_boundaries(dataset_generator, key, n_buckets):
+    """
+    Derive optimal bucket boundaries from data.
+
+    Arguments:
+        dataset_generator (:obj:`iter` of :obj:`dict`):
+            Generator to collect data from for deriving the buckets.
+
+        key (str):
+            Key of the column which should be used to derive the boundaries.
+
+        n_buckets (int):
+            Number of buckets to sort data into.
+            If it is not possible to create as meany buckets as requested, less buckets are created.
+
+    Returns (:obj:`list` of :obj:`int`):
+        Bucket boundaries for use in tensorflows `grouping.bucket_by_sequence_length`.
+    """
+    element_lengths = [row[key] for row in dataset_generator]
 
     # Get the total number of samples in the dataset.
     n_samples = len(element_lengths)
@@ -359,8 +422,23 @@ def derive_bucket_boundaries(dataset_generator, n_buckets):
     return bucket_boundaries
 
 
-def py_load_processed_features(wav_path):
-    file_path = os.path.splitext(wav_path.decode())[0]
+def py_load_processed_features(audio_path):
+    """
+    Load pre-processed features from disk in an `tf.py_func` compatible way.
+
+    Arguments:
+        audio_path (str):
+            Path to the audio file to load the corresponding features for.
+            `audio_path` is expected to be a binary string.
+
+    Returns (tuple):
+        mel_mag_db (np.ndarray):
+            Mel scale spectrogram.
+
+        linear_mag_db (np.ndarray):
+            Linear scale spectrogram.
+    """
+    file_path = os.path.splitext(audio_path.decode())[0]
 
     # Load features from disk.
     data = np.load('{}.npz'.format(file_path))
