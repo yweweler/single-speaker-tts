@@ -11,6 +11,34 @@ import numpy as np
 from datasets.utils import statistics
 
 
+def collect_vocabulary(_parsed_sentences):
+    """
+    Collect a vocabulary dictionary from a collection of strings.
+
+    Arguments:
+        _parsed_sentences (:obj:`list` of :obj:`str`):
+            Strings to collect the vocabulary from.
+
+    Returns (dict):
+        Dictionary with individual symbols as keys and unique integers as values.
+        Note, that the vocabulary always contains the additional virtual EOS and PAD symbols.
+        The EOS symbols is always translated to the integer 0.
+        The PAD symbol is always translated to the integer 1.
+    """
+    vocabulary_set = set()
+    for sentence in _parsed_sentences:
+        vocabulary_set.update(sentence)
+
+    print('len(vocabulary_set)', len(vocabulary_set))
+    vocabulary_dict = dict()
+    vocabulary_dict['pad'] = 0
+    vocabulary_dict['eos'] = 1
+    for i, symbol in zip(range(2, len(vocabulary_set)), sorted(list(vocabulary_set))):
+        vocabulary_dict[symbol] = i
+
+    return vocabulary_dict
+
+
 class Dataset:
     """
     Basic dataset that can be loaded and saved.
@@ -231,18 +259,31 @@ class Dataset:
         self.__definition['eval_listing'] = _listing_path
 
     def generate_vocabulary(self):
+        """
+        Generate the vocabulary over the entire dataset (train and eval listing) and store it in
+        the dataset definition.
+        """
+        # Concatenate train and eval listing.
         all_rows = self.__train_listing + self.__eval_listing
 
+        # Acquire all sentences from the dataset.
         parsed_sentences = [row['sentence'] for row in all_rows]
-        _vocabulary_dict = dataset.collect_vocabulary(parsed_sentences)
-        print(_vocabulary_dict)
+
+        # Collect the vocabulary over all sentences.
+        _vocabulary_dict = collect_vocabulary(parsed_sentences)
 
         self.__definition['vocabulary'] = _vocabulary_dict
+
+        # Generate the reverse lookup vocabulary dictionary.
         self.__generate_reverse_vocabulary()
 
     def __generate_reverse_vocabulary(self):
+        """
+        Generate the reverse lookup vocabulary dictionary.
+        """
         # Initialize reverse_dictionary in case a user defined dictionary was passed.
         self.__reverse_vocabulary = dict()
+
         for _token, _id in self.get_vocabulary().items():
             self.__reverse_vocabulary[_id] = _token
 
@@ -259,6 +300,8 @@ class Dataset:
             definition = json.loads(json_file.read())
 
         self.__definition = definition
+
+        # Generate the reverse lookup dictionary.
         self.__generate_reverse_vocabulary()
 
     def save(self):
@@ -273,23 +316,44 @@ class Dataset:
             json.dump(self.__definition, json_file, indent=2)
 
     def load_listings(self):
+        """
+        Load and parse the train and eval listing files from disk.
+        """
+        # Get the full train listing file path.
         train_listing_file = os.path.join(
             self.get_definition()['dataset_folder'],
             self.get_definition()['train_listing']
         )
+
+        # Load and parse the file.
         parsed_train_rows = self.__load_listing_file(train_listing_file)
         self.__train_listing = parsed_train_rows
         print('Loaded {} train rows'.format(len(parsed_train_rows)))
 
+        # Get the full eval listing file path.
         eval_listing_file = os.path.join(
             self.get_definition()['dataset_folder'],
             self.get_definition()['eval_listing']
         )
+
+        # Load and parse the file.
         parsed_eval_rows = self.__load_listing_file(eval_listing_file)
         self.__eval_listing = parsed_eval_rows
         print('Loaded {} eval rows'.format(len(parsed_eval_rows)))
 
     def __load_listing_file(self, _listing_file):
+        """
+        Load and parse a specific listing frile from disk.
+
+        Arguments:
+            _listing_file (str):
+                path to the listing file to be loaded.
+
+        Returns (:obj:`list` of :obj:`dict`):
+            List of parsed listing rows as dictionaries.
+            The keys of each dictionary are: ['audio_path', 'sentence', 'tokenized_sentence',
+            'tokenized_sentence_length'].
+        """
         with open(_listing_file, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file, delimiter='|', quotechar='|')
             csv_rows = list(csv_reader)
@@ -298,12 +362,12 @@ class Dataset:
             for row in csv_rows:
                 parsed_row = self.__parse_listing_row(row)
 
-                # Tokenize sentence.
+                # Tokenize the sentence.
                 sentence = parsed_row['sentence']
                 tokenized_sentence = self.sentence2tokens(sentence)
                 tokenized_sentence.append(self.get_eos_token())
 
-                # Get tokenized sentence length.
+                # Get the length of the tokenized sentence.
                 tokenized_sentence_length = len(tokenized_sentence)
 
                 parsed_row.update({
@@ -315,31 +379,42 @@ class Dataset:
         return parsed_rows
 
     def __parse_listing_row(self, _row):
+        """
+        Parse a listing row.
+
+        Arguments:
+            _row (tuple):
+                Values oif a listing row to be parsed.
+
+        Returns (dict):
+            Parsed row as a dictionary.
+            The keys are: ['audio_path', 'sentence'].
+        """
         definition = self.__definition
+
+        # Get the full path to the audio file.
         audio_folder = os.path.join(
             definition['dataset_folder'],
             definition['audio_folder']
         )
+
         return {
             'audio_path': os.path.join(audio_folder, _row[0]),
             'sentence': _row[1],
         }
 
-    def collect_vocabulary(self, _parsed_sentences):
-        vocabulary_set = set()
-        for sentence in _parsed_sentences:
-            vocabulary_set.update(sentence)
-
-        print('len(vocabulary_set)', len(vocabulary_set))
-        vocabulary_dict = dict()
-        vocabulary_dict['pad'] = 0
-        vocabulary_dict['eos'] = 1
-        for i, symbol in zip(range(2, len(vocabulary_set)), sorted(list(vocabulary_set))):
-            vocabulary_dict[symbol] = i
-
-        return vocabulary_dict
-
     def generate_normalization(self, n_threads=1):
+        """
+        Calculate feature normalization parameters over the training portion of the dataset and
+        store them in the dataset definition.
+
+        Arguments:
+            n_threads (int):
+                Number of threads to use for calculation.
+                Default is 1 thread.
+        Returns:
+
+        """
         path_listing = [row['audio_path'] for row in self.__train_listing]
 
         # (min_linear, max_linear, min_mel, max_mel)
@@ -352,27 +427,17 @@ class Dataset:
             "linear_mag_max_db": stats[0]
         }
 
-        return stats
-
-
-if __name__ == '__main__':
-    dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
-    dataset.load()
-    dataset.load_listings()
-
-    # dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
-    # dataset.set_audio_folder('wavs')
-    # dataset.set_train_listing_file('train.csv')
-    # dataset.set_eval_listing_file('eval.csv')
-    # TODO: Fix cyclic dependency between `load_listings` and `generate_vocabulary`.
-    # dataset.load_listings()
-    # dataset.generate_vocabulary()
-    # dataset.generate_normalization()
-    # TODO: Implement automatic feature pre-calculation.
-    # dataset.save()
-
-    # for element in dataset.get_train_listing_generator():
-    #     print(element)
-
-    for element in dataset.get_eval_listing_generator():
-        print(element)
+# if __name__ == '__main__':
+#     dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
+#     dataset.load()
+#     dataset.load_listings()
+#
+#     # dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
+#     # dataset.set_audio_folder('wavs')
+#     # dataset.set_train_listing_file('train.csv')
+#     # dataset.set_eval_listing_file('eval.csv')
+#     # TODO: Fix cyclic dependency between `load_listings` and `generate_vocabulary`.
+#     # dataset.load_listings()
+#     # dataset.generate_vocabulary()
+#     # dataset.generate_normalization()
+#     # dataset.save()
