@@ -17,7 +17,7 @@ The implementation is based on [Tensorflow](https://tensorflow.org/).
 - [Prerequisites](#toc-prerequisites)
 - [Installation](#toc-installation)
 - [Dataset Preparation](#toc-preparation)
-  1. [Signal Statistics](#toc-preparation-signal-stats)
+  1. [Dataset Definition File](#toc-preparation-definition)
   2. [Feature Pre-Calculation](#toc-preparation-feature-pre-calc)
 - [Training](#toc-training)
 - [Evaluation](#toc-evaluation)
@@ -83,88 +83,96 @@ export PYTHONPATH=$PYTHONPATH:$PWD/tacotron:$PWD
 
 ## <a name="toc-preparation">Dataset Preparation</a>
 
-Datasets are loaded using dataset loaders.
-Currently each dataset requires a custom dataset loader to be written.
-Depending on how the loader does its job the datasets can be stored in nearly any form and file-format.
-If you want to use a custom dataset you have to write a custom loading helper.
-However, a few custom loaders for datasets exist already.
+Each dataset is defined by an dataset definition file (`dataset.json`).
+Additionally each dataset has to define separate `train.csv` and `eval.csv` listing files defining 
+the data necessary for training and evaluation.
 
-See: [datasets/](datasets/)
+A dataset might look like this:
 ```bash
-datasets/
-├── blizzard_nancy.py
-├── cmu_slt.py
-├── lj_speech.py
-...
+some-dataset/
+├── dataset.json
+├── eval.csv
+├── train.csv
+└── wavs
 ```
 
 Please take a look at [LJSPEECH.md](LJSPEECH.md) for a full step by step tutorial on how to train
  a model on the LJ Speech v1.1 dataset.
 
-### <a name="toc-preparation-signal-stats">Signal Statistics</a>
-
-In order to create a model the exact character vocabulary and certain signal boundaries have to 
-be calculated for normalization.
-The model uses linear scale as well as Mel scale spectrograms for synthesis.
-All spectrograms are scaled linearly to fit the range `(0.0, 1.0)` using global minimum and 
-maximum dB values calculated on the training corpus.
-
-First we have to configure the dataset in [tacotron/params/dataset.py](tacotron/params/dataset.py).
-Enter the path to the dataset `dataset_folder` and set the `dataset_loader` variable to te 
-loader required for your dataset.
-
-Then calculate the vocabulary and the signal boundaries using:
-```bash
-python tacotron/dataset_statistics.py
-
-Dataset: /my-dataset-path/LJSpeech-1.1
-Loading dataset ...
-Dataset vocabulary:
-vocabulary_dict={
-    'pad': 0,
-    'eos': 1,
-    'p': 2,
-    'r': 3,
-    'i': 4,
-    'n': 5,
-    't': 6,
-    'g': 7,
-    ' ': 8,
-    'h': 9,
-    'e': 10,
-    'o': 11,
-    'l': 12,
-    'y': 13,
-    's': 14,
-    'w': 15,
-    'c': 16,
-    'a': 17,
-    'd': 18,
-    'f': 19,
-    'm': 20,
-    'x': 21,
-    'b': 22,
-    'v': 23,
-    'u': 24,
-    'k': 25,
-    'j': 26,
-    'z': 27,
-    'q': 28,
-},
-vocabulary_size=29
+### <a name="toc-preparation-definition">Dataset Definition File</a>
 
 
-Collecting decibel statistics for 13100 files ...
-mel_mag_ref_db =  6.026512479977281
-mel_mag_max_db =  -99.89414986824931
-linear_ref_db =  35.65918850818663
-linear_mag_max_db =  -100.0
+In order for a model to work with a dataset file paths, a character vocabulary and certain signal 
+statistics for normalization have to be known.
+Each dataset store such information in the definition file `dataset.json`.
+
+Lets take a look at an exemplaric definition file for the LJSpeech dataset.
+```json
+{
+  "dataset_folder": "/datasets/LJSpeech-1.1",
+  "audio_folder": "wavs",
+  "train_listing": "train.csv",
+  "eval_listing": "eval.csv",
+  "vocabulary": {
+    "pad": 0,
+    "eos": 1,
+    "p": 2,
+    .
+    .
+    .
+    "!": 37,
+    "?": 38
+  },
+  "normalization": {
+    "mel_mag_ref_db": 6.02,
+    "mel_mag_max_db": 99.89,
+    "linear_ref_db": 35.66,
+    "linear_mag_max_db": 100
+  }
+}
 ```
 
-Now complement `vocabulary_dict` and `vocabulary_size` in [tacotron/params/dataset.py](tacotron/params/dataset.py) and transfer the decibel boundaries (`mel_mag_ref_db`, 
-`mel_mag_max_db`, `linear_ref_db`, `linear_mag_max_db`) to your loader.
-Each loader derived from `DatasetHelper` has to define these variables in order to be able to 
-normalize the audio files.
+The `dataset_folder` field defines the path to the dataset base folder.
+All other paths are relative to that folder.
+For example `audio_folder` gives the relative path to the audio file folder.
+While `train_listing` and `eval_listing` give the path to the training and evaluation listing files.
+Appart from the paths the definition file also defines `vocabulary` and `normalization`.
+The vocabulary is an enumerated lookup dictionary defining all characters the model should learn on.
+An exception are the two virtual `pad` and `eos` symbols that are used for padding and marking 
+the end of a sequence.
+Finally, `normalization` is an lookup dictionary containing normalization parameters for feature 
+calculation.
+
+However, Before creating the definition file one has to generate the `train.csv` and `eval.csv` 
+files for the dataset to be used.
+Each line of these files uses the delimiter `|` and has the following format:
+```bash
+<file-name>.wav|<sentence>
+```
+Take a look at [datasets/preparation/ljspeech.py](datasets/preparation/ljspeech.py) to see how 
+`train.csv` and `eval.csv` can be generated.
+
+When both `train.csv` and `eval.csv` exist the dataset definition file can be generated like in 
+this example:
+```python
+from datasets.dataset import Dataset
+
+dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
+dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
+dataset.set_audio_folder('wavs')
+dataset.set_train_listing_file('train.csv')
+dataset.set_eval_listing_file('eval.csv')
+dataset.load_listings(stale=True)
+dataset.generate_vocabulary()
+
+# Calculates the signal statistics over the entire dataset (may take a while).
+dataset.generate_normalization(n_threads=4)
+dataset.save()
+```
+
+Finally the path to the dataset definition file the model should load has to be configured in  
+[tacotron/params/dataset.py](tacotron/params/dataset.py).
+Set the path to the dataset definition file in `dataset_file`.
 
 ### <a name="toc-preparation-feature-pre-calc">Feature Pre-Calculation</a>
 
@@ -173,9 +181,11 @@ pre-calculate features and store them on disk.
 
 To pre-calculate features run:
 ```bash
-python tacotron/dataset_precalc_features.py
+python tacotron/calculate_features.py
 ```
 
+The features are calculated using the general model parameters set in 
+[tacotron/params/model.py](tacotron/params/model.py).
 The pre-computed features are stored as `.npz` files next to the actual audio files.
 Note that independent from pre-calculation, features can also be cached in RAM to accelerate throughput.
 
@@ -372,7 +382,8 @@ Just open a pull request with your proposed changes.
 * The model architecture is implemented in [tacotron/model.py](tacotron/model.py).
 * The model architecture parameters are defined in [tacotron/params/model.py](tacotron/params/model.py).
 * The train code is defined [tacotron/train.py](tacotron/train.py).
-* Take a look at [datasets/blizzard_nancy.py](datasets/blizzard_nancy.py) to see how a dataset loading helper has to implemented.
+* Take a look at [datasets/dataset.py](datasets/dataset.py) to see how dataset loading 
+is implemented.
 
 ### Todo
 See [Issues](https://github.com/yweweler/single-speaker-tts/issues)

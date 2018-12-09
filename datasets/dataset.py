@@ -315,9 +315,18 @@ class Dataset:
         with open(self.__dataset_file, 'w') as json_file:
             json.dump(self.__definition, json_file, indent=2)
 
-    def load_listings(self):
+    def load_listings(self, stale=False):
         """
         Load and parse the train and eval listing files from disk.
+
+        Arguments:
+            stale (bool):
+                Flag indicating of the dataset is loaded in an incomplete state.
+                When set to True, the dataset does not assume that an vocabulary is available and
+                only parses the raw rows from the listing file.
+                If set to False, the loader assumes that the dataset definition is build and
+                augments the parsed rows with additional data.
+                Default is False.
         """
         # Get the full train listing file path.
         train_listing_file = os.path.join(
@@ -326,7 +335,7 @@ class Dataset:
         )
 
         # Load and parse the file.
-        parsed_train_rows = self.__load_listing_file(train_listing_file)
+        parsed_train_rows = self.__load_listing_file(train_listing_file, stale)
         self.__train_listing = parsed_train_rows
         print('Loaded {} train rows'.format(len(parsed_train_rows)))
 
@@ -337,17 +346,25 @@ class Dataset:
         )
 
         # Load and parse the file.
-        parsed_eval_rows = self.__load_listing_file(eval_listing_file)
+        parsed_eval_rows = self.__load_listing_file(eval_listing_file, stale)
         self.__eval_listing = parsed_eval_rows
         print('Loaded {} eval rows'.format(len(parsed_eval_rows)))
 
-    def __load_listing_file(self, _listing_file):
+    def __load_listing_file(self, _listing_file, stale=False):
         """
-        Load and parse a specific listing frile from disk.
+        Load and parse a specific listing file from disk.
 
         Arguments:
             _listing_file (str):
                 path to the listing file to be loaded.
+
+            stale (bool):
+                Flag indicating of the dataset is loaded in an incomplete state.
+                When set to True, the dataset does not assume that an vocabulary is available and
+                only parses the raw rows from the listing file.
+                If set to False, the loader assumes that the dataset definition is build and
+                augments the parsed rows with additional data.
+                Default is False.
 
         Returns (:obj:`list` of :obj:`dict`):
             List of parsed listing rows as dictionaries.
@@ -362,18 +379,20 @@ class Dataset:
             for row in csv_rows:
                 parsed_row = self.__parse_listing_row(row)
 
-                # Tokenize the sentence.
-                sentence = parsed_row['sentence']
-                tokenized_sentence = self.sentence2tokens(sentence)
-                tokenized_sentence.append(self.get_eos_token())
+                if stale is False:
+                    # Tokenize the sentence.
+                    sentence = parsed_row['sentence']
+                    tokenized_sentence = self.sentence2tokens(sentence)
+                    tokenized_sentence.append(self.get_eos_token())
 
-                # Get the length of the tokenized sentence.
-                tokenized_sentence_length = len(tokenized_sentence)
+                    # Get the length of the tokenized sentence.
+                    tokenized_sentence_length = len(tokenized_sentence)
 
-                parsed_row.update({
-                    'tokenized_sentence': np.array(tokenized_sentence, dtype=np.int32),
-                    'tokenized_sentence_length': tokenized_sentence_length
-                })
+                    parsed_row.update({
+                        'tokenized_sentence': np.array(tokenized_sentence, dtype=np.int32),
+                        'tokenized_sentence_length': tokenized_sentence_length
+                    })
+
                 parsed_rows.append(parsed_row)
 
         return parsed_rows
@@ -427,17 +446,17 @@ class Dataset:
             "linear_mag_max_db": stats[0]
         }
 
-# if __name__ == '__main__':
-#     dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
-#     dataset.load()
-#     dataset.load_listings()
-#
-#     # dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
-#     # dataset.set_audio_folder('wavs')
-#     # dataset.set_train_listing_file('train.csv')
-#     # dataset.set_eval_listing_file('eval.csv')
-#     # TODO: Fix cyclic dependency between `load_listings` and `generate_vocabulary`.
-#     # dataset.load_listings()
-#     # dataset.generate_vocabulary()
-#     # dataset.generate_normalization()
-#     # dataset.save()
+
+if __name__ == '__main__':
+    dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
+    # dataset.load()
+    # dataset.load_listings()
+
+    dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
+    dataset.set_audio_folder('wavs')
+    dataset.set_train_listing_file('train.csv')
+    dataset.set_eval_listing_file('eval.csv')
+    dataset.load_listings(stale=True)
+    dataset.generate_vocabulary()
+    dataset.generate_normalization()
+    dataset.save()
