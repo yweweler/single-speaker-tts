@@ -40,80 +40,47 @@ LJ001-0002|in being comparatively ...
 ...
 ```
 Hence, they are of the form `<file-name>|<transcription>/r/n`.
-Luckily this project already comes with a custom loader for the LJ Speech dataset to we do not have to write out own.
-The loader is defined in [datasets/lj_speech.py](datasets/lj_speech.py).
-Based on `metadata.csv` the loader parses the transcriptions and loads the audio files from the `wavs/` folder.
 
 
-## Calculate And Set The Signal Statistics
+## Create Listing Files
+
+Luckily this project already comes with a custom listing generator for the LJ Speech dataset so we
+ do not have to write out own.
+The generator is defined in [datasets/preparation/ljspeech.py](datasets/preparation/ljspeech.py).
+Based on `metadata.csv` the generator parses and pre-processes the transcriptions to generate and
+ write both the `train.csv` and `eval.csv` listing files.
+
+
+## Generate the Dataset Definition File
+
+Before the dataset can be used a definition file has to be created.
+When both `train.csv` and `eval.csv` exist the dataset definition file can be generated like in 
+this:
+```python
+from datasets.dataset import Dataset
+
+dataset = Dataset('/tmp/LJSpeech-1.1/dataset.json')
+dataset.set_dataset_folder('/tmp/LJSpeech-1.1/')
+dataset.set_audio_folder('wavs')
+dataset.set_train_listing_file('train.csv')
+dataset.set_eval_listing_file('eval.csv')
+dataset.load_listings(stale=True)
+dataset.generate_vocabulary()
+
+# Calculates the signal statistics over the entire dataset (may take a while).
+dataset.generate_normalization(n_threads=4)
+dataset.save()
+```
 
 Let us now configure the project so that it does use the dataset for training.
 First we will set up the dataset [tacotron/params/dataset.py](tacotron/params/dataset.py).
-Configure the path to the dataset `dataset_folder` and set the `dataset_loader` to be `LJSpeechDatasetHelper`.
-Next, you need to establish an enumerated vocabulary for the dataset and tell the architecture the vocabulary size.
-
-However, as we do not have this information at hand we will have to collect the, first using [tacotron/dataset_statistics.py](tacotron/dataset_statistics.py).
-The script will use the dataset loader and the folder path we just configured to collect the missing parameters.
-
-```bash
-# Collect the necessary data.
-python tacotron/dataset_statistics.py
-
-Dataset: /my-dataset-path/LJSpeech-1.1
-Loading dataset ...
-Dataset vocabulary:
-vocabulary_dict={
-    'pad': 0,
-    'eos': 1,
-    'p': 2,
-    'r': 3,
-    'i': 4,
-    'n': 5,
-    't': 6,
-    'g': 7,
-    ' ': 8,
-    'h': 9,
-    'e': 10,
-    'o': 11,
-    'l': 12,
-    'y': 13,
-    's': 14,
-    'w': 15,
-    'c': 16,
-    'a': 17,
-    'd': 18,
-    'f': 19,
-    'm': 20,
-    'x': 21,
-    'b': 22,
-    'v': 23,
-    'u': 24,
-    'k': 25,
-    'j': 26,
-    'z': 27,
-    'q': 28,
-},
-vocabulary_size=29
-
-
-Collecting decibel statistics for 13100 files ...
-mel_mag_ref_db =  6.026512479977281
-mel_mag_max_db =  -99.89414986824931
-linear_ref_db =  35.65918850818663
-linear_mag_max_db =  -100.0
-```
-
-Now we can complement `vocabulary_dict` and `vocabulary_size` into the dataset configuration in 
-[tacotron/params/dataset.py](tacotron/params/dataset.py).
-Additionally the are given a set of decibel values the loader requires from normalizing features.
-Make sure to set the variables (`mel_mag_ref_db`, `mel_mag_max_db`, `linear_ref_db`, `linear_mag_max_db`) in 
-[datasets/lj_speech.py](datasets/lj_speech.py).
+Just configure the path to the dataset definition file `dataset_file`.
 
 
 ## Configuration Of The Architecture
 
 Next we have to define the architecture parameters in [tacotron/params/model.py](tacotron/params/model.py).
-For now we will only set `vocabulary_size=29` and `sampling_rate=22050`, such that the 
+For now we will only set `vocabulary_size=39` and `sampling_rate=22050`, such that the 
 architecture does work with the LJ Speech dataset.
 
 Depending on your configuration now would be the right time to start the optional feature 
